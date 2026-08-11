@@ -1,0 +1,12 @@
+{
+  // Solution-style root config: `files: []` means it compiles nothing itself.
+  // `baseUrl`/`paths` are duplicated here purely so tooling that reads only the
+  // root tsconfig (the shadcn CLI) can resolve the `@renderer`/`@shared` aliases.
+  // The authoritative copies live in tsconfig.node.json and tsconfig.web.json.
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": { "@shared/*": ["src/shared/*"], "@renderer/*": ["src/renderer/src/*"] }
+  },
+  "files": [],
+  "references": [{ "path": "./tsconfig.node.json" }, { "path": "./tsconfig.web.json" }]
+}
