@@ -129,10 +129,42 @@ mit und muss nicht nachgeladen werden.
 `data.attendanceMutations.<op>.errors` ist leer. Der HTTP-Status allein sagt
 nichts aus.
 
-**2. `openShift.clockIn` ist ein Sentinel.** Beobachtet:
-`"2000-01-01T00:11:12Z"` — korrekte Uhrzeit, Platzhalter-Datum. Für jede
-Zeitrechnung ausschließlich `shift.clockInWithSeconds`
-(`"2026-08-11T00:11:12+00:00"`) verwenden.
+**2. Kein Zeitstempel der API ist ein gültiger absoluter Zeitpunkt.** Das ist der
+gefährlichste Fallstrick der ganzen Integration.
+
+`openShift.clockIn` liefert `"2000-01-01T00:11:12Z"` — korrekte Uhrzeit,
+Platzhalter-Datum.
+
+`shift.clockInWithSeconds` sieht auf den ersten Blick brauchbar aus, ist es aber
+nicht. Verifiziert an einem realen Datensatz:
+
+| | |
+|---|---|
+| Tatsächlich eingestempelt | `2026-08-12 00:11:12` lokal (Europe/Berlin, +02:00) |
+| Also als UTC-Instant | `2026-08-11T22:11:12Z` |
+| Was die API liefert | `2026-08-11T00:11:12+00:00` |
+
+Factorial kombiniert die **UTC-Datumskomponente** (11. Aug., da 22:11 UTC) mit der
+**lokalen Uhrzeit** (00:11:12) und deklariert das Ergebnis als `+00:00`. Als
+Instant gelesen liegt der Wert 22 Stunden daneben.
+
+**Korrekte Rekonstruktion:** lokale Kalenderdatum aus `shift.date` nehmen, die
+Uhrzeit-Komponente aus `clockInWithSeconds`, und beides in der **lokalen**
+Zeitzone zusammensetzen. Ergibt der Wert einen Zeitpunkt in der Zukunft, einen
+Tag abziehen — das deckt über Mitternacht laufende Schichten ab
+(`crossesMidnight` / `isOvernight` sind als Flags vorhanden).
+
+Der `+00:00`-Offset und die Datumskomponente von `clockIn*` sind **immer** zu
+ignorieren.
+
+**3. `clockOut` gibt es nur in Minutenauflösung.** Ein `clockOutWithSeconds`
+existiert nicht — das Schema kennt das Feld nicht.
+
+**4. Eine Pause splittet den Shift in mehrere Records.** Ein Durchlauf
+Einstempeln → Pause → Fortsetzen → Ausstempeln erzeugte drei Einträge mit
+eigenen IDs, alle mit demselben `date`. Die Tagessumme ist also die Summe über
+`minutes` aller Shifts des Tages plus die laufende Zeit des offenen Shifts —
+nicht das Delta eines einzelnen Records.
 
 ## Architektur
 
@@ -230,11 +262,17 @@ Zustand neu geladen.
 
 ### Zeitberechnung
 
-Der Timer zählt **nicht** selbst hoch. Bei jedem Tick wird
-`Date.now() - clockInWithSeconds` gerechnet. Damit driftet er nicht und übersteht
-Standby.
+Der Timer zählt **nicht** selbst hoch. Bei jedem Tick wird die Differenz zu einem
+rekonstruierten Startzeitpunkt neu gerechnet. Damit driftet er nicht und
+übersteht Standby.
 
-Pausenzeit wird analog aus dem Beginn der laufenden Pause berechnet.
+Der Startzeitpunkt wird nach der Regel aus "Fallstrick 2" gebildet: `shift.date`
+plus Uhrzeit-Komponente aus `clockInWithSeconds`, in lokaler Zeitzone, mit
+Tagesrücksprung falls das Ergebnis in der Zukunft liegt. Diese Rekonstruktion
+liegt in **einer** Funktion in `time.ts` und wird nirgends dupliziert.
+
+Die Tagessumme ist die Summe über `minutes` aller heutigen Shifts plus die
+laufende Zeit des offenen Shifts — Pausen splitten den Shift in mehrere Records.
 
 ## Fehlerbehandlung
 
