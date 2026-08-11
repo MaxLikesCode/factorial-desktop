@@ -34,6 +34,13 @@ Reverse-engineered am 2026-08-12 aus `app.factorialhr.com` (Interceptor im
 Page-Kontext, echte Klicks auf Einstempeln → Mittagspause → Fortsetzen →
 Ausstempeln) plus Schema-Introspection.
 
+**Am 2026-08-12 vollständig gegen die Live-API nachverifiziert.** Alle vier
+Mutations wurden per direktem `fetch` aus dem Seitenkontext ausgeführt
+(`errors: []`), und `openShift` wurde in jedem der drei Zustände abgefragt. Die
+dabei gefundenen Abweichungen vom ersten Mitschnitt sind unten jeweils als
+**Korrektur** markiert — sie betreffen die Mutation-Signaturen, die
+Zeitrekonstruktion und die Herkunft der Soll-Zeit.
+
 ### Transport
 
 - **Ein Endpoint:** `POST https://api.factorialhr.com/graphql?<OperationName>`
@@ -72,10 +79,24 @@ eingeloggt.
 ```graphql
 query Status($id: Int!) {
   attendance { employee(id: $id) { id openShift {
-    id clockIn clockOut date locationType workplaceId workable
+    id clockIn clockInOffset clockOut date referenceDate status
+    locationType workplaceId workable
     timeSettingsBreakConfiguration { id name }
   } } }
 }
+```
+
+`clockInOffset` ist für die Timer-Rekonstruktion zwingend — siehe „Fallstrick 2".
+`workplaceId` liefert nebenbei den zuletzt benutzten Arbeitsplatz (beobachtet:
+`3333333`) und taugt als Default fürs nächste Einstempeln.
+
+Die Tagesliste der abgeschlossenen Shifts (für die Ist-Summe) kommt aus:
+
+```graphql
+attendanceShiftsConnection(startOn: $d, endOn: $d) { nodes {
+  id date clockInWithSeconds clockInOffset clockOut minutes workable
+  createdAt crossesMidnight timeSettingsBreakConfiguration { id name }
+} }
 ```
 
 ### Pausentypen
@@ -95,33 +116,63 @@ Beobachtet: `19613 Mittagspause`, `20211 Verdienstausfall`, `20261 Arztbesuch`,
 
 ### Mutations
 
-Alle vier liegen unter `attendanceMutations`. Gemeinsame Variablen:
+Alle vier liegen unter `attendanceMutations`. Die Signaturen unten stammen aus
+der Schema-Introspection und wurden am 2026-08-12 mit einem vollständigen
+Live-Durchlauf (Ein → Pause → Fortsetzen → Aus, alle vier `errors: []`)
+gegengeprüft.
 
-- `now` — ISO8601 **mit lokalem Offset**, z.B. `2026-08-12T00:11:12+02:00`
-- `date` / `startOn` / `endOn` — lokales `YYYY-MM-DD`
-- `source` — `"desktop"` (offizieller Enum-Wert von `AttendanceEnumsShiftSourceEnum`)
+**`now` ist das einzige Pflichtargument** — ISO8601 **mit lokalem Offset**,
+z.B. `2026-08-12T01:18:23+02:00`.
 
-| Operation | Mutation-Feld | Zusätzliche Variablen |
+> **Korrektur gegenüber dem Mitschnitt:** `date`, `startOn` und `endOn` sind
+> **keine** Argumente dieser Mutations. Sie tauchten im Web-Client nur als
+> deklarierte GraphQL-Variablen des Dokuments auf und gehören zu Feldern, die im
+> selben Request nachgeladen werden. Mitschicken lässt das Schema sie nicht.
+
+| Operation | Mutation-Feld | Akzeptierte Argumente (Auswahl) |
 |---|---|---|
-| ClockIn | `clockInAttendanceShift` | `locationType`, `workplaceId`, `clockInWorkAreaId`, `projectTaskId`, `projectWorkerId`, `subprojectId`, `timeSettingsBreakConfigurationId` |
-| BreakStart | `breakStartAttendanceShift` | `timeSettingsBreakConfigurationId`, `systemCreated: false` |
-| BreakEnd | `breakEndAttendanceShift` | `projectTaskId`, `projectWorkerId`, `subprojectId`, `systemCreated: false` |
-| ClockOut | `clockOutAttendanceShift` | — |
+| ClockIn | `clockInAttendanceShift` | `locationType`, `workplaceId: Int`, `clockInWorkAreaId: Int`, `timeSettingsBreakConfigurationId: Int`, `workable`, `referenceDate`, `observations`, `source` |
+| BreakStart | `breakStartAttendanceShift` | `timeSettingsBreakConfigurationId: Int`, **`systemCreated: Boolean!`**, `observations`, `source` |
+| BreakEnd | `breakEndAttendanceShift` | `locationType`, **`systemCreated: Boolean!`**, `projectTaskId`, `projectWorkerId`, `subprojectId`, `source` |
+| ClockOut | `clockOutAttendanceShift` | `clockOutWorkAreaId: Int`, `workable`, `observations`, `source` |
 
-Beobachtete Variablen (echte Requests):
+> **`breakStartAttendanceShift` akzeptiert kein `locationType`** — `breakEnd` und
+> `clockIn` dagegen schon. Ein mitgeschicktes `locationType` lässt die
+> BreakStart-Mutation mit `undefinedArgument` fehlschlagen.
 
-```jsonc
-// ClockIn
-{"now":"2026-08-12T00:11:12+02:00","date":"2026-08-12","source":"desktop","locationType":"office"}
-// BreakStart
-{"now":"...","date":"...","source":"desktop","locationType":"office",
- "timeSettingsBreakConfigurationId":"19613","startOn":"2026-08-12","endOn":"2026-08-12"}
-// ClockOut
-{"now":"...","date":"...","source":"desktop","startOn":"2026-08-12","endOn":"2026-08-12"}
+Es existieren zusätzlich `breakStartAttendanceBreakShift` /
+`breakEndAttendanceBreakShift`. Die werden **nicht** verwendet — der Web-Client
+nutzt die `…AttendanceShift`-Variante, und nur die ist verifiziert.
+
+**Enums:**
+
+- `AttendanceEnumsShiftSourceEnum`: `desktop`, `mobile`, `face_recognition`,
+  `qr_code`, `mobile_geolocation`, `shared_device`, `api`, `system`, `one_assistant`
+- `AttendanceShiftLocationTypeEnum`: `office`, `business_trip`, `work_from_home`
+
+Verifizierte Aufrufe:
+
+```graphql
+clockInAttendanceShift(now: $now, source: desktop, locationType: office)
+breakStartAttendanceShift(now: $now, source: desktop, systemCreated: false,
+                          timeSettingsBreakConfigurationId: 19613)
+breakEndAttendanceShift(now: $now, source: desktop, systemCreated: false)
+clockOutAttendanceShift(now: $now, source: desktop)
 ```
 
 Jede Mutation gibt `{ errors, shift }` zurück — der neue Shift kommt also direkt
 mit und muss nicht nachgeladen werden.
+
+**`errors` ist `[MutationError!]!`, eine Union** und braucht Inline-Fragmente.
+Ein blankes `errors` ist ein Syntaxfehler:
+
+```graphql
+errors {
+  __typename
+  ... on SimpleError { message type }
+  ... on StructuredError { field messages }
+}
+```
 
 ### Zwei Fallstricke
 
@@ -148,14 +199,44 @@ Factorial kombiniert die **UTC-Datumskomponente** (11. Aug., da 22:11 UTC) mit d
 **lokalen Uhrzeit** (00:11:12) und deklariert das Ergebnis als `+00:00`. Als
 Instant gelesen liegt der Wert 22 Stunden daneben.
 
-**Korrekte Rekonstruktion:** lokale Kalenderdatum aus `shift.date` nehmen, die
-Uhrzeit-Komponente aus `clockInWithSeconds`, und beides in der **lokalen**
-Zeitzone zusammensetzen. Ergibt der Wert einen Zeitpunkt in der Zukunft, einen
-Tag abziehen — das deckt über Mitternacht laufende Schichten ab
-(`crossesMidnight` / `isOvernight` sind als Flags vorhanden).
+**Korrekte Rekonstruktion:** lokales Kalenderdatum aus `shift.date`,
+Uhrzeit-Komponente aus `clockInWithSeconds`, **Zonen-Offset aus `clockInOffset`**.
+
+`clockInOffset` ist ein eigenes Feld und liefert den echten lokalen Offset
+(`"+02:00"`). Damit braucht es weder die Zeitzone der laufenden Maschine noch die
+frühere „liegt der Wert in der Zukunft, zieh einen Tag ab"-Heuristik — die entfällt
+ersatzlos.
+
+Gegengeprobt an einem realen Record: `AttendanceShift.createdAt` ist der einzige
+**echte** UTC-Instant im ganzen Schema und dient als Kontrolle.
+
+| Feld | Wert |
+|---|---|
+| `clockInWithSeconds` | `2026-08-11T09:49:05+00:00` |
+| `clockInOffset` | `+02:00` |
+| `shift.date` | `2026-08-11` |
+| rekonstruiert | `2026-08-11T09:49:05+02:00` = `07:49:05Z` |
+| `createdAt` (Kontrolle) | `2026-08-11T07:49:05Z` ✓ |
 
 Der `+00:00`-Offset und die Datumskomponente von `clockIn*` sind **immer** zu
 ignorieren.
+
+**Für den offenen Shift gilt dieselbe Regel mit anderen Feldnamen.**
+`AttendanceOpenShift` ist ein **anderer Typ** als `AttendanceShift` und kennt
+weder `clockInWithSeconds` noch `minutes`. Verifizierte Form während einer
+laufenden Schicht:
+
+```jsonc
+{ "id": 543343386, "date": "2026-08-12",
+  "clockIn": "2000-01-01T01:18:23Z",   // Sentinel-Datum, lokale Uhrzeit, mit Sekunden
+  "clockInOffset": "+02:00", "clockOut": null,
+  "locationType": "office", "workplaceId": 3333333,
+  "workable": true, "status": "opened", "referenceDate": "2026-08-12",
+  "timeSettingsBreakConfiguration": null }
+```
+
+Also: `openShift.date` + Uhrzeit aus `openShift.clockIn` + `openShift.clockInOffset`.
+Dieselbe Funktion, andere Feldnamen — sie muss beide Formen bedienen.
 
 **3. `clockOut` gibt es nur in Minutenauflösung.** Ein `clockOutWithSeconds`
 existiert nicht — das Schema kennt das Feld nicht.
@@ -236,13 +317,25 @@ und **ohne Preload** — es lädt eine fremde Website.
 
 Drei Zustände, vollständig aus `openShift` abgeleitet — kein parallel gepflegtes Flag:
 
-| `openShift` | `timeSettingsBreakConfiguration` | Zustand |
-|---|---|---|
-| `null` | — | **aus** |
-| gesetzt | `null` | **eingestempelt** |
-| gesetzt | gesetzt | **in Pause** |
+| `openShift` | `timeSettingsBreakConfiguration` | `workable` | Zustand |
+|---|---|---|---|
+| `null` | — | — | **aus** |
+| gesetzt | `null` | `true` | **eingestempelt** |
+| gesetzt | gesetzt | `false` | **in Pause** |
 
 Dazu die Meta-Zustände `unknown` (vor dem ersten Laden) und `unauthenticated`.
+
+Am 2026-08-12 live durchgespielt und bestätigt. `workable` korreliert
+vollständig mit dem Pausenzustand, ist aber **redundant** — maßgeblich bleibt
+`timeSettingsBreakConfiguration`, sonst gäbe es zwei Wahrheiten.
+
+> **Das Factorial-Web-Widget ist keine verlässliche Referenz.** Beobachtet:
+> Das Dashboard zeigte „In einer Pause" samt *Fortsetzen*-Button, auch nach
+> Hard-Reload — während `openShift` `null` war, der zuletzt angelegte Shift
+> geschlossen und der Stundenzettel `0h 00m` auswies. Der Client-Cache von
+> Factorial hängt nach schnellen Zustandswechseln. **Die API ist die Wahrheit.**
+> Unsere App wird in solchen Fällen bewusst vom Web-Widget abweichen; das ist
+> kein Bug auf unserer Seite und darf nicht „passend" gemacht werden.
 
 ### Synchronisation
 
@@ -310,19 +403,40 @@ Komponenten: Button, DropdownMenu, Select, Tooltip, Badge, Sonner.
 Der Arbeitsort merkt sich die letzte Wahl und wird beim Einstempeln als
 `locationType` + `workplaceId` mitgeschickt.
 
-### Offen: Soll-Zeit und Fortschrittsring
+### Soll-Zeit und Fortschrittsring — geklärt
 
-Die gearbeitete Zeit liegt vor (`shift.minutes`, plus laufende Zeit aus
-`clockInWithSeconds`). **Die Tages-Soll-Zeit ist noch nicht verifiziert.** Das
-Web-Widget zeigt "Verbleibende Zeit 08:00", die zugehörige Query wurde beim
-Mitschnitt nicht erfasst — Kandidaten sind `ClockInWidget`,
-`TimesheetLastWorkingShift` oder ein Work-Schedule-Feld.
+Die Tages-Soll-Zeit kommt aus `attendanceEstimatedTimes`:
 
-Erster Implementierungsschritt für dieses Feature ist deshalb eine kurze
-Discovery per Introspection und Interceptor, mit derselben Methode wie bei den
-Mutations. Findet sich keine saubere Quelle, fällt der Ring auf reine
-Ist-Zeit-Anzeige ohne Soll-Vergleich zurück; der Rest der App ist davon nicht
-betroffen.
+```graphql
+query EstimatedTime($id: Int!, $d: ISO8601Date!) {
+  attendance { employee(id: $id) {
+    attendanceEstimatedTimesConnection(startOn: $d, endOn: $d) { nodes {
+      date expectedMinutes minutes regularMinutes
+      overtimeMinutes absencesMinutes contractMinutes source
+    } }
+  } }
+}
+```
+
+Reale Antwort für den 2026-08-12:
+
+```jsonc
+{ "date": "2026-08-12", "expectedMinutes": 480, "minutes": 480,
+  "regularMinutes": 480, "overtimeMinutes": 0, "absencesMinutes": 0,
+  "contractMinutes": 720, "timeUnit": "minute", "source": "contract_hours" }
+```
+
+`expectedMinutes: 480` ist die „Verbleibende Zeit 08:00" des Web-Widgets,
+gegengeprüft mit dem Stundenzettel („0h 00m / 8h 00m" für den 12.8.).
+
+**Nicht `contractMinutes` verwenden** — das sind 720 und meint etwas anderes.
+**Nicht `minutes` aus dieser Query als Ist-Zeit verwenden** — der Wert stand bei
+0 gearbeiteten Minuten ebenfalls auf 480. Die Ist-Zeit wird weiterhin aus der
+Summe über `shift.minutes` des Tages plus laufender Zeit gebildet.
+
+An freien Tagen bzw. bei Abwesenheit ist mit `expectedMinutes: 0` oder einem
+leeren `nodes`-Array zu rechnen; dann entfällt der Soll-Vergleich und der Ring
+zeigt reine Ist-Zeit.
 
 ## Tray
 
@@ -408,11 +522,35 @@ Explizite Trennung: was nachweislich läuft, was nur kompiliert, was
 ungetesteter Code ist. Keine impliziten Erfolgsbehauptungen.
 
 **5. Wie man die Factorial-API selbst weiter erforscht**
-Die Methode, mit der diese Spec entstanden ist, reproduzierbar dokumentiert:
-Interceptor in den Page-Kontext injizieren (ein Content-Script in der isolierten
-Welt reicht **nicht** — `window.fetch` dort zu patchen hat keine Wirkung),
-Rückkanal über ein verstecktes DOM-Element, plus Schema-Introspection. Damit kann
-der Windows-Agent fehlende Queries selbst nachziehen.
+Die Methode, mit der diese Spec entstanden ist, reproduzierbar dokumentiert.
+
+Die **Introspection ist der schnellere Weg** und sollte der erste Griff sein:
+In einer eingeloggten Session genügt ein direkter `fetch` aus dem Seitenkontext,
+weil die API `credentials: 'include'` cross-origin akzeptiert.
+
+```js
+const gql = async (query, variables = {}, op = 'X') =>
+  (await fetch('https://api.factorialhr.com/graphql?' + op, {
+    method: 'POST', credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ operationName: op, variables, query }),
+  })).json()
+
+// Felder eines Typs auflisten:
+await gql(`query T($n:String!){ __type(name:$n){ fields {
+  name args { name } type { kind name ofType { kind name } } } } }`,
+  { n: 'AttendanceEmployee' }, 'T')
+```
+
+So wurden `attendanceEstimatedTimes.expectedMinutes`, `clockInOffset` und die
+korrigierten Mutation-Signaturen gefunden — ohne jeden Interceptor.
+
+**Zum Mitschneiden echter Requests:** `window.fetch` zu patchen bringt bei
+Factorial **nichts**, auch nicht im Main World. Die App hält eine Referenz auf
+`fetch`, die vor jedem nachträglichen Patch aufgelöst wurde; ein installierter
+Wrapper fängt null Requests. Wer echte Requests sehen muss, patcht vor dem
+Laden der App-Bundles oder nutzt die DevTools direkt. Für Feld-Discovery ist das
+aber gar nicht nötig — Introspection reicht.
 
 **6. Offene Punkte und Verdachtsmomente**
 Alles, was beim Bauen auffiel, aber nicht auf macOS entschieden werden konnte.
