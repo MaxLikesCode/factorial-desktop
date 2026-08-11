@@ -23,7 +23,9 @@ anzufassen.
   Rechtsklick → Öffnen freigeben.
 - **Kein Auto-Update.**
 - **Keine Windows-Verifikation.** Der Code bleibt plattformneutral und
-  electron-builder erzeugt ein NSIS-Target, aber getestet wird ausschließlich macOS.
+  electron-builder erzeugt ein NSIS-Target, aber getestet wird ausschließlich
+  macOS. Die Windows-Fertigstellung übernimmt ein separater Agent — siehe
+  "Windows-Übergabe".
 - **Keine Benachrichtigungen/Erinnerungen** ("du bist seit 9h eingestempelt").
 
 ## Die Factorial-API
@@ -325,6 +327,65 @@ Kein E2E-Login-Test — fremde Website mit 2FA.
 
 - **macOS:** DMG + ZIP, arm64 (unsigniert)
 - **Windows:** NSIS-Target konfiguriert, aber nicht verifiziert
+
+## Windows-Übergabe
+
+Die Windows-Fertigstellung übernimmt ein eigener Agent auf einer Windows-Maschine,
+**ohne Zugriff auf diesen Gesprächsverlauf**. Der gesamte Kontext muss deshalb im
+Repository liegen. Das ist ein harter Deliverable dieser Implementierung, kein
+Nice-to-have.
+
+### Deliverable: `docs/WINDOWS.md`
+
+Wird während der Implementierung geschrieben, nicht nachträglich — jede
+plattformabhängige Entscheidung wird festgehalten, wenn sie getroffen wird.
+Inhalt:
+
+**1. Einstieg ohne Vorwissen**
+Was die App tut, wie sie aufgebaut ist, Verweis auf dieses Design-Doc, wie man
+Dev-Modus und Build startet, wo die Einstiegspunkte liegen.
+
+**2. Vollständige Liste aller plattformabhängigen Stellen**
+Jede Verzweigung nach `process.platform` mit Datei, Zeile, Begründung und was auf
+Windows zu prüfen ist. Diese Liste ist maschinell nachvollziehbar zu halten: jede
+solche Stelle bekommt im Code einen `// PLATFORM:` Kommentar, damit ein `grep`
+sie alle findet und nichts stillschweigend verloren geht.
+
+**3. Die bekannten Windows-Themen im Detail**
+
+| Thema | Was auf Windows anders ist |
+|---|---|
+| Tray-Titel | `tray.setTitle()` ist macOS-only. Windows braucht Tooltip + farbcodiertes Icon + Zeit als deaktivierten Menüeintrag |
+| Tray-Icon | macOS: Template-PNG @1x/@2x, monochrom. Windows: `.ico` mit 16/32/48 px, farbig, DPI-abhängig |
+| Frameless & Transparenz | Keine macOS-Vibrancy. Abgerundete Ecken, Schatten und Resize-Verhalten unterscheiden sich; `thickFrame` und `transparent` interagieren anders |
+| Always-on-Top | Die Level-Namen sind plattformspezifisch; macOS-Panel-Level existieren so nicht |
+| Autostart | macOS `setLoginItemSettings` vs. Windows Registry-Run-Key. Im gepackten Zustand müssen `path` und `args` explizit gesetzt werden |
+| Single-Instance | Auf Windows zwingend `requestSingleInstanceLock()` plus `second-instance`-Handler, sonst startet die App mehrfach |
+| Fensterposition | Multi-Monitor mit gemischten DPI-Skalierungen verhält sich anders; gespeicherte Positionen müssen gegen aktuelle Displays validiert werden |
+| Schließen-Verhalten | Erwartungshaltung "X schließt die App" ist auf Windows stärker als auf macOS |
+| Packaging | NSIS statt DMG, andere Artefaktnamen, `appId`, Installer-Optionen |
+
+**4. Was auf macOS verifiziert wurde und was nicht**
+Explizite Trennung: was nachweislich läuft, was nur kompiliert, was
+ungetesteter Code ist. Keine impliziten Erfolgsbehauptungen.
+
+**5. Wie man die Factorial-API selbst weiter erforscht**
+Die Methode, mit der diese Spec entstanden ist, reproduzierbar dokumentiert:
+Interceptor in den Page-Kontext injizieren (ein Content-Script in der isolierten
+Welt reicht **nicht** — `window.fetch` dort zu patchen hat keine Wirkung),
+Rückkanal über ein verstecktes DOM-Element, plus Schema-Introspection. Damit kann
+der Windows-Agent fehlende Queries selbst nachziehen.
+
+**6. Offene Punkte und Verdachtsmomente**
+Alles, was beim Bauen auffiel, aber nicht auf macOS entschieden werden konnte.
+
+### Regel für die Implementierung
+
+Windows-Code wird **mitgeschrieben, nicht wegabstrahiert**. Wo eine Verzweigung
+nötig ist, kommt sie sofort rein, mit `// PLATFORM:` markiert und in
+`docs/WINDOWS.md` vermerkt — auch wenn der Zweig hier nicht getestet werden kann.
+Ein leerer Windows-Pfad, der später "noch gebaut werden muss", ist schlechter als
+ein plausibler ungetesteter, weil er im Code unsichtbar ist.
 
 ## Erweiterbarkeit
 
