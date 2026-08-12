@@ -223,6 +223,22 @@ describe('refresh', () => {
     expect(store.getSnapshot().lastError).toMatch(/timed out/)
   })
 
+  it('retires the error once a read succeeds again', async () => {
+    const ops = makeOps()
+    ops.fetchOpenShift.mockRejectedValueOnce(new FactorialError('network', 'request timed out after 15000 ms'))
+    const store = makeStore(ops)
+
+    await store.refresh()
+    expect(store.getSnapshot().lastError).toMatch(/timed out/)
+    expect(store.getSnapshot().stale).toBe(true)
+
+    await store.refresh()
+    expect(store.getSnapshot().stale).toBe(false)
+    // Without this the widget shows a recovered hiccup for the rest of the day.
+    expect(store.getSnapshot().lastError).toBeNull()
+    expect(store.getSnapshot().lastErrorKind).toBeNull()
+  })
+
   it('reports an unparseable shift as stale rather than showing a guessed time', async () => {
     const ops = makeOps()
     ops.fetchOpenShift.mockResolvedValue({ ...OPEN, clockInOffset: 'nonsense' })
@@ -525,6 +541,40 @@ describe('polling', () => {
     if (sleeper.pending() > 0) sleeper.wake()
     await settle()
     expect(ops.fetchOpenShift).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not leave two loops running when a stop is followed straight by a start', async () => {
+    // The suspend/resume path does exactly this. The old loop is parked inside
+    // its sleep, so it re-reads `polling` only after `startPolling` has already
+    // set it back to true.
+    const ops = makeOps()
+    const sleeper = makeSleeper()
+    const store = makeStore(ops, { sleep: sleeper.sleep, pollIntervalMs: 60_000 })
+
+    store.startPolling()
+    await settle()
+    expect(sleeper.pending()).toBe(1)
+
+    store.stopPolling()
+    store.startPolling()
+    await settle()
+
+    // Two refreshes so far: one per start.
+    expect(ops.fetchOpenShift).toHaveBeenCalledTimes(2)
+    // Two sleepers are registered, but one of them belongs to the orphaned loop:
+    // `stopPolling` resolves the race promise, not the fake sleeper's timer.
+    expect(sleeper.pending()).toBe(2)
+
+    // Wake both. The orphan must fall out of its loop without refreshing; only
+    // the live loop may come round again. Before the generation guard both woke
+    // into a refresh and the count went to 4.
+    sleeper.wake()
+    await settle()
+    sleeper.wake()
+    await settle()
+    expect(ops.fetchOpenShift).toHaveBeenCalledTimes(3)
+
+    store.stopPolling()
   })
 
   it('does not start a second loop when startPolling is called twice', async () => {

@@ -183,6 +183,8 @@ export function createAttendanceStore({
   let appliedRefresh = 0
 
   let polling = false
+  /** Bumped on every start and stop; only the newest poll loop may run. */
+  let loopGeneration = 0
   let wakeFromSleep: () => void = () => {}
 
   function emit(next: Partial<AttendanceSnapshot>): void {
@@ -222,6 +224,12 @@ export function createAttendanceStore({
         state: deriveState(openShift),
         ...summariseDay(shifts, openShift?.id ?? null),
         stale: false,
+        // A read that worked retires the previous reason for failing. Without
+        // this the widget keeps a recovered network hiccup on screen forever.
+        // Safe for the mutation path: `mutate` restates its own failure right
+        // after the reload precisely so the user still reads about their click.
+        lastError: null,
+        lastErrorKind: null,
       })
     } catch (error) {
       if (ticket < appliedRefresh) return
@@ -295,15 +303,22 @@ export function createAttendanceStore({
     return { kind: 'in', shiftId: OPTIMISTIC_SHIFT_ID, since: now(), ...location }
   }
 
-  async function pollLoop(): Promise<void> {
-    while (polling) {
+  async function pollLoop(generation: number): Promise<void> {
+    // `polling` alone is not enough to own the loop. A stop immediately followed
+    // by a start — which is exactly what suspend/resume does — flips the flag
+    // back to true before this loop's continuation gets to re-read it, so the
+    // old loop would sail past the check and run alongside the new one, doubling
+    // the request rate against a real HR API. The generation makes ownership
+    // explicit: only the newest loop keeps going.
+    const owns = (): boolean => polling && generation === loopGeneration
+    while (owns()) {
       try {
         await refresh()
       } catch {
         // `refresh` handles its own failures; this only catches a listener that
         // threw. One bad tick must not end background synchronisation for good.
       }
-      if (!polling) break
+      if (!owns()) break
       // Racing the sleep against `stopPolling` keeps shutdown immediate instead
       // of waiting out a full minute.
       await new Promise<void>((resolve) => {
@@ -362,11 +377,14 @@ export function createAttendanceStore({
     startPolling(): void {
       if (polling) return
       polling = true
-      void pollLoop()
+      void pollLoop((loopGeneration += 1))
     },
 
     stopPolling(): void {
       polling = false
+      // Orphans any loop still suspended in its sleep, so a start on the very
+      // next line cannot revive it.
+      loopGeneration += 1
       wakeFromSleep()
     },
   }
