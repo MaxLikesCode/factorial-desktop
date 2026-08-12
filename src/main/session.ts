@@ -9,7 +9,7 @@
  */
 
 import { session as electronSession, type Session } from 'electron'
-import { stripElectronToken } from '@shared/user-agent'
+import { toBrowserUserAgent } from '@shared/user-agent'
 import type { GraphQLFetch } from './factorial/client'
 import { createTimeoutFetch, type SessionFetch } from './session-fetch'
 
@@ -38,7 +38,7 @@ export function getFactorialSession(): Session {
  * set, so the caller can log it.
  */
 export function applyBrowserUserAgent(session: Session): string {
-  const userAgent = stripElectronToken(session.getUserAgent())
+  const userAgent = toBrowserUserAgent(session.getUserAgent())
   session.setUserAgent(userAgent)
   return userAgent
 }

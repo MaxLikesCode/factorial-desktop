@@ -15,25 +15,13 @@ import { BrowserWindow } from 'electron'
 import { authenticate, createSessionProbe, type LoginWindowHandle } from './auth-flow'
 import type { Operations } from './factorial/operations'
 import type { Identity } from './factorial/types'
+import { indicatesSignedIn, LOGIN_URL } from './login-target'
 import { PARTITION } from './session'
-
-/**
- * DESIGN.md names `id.factorialhr.com` as the login host (PLAN.md's Task 6
- * snippet says `app.factorialhr.com`; the design document wins). Both lead to
- * the same form — `app` bounces to `id` when there is no session — but pointing
- * straight at the login host avoids one redirect on the cold path.
- */
-const LOGIN_URL = 'https://id.factorialhr.com/'
-
-/** Slow enough not to hammer the API, fast enough to feel immediate after 2FA. */
-const POLL_INTERVAL_MS = 1500
 
 const LOGIN_WINDOW_WIDTH = 520
 const LOGIN_WINDOW_HEIGHT = 720
 
 let loginWindow: BrowserWindow | null = null
-
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 /** Opens the login window, or focuses the one already open. */
 export function openLoginWindow(): BrowserWindow {
@@ -72,6 +60,16 @@ export function closeLoginWindow(): void {
 function toHandle(win: BrowserWindow): LoginWindowHandle {
   return {
     onClosed: (listener) => win.once('closed', listener),
+    // `did-navigate` is main-frame only, which is what this wants: sub-frame and
+    // in-page navigations are not a completed sign-in.
+    onNavigate: (listener) => {
+      win.webContents.on('did-navigate', (_event, url) => listener(url))
+      // A redirect that never becomes a fresh document still lands the user
+      // somewhere new, and after sign-in Factorial does exactly that.
+      win.webContents.on('did-redirect-navigation', (_event, url, isInPlace, isMainFrame) => {
+        if (isMainFrame && !isInPlace) listener(url)
+      })
+    },
     close: () => closeLoginWindow(),
   }
 }
@@ -86,7 +84,6 @@ export function ensureAuthenticated(ops: Operations): Promise<Identity> {
   return authenticate({
     probe: createSessionProbe(ops),
     openLoginWindow: () => toHandle(openLoginWindow()),
-    sleep,
-    pollIntervalMs: POLL_INTERVAL_MS,
+    indicatesSignedIn,
   })
 }

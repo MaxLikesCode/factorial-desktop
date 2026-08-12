@@ -303,8 +303,34 @@ renderer/           React + Tailwind v4 + shadcn/ui (Nova)
 3. Erfolg → `employeeId` und `companyId` cachen, App startet normal.
 4. 401 oder leere Antwort → Login-`BrowserWindow` auf `https://id.factorialhr.com`
    in derselben Partition öffnen.
-5. Parallel die `Me`-Query pollen. Sobald sie durchgeht, Login-Fenster schließen
-   und normal weiterlaufen.
+5. **Auf Navigation warten, nicht pollen.** Sobald das Login-Fenster auf einem
+   Factorial-Host landet, der *nicht* der Login-Host ist, einmal `Me` abfragen.
+   Geht sie durch: Fenster schließen und normal weiterlaufen.
+
+> **Während der Anmeldung stellt die App keine einzige API-Anfrage.** Das ist
+> keine Optimierung, sondern eine Korrektur.
+>
+> Die erste Fassung fragte `Me` alle 1,5 Sekunden ab, solange das Login-Fenster
+> offen war. Factorial lehnte daraufhin **jeden** Code ab — den per E-Mail
+> geschickten OTP genauso wie den TOTP aus der Authenticator-App, beide mit
+> „Ungültiger Code". Ein TOTP wird serverseitig aus Code, Secret und Uhrzeit
+> geprüft; kein Client kann einen richtigen Code falsch machen. Wenn also beide
+> Arten gleichzeitig scheitern, war nie der Code das Problem, sondern die
+> Prüfanfrage fand ihre laufende Anmeldung nicht mehr.
+>
+> Ein Strom unauthentifizierter `Me`-Aufrufe im Sekundentakt, mit einem
+> halbfertigen Auth-Cookie, gegen eine API hinter Cloudflare — das macht kein
+> Browser, und es ist das Naheliegendste, was man entfernen kann.
+>
+> Das Prädikat dafür (`indicatesSignedIn` in `login-target.ts`) ist **positiv**
+> formuliert: es sagt nur bei einem Factorial-Host außerhalb des Login-Hosts ja.
+> Ein negatives „ist das noch der Login?" würde bei jedem unbekannten Umweg —
+> SSO-Hop, `about:blank`, kaputte URL — mit nein antworten und genau dann eine
+> Anfrage auslösen.
+>
+> Preis dieser Entscheidung: ändert Factorial das Ziel nach der Anmeldung, bleibt
+> das Login-Fenster offen stehen. Das ist sichtbar und leicht zu finden — und
+> allemal besser als eine Anmeldung, die grundsätzlich nicht durchgehen kann.
 
 Die App **liest das Cookie nie aus und speichert keinen Token**. Chromium hält es
 in der Partition, `net.request` schickt es mit. Logout = Cookies der Partition

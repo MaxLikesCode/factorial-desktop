@@ -1,24 +1,43 @@
 /**
- * Electron announces itself in the User-Agent:
+ * Reduces Electron's User-Agent to the plain Chrome one.
  *
- *   ...AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.7871.224 Electron/43.4.0 Safari/537.36
+ * Electron announces itself twice. The obvious one is the engine token:
  *
- * That token is the only thing separating this string from a plain Chrome on the
- * same machine. Factorial's sign-in rejected every emailed OTP and every MFA
- * code with "invalid code" — for both kinds at once, which means the codes were
- * never the problem and the verification request was being refused before the
- * code was even considered.
+ *   ...(KHTML, like Gecko) Chrome/150.0.7871.224 Electron/43.4.0 Safari/537.36
  *
- * Removing the token leaves the string Chromium built for its own engine, which
- * is what this window in fact is: a first-party desktop client signing a user
- * into their own account. Nothing is impersonated that is not already true — the
- * Chrome version is real, the platform is real. Only the build flavour is
- * dropped.
+ * The second only appears in a real app, which is how it survived a first fix:
+ * Electron also inserts the application's own name and version, taken from
+ * `package.json`, *before* the Chrome token:
+ *
+ *   ...(KHTML, like Gecko) factorial-desktop-2/0.1.0 Chrome/150.0.7871.224 Safari/537.36
+ *
+ * Both are foreign to a browser, and Factorial's sign-in runs behind Cloudflare
+ * bot management — the login host serves `/cdn-cgi/rum` and an obfuscated
+ * challenge path alongside the form.
+ *
+ * So this rebuilds the string from the two parts that are true of this client
+ * anyway — the platform and the Chromium version it actually runs — rather than
+ * subtracting tokens one at a time and hoping none is left. Nothing is claimed
+ * that is not the case: the Chrome version is genuine, the platform is genuine.
+ * Only the build flavour and the product name are dropped.
  */
 
-/** Matches ` Electron/<version>` anywhere in the string. */
-const ELECTRON_TOKEN = /\sElectron\/\S+/g
+/**
+ * `Mozilla/5.0 (<platform>) AppleWebKit/537.36 (KHTML, like Gecko) ... Chrome/<version> ...`
+ * Everything between the Gecko marker and the Chrome token is a product token.
+ */
+const CHROME_SHAPE =
+  /^Mozilla\/5\.0 \(([^)]*)\) AppleWebKit\/537\.36 \(KHTML, like Gecko\).*?\bChrome\/(\S+)/
 
-export function stripElectronToken(userAgent: string): string {
-  return userAgent.replace(ELECTRON_TOKEN, '')
+/** Fallback removals, for a string that does not match the expected shape. */
+const FOREIGN_TOKENS = /\s(?:Electron)\/\S+/g
+
+export function toBrowserUserAgent(userAgent: string): string {
+  const match = CHROME_SHAPE.exec(userAgent)
+  if (!match) {
+    // Better a partial cleanup than none: still drop the Electron token.
+    return userAgent.replace(FOREIGN_TOKENS, '')
+  }
+  const [, platform, chromeVersion] = match
+  return `Mozilla/5.0 (${platform}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`
 }

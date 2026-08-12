@@ -4,12 +4,32 @@
  *
  * `auth.ts` next door owns the real `BrowserWindow`; everything decided here —
  * when to open a window, when to keep waiting, when to give up — is testable
- * because the window, the clock and the probe are injected.
+ * because the window and the probe are injected.
  *
  * The one distinction that matters: **"the server says no" is not the same as
  * "the server did not answer"**. Only the first means the user has to log in.
  * Treating a network hiccup as a logout would throw a login window at a user
  * whose problem is their Wi-Fi.
+ *
+ * ## Why this waits for navigation instead of polling
+ *
+ * It used to ask `Me` every 1.5 seconds for as long as the login window was
+ * open. That is not how a browser behaves, and Factorial's sign-in rejected
+ * every code — the emailed OTP and the authenticator's TOTP alike — with
+ * "invalid code". A TOTP is checked server-side from the code, the shared
+ * secret and the clock; nothing about the client can make a correct one wrong.
+ * So the codes were never the problem: the request verifying them could not
+ * find its pending sign-in any more.
+ *
+ * A stream of unauthenticated `Me` calls carrying a half-built auth cookie, one
+ * every 1.5 s, into an API that sits behind Cloudflare, is the obvious thing to
+ * remove. So this flow now makes **no API request at all** while the user is on
+ * the login host. It waits for the window to navigate somewhere else — which is
+ * what a completed sign-in does — and only then asks once.
+ *
+ * If Factorial ever changes where it lands after sign-in, the symptom is a login
+ * window that stays open after a successful login: visible, and easy to trace.
+ * That is a much better failure than a sign-in that cannot succeed at all.
  */
 
 import { FactorialError } from './factorial/client'
@@ -25,14 +45,21 @@ export type SessionProbe = () => Promise<Identity | null>
 /** The slice of the login window this flow needs — see `auth.ts` for the real one. */
 export interface LoginWindowHandle {
   onClosed(listener: () => void): void
+  /** Main-frame navigations, as absolute URLs. */
+  onNavigate(listener: (url: string) => void): void
   close(): void
 }
 
 export interface AuthFlowDeps {
   probe: SessionProbe
   openLoginWindow: () => LoginWindowHandle
-  sleep: (ms: number) => Promise<void>
-  pollIntervalMs: number
+  /**
+   * True only for a URL that means the sign-in is over. Stated positively on
+   * purpose: a negative "is this still the login?" lets every unknown detour
+   * through — an SSO hop, `about:blank` — and each of those would fire a request
+   * mid-challenge, which is the bug this flow exists to avoid.
+   */
+  indicatesSignedIn: (url: string) => boolean
 }
 
 /**
@@ -64,39 +91,36 @@ export async function authenticate(deps: AuthFlowDeps): Promise<Identity> {
 
   const window = deps.openLoginWindow()
 
-  let abandoned = false
-  let markClosed = (): void => {}
-  const closed = new Promise<void>((resolve) => {
-    markClosed = resolve
+  return new Promise<Identity>((resolve, reject) => {
+    let settled = false
+
+    window.onClosed(() => {
+      if (settled) return
+      settled = true
+      // The window is already gone; closing it again is at best a no-op.
+      reject(new FactorialError('unauthenticated', LOGIN_ABORTED_MESSAGE))
+    })
+
+    window.onNavigate((url) => {
+      // Anything short of a clear "we are through" is left alone. Touching the
+      // API mid-sign-in is what broke it.
+      if (settled || !deps.indicatesSignedIn(url)) return
+
+      void deps
+        .probe()
+        .then((identity) => {
+          // `settled` is re-read after the await: the user may have closed the
+          // window while this was in flight, and logging someone in after they
+          // gave up is worse than making them click again.
+          if (settled || !identity) return
+          settled = true
+          window.close()
+          resolve(identity)
+        })
+        .catch(() => {
+          // A failed probe here is not a verdict — the page that just loaded is
+          // proof the network was reachable. Wait for the next navigation.
+        })
+    })
   })
-  window.onClosed(() => {
-    abandoned = true
-    markClosed()
-  })
-
-  while (!abandoned) {
-    let identity: Identity | null = null
-    try {
-      identity = await deps.probe()
-    } catch {
-      // A failed probe during login is not a verdict: the login page itself is
-      // proof the network was reachable a moment ago. Keep waiting.
-    }
-
-    // The window may have closed while the probe was in flight. Logging someone
-    // in after they gave up is worse than making them click again.
-    if (abandoned) break
-
-    if (identity) {
-      window.close()
-      return identity
-    }
-
-    // Racing the sleep against the close event keeps the abort responsive
-    // instead of waiting out a full poll interval.
-    await Promise.race([deps.sleep(deps.pollIntervalMs), closed])
-  }
-
-  // The window is already gone; closing it again is at best a no-op.
-  throw new FactorialError('unauthenticated', LOGIN_ABORTED_MESSAGE)
 }
