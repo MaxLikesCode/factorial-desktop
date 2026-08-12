@@ -410,6 +410,28 @@ Reihenfolge, in der man sie abarbeitet, steht in Abschnitt 7:
   nichts: `setLoginItemSettings` verändert echte Systemeinstellungen des
   Benutzers und wurde deshalb bewusst nicht ausgelöst.
 
+- **Die vollständige Anmeldung, inklusive Zwei-Faktor** — am 2026-08-12 von Max
+  auf macOS durchgeführt und als funktionierend gemeldet. Damit ist die Kette
+  „leere Partition → Login-Fenster → Formular → MFA → Fenster schließt sich →
+  `bootstrap` läuft weiter" einmal echt gelaufen.
+
+  Sie funktionierte **vorher nicht**, und der Grund lohnt das Festhalten, weil er
+  jeden trifft, der diese App nachbaut: Factorial wies jeden Code ab, den
+  E-Mail-OTP wie den TOTP aus der Authenticator-App, beide mit „Ungültiger
+  Code". Zwei Ursachen, beide erst im Netzwerk-Log der App sichtbar:
+
+  1. Der Login-Ablauf pollte `Me` alle 1,5 s, solange das Fenster offen war —
+     unauthentifizierte Aufrufe mit halbfertigem Auth-Cookie gegen eine API
+     hinter Cloudflare. Seitdem stellt die App **während der Anmeldung gar keine
+     API-Anfrage** mehr; siehe `auth-flow.ts` und `login-target.ts`.
+  2. Der User-Agent trug erst `Electron/43.4.0` und danach immer noch
+     `factorial-desktop-2/0.1.0`. Er wird jetzt aus Plattform und echter
+     Chromium-Version neu gebaut; siehe `@shared/user-agent`.
+
+  Diagnosewerkzeug dafür ist `FACTORIAL_DEBUG_NET=1 npm run dev`
+  (`src/main/debug-net.ts`) — protokolliert Methode, URL und Status, bewusst
+  keine Bodies und keine Header-Werte.
+
 **Nicht verifiziert, auf keiner Plattform:**
 
 - **Die `.ico`-Dateien.** Electron kann auf macOS überhaupt kein ICO lesen:
@@ -449,10 +471,14 @@ Reihenfolge, in der man sie abarbeitet, steht in Abschnitt 7:
 - **`window-all-closed` mit und ohne Tray.** Die Verzweigung hängt an
   `hasTray()`; beide Zweige sind nur gelesen, nicht gelaufen.
 
-- Der **vollständige Login** (Formular ausfüllen, 2FA, Fenster schließt sich
-  selbst, `[auth] signed in as …` erscheint) — braucht echte Zugangsdaten und
-  einen Menschen. Ebenso der zweite Start *ohne* Login-Fenster, der die
-  Persistenz der Partition belegen würde.
+- Der **zweite Start ohne Login-Fenster**, der die Persistenz der Partition über
+  einen Neustart hinweg belegen würde. Die Anmeldung selbst ist erledigt (siehe
+  oben), dieser Folgeschritt wurde nicht getrennt bestätigt.
+- **Was nach der Anmeldung passiert.** Dass die App läuft, belegt nur, dass
+  `ensureAuthenticated` durchkam. Es belegt **nicht**, dass der erste
+  `store.refresh()` echte Zahlen bekam — `refresh` wirft nie, sondern markiert
+  im Fehlerfall `stale`. Ein- und Ausstempeln, Pause und der Abgleich der
+  Soll-Zeit gegen den Stundenzettel sind ebenfalls nicht bestätigt.
 - Das Verhalten von `ses.fetch` bei `redirect: 'manual'`: ob Electron den echten
   3xx-Status durchreicht oder eine „opaque" Antwort mit Status 0. Beide Fälle
   sind in `src/main/session-fetch.ts` behandelt (Status 0 wird zu 302
