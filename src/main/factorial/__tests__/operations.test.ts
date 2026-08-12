@@ -291,8 +291,8 @@ describe('fetchBreakConfigurations', () => {
       timeSettings: {
         breakConfigurationsConnection: {
           nodes: [
-            { id: 19613, name: 'Mittagspause' },
-            { id: 20261, name: 'Arztbesuch' },
+            { id: 19613, name: 'Mittagspause', archived: false },
+            { id: 20261, name: 'Arztbesuch', archived: false },
           ],
         },
       },
@@ -305,14 +305,70 @@ describe('fetchBreakConfigurations', () => {
     expect(only(calls).query).not.toContain('attendance')
   })
 
+  it('asks the server for active configurations only', async () => {
+    const { client, calls } = recordingClient({
+      timeSettings: { breakConfigurationsConnection: { nodes: [] } },
+    })
+    await createOperations(client).fetchBreakConfigurations()
+    expect(only(calls).query).toContain('active: true')
+  })
+
+  /**
+   * The real account, read from the live API on 2026-08-12. Factorial keeps
+   * retired configurations and serves them next to the live ones under the same
+   * names — and the archived pair carries paid: false where the current pair
+   * carries paid: true. Offering both would let a user book a break against a
+   * retired configuration in a real HR record.
+   */
+  it('drops archived duplicates even if the server hands them over anyway', async () => {
+    const { client } = recordingClient({
+      timeSettings: {
+        breakConfigurationsConnection: {
+          nodes: [
+            { id: 19613, name: 'Mittagspause', archived: false },
+            { id: 20211, name: 'Verdienstausfall', archived: true },
+            { id: 20261, name: 'Arztbesuch', archived: true },
+            { id: 21217, name: 'Verdienstausfall', archived: false },
+            { id: 21836, name: 'Arztbesuch', archived: false },
+          ],
+        },
+      },
+    })
+    await expect(createOperations(client).fetchBreakConfigurations()).resolves.toEqual([
+      { id: '19613', name: 'Mittagspause' },
+      { id: '21217', name: 'Verdienstausfall' },
+      { id: '21836', name: 'Arztbesuch' },
+    ])
+  })
+
+  it('treats a missing or malformed archived flag as archived', async () => {
+    // Erring the other way would put a retired configuration back in the menu,
+    // which is the failure that costs something.
+    const { client } = recordingClient({
+      timeSettings: {
+        breakConfigurationsConnection: {
+          nodes: [
+            { id: 1, name: 'Ohne Flag' },
+            { id: 2, name: 'Nullflag', archived: null },
+            { id: 3, name: 'Stringflag', archived: 'false' },
+            { id: 4, name: 'Mittagspause', archived: false },
+          ],
+        },
+      },
+    })
+    await expect(createOperations(client).fetchBreakConfigurations()).resolves.toEqual([
+      { id: '4', name: 'Mittagspause' },
+    ])
+  })
+
   it('drops entries without a name so the menu never shows a blank row', async () => {
     const { client } = recordingClient({
       timeSettings: {
         breakConfigurationsConnection: {
           nodes: [
-            { id: 1, name: null },
-            { id: 2, name: '   ' },
-            { id: 3, name: 'Mittagspause' },
+            { id: 1, name: null, archived: false },
+            { id: 2, name: '   ', archived: false },
+            { id: 3, name: 'Mittagspause', archived: false },
           ],
         },
       },

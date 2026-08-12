@@ -103,12 +103,36 @@ attendanceShiftsConnection(startOn: $d, endOn: $d) { nodes {
 
 ```graphql
 query BreakConfigurations {
-  timeSettings { breakConfigurationsConnection { nodes { id name } } }
+  timeSettings {
+    breakConfigurationsConnection(active: true) { nodes { id name archived } }
+  }
 }
 ```
 
-Beobachtet: `19613 Mittagspause`, `20211 Verdienstausfall`, `20261 Arztbesuch`,
-`21217 Verdienstausfall`, `21836 Arztbesuch`.
+**`active: true` ist nicht optional.** Factorial behält stillgelegte
+Konfigurationen und liefert sie ungefiltert neben den aktuellen aus — mit
+denselben Namen. Ohne Filter (Stand 2026-08-12, echtes Konto):
+
+| ID | Name | `archived` | `paid` |
+|---|---|---|---|
+| 19613 | Mittagspause | `false` | `false` |
+| 20211 | Verdienstausfall | **`true`** | `false` |
+| 20261 | Arztbesuch | **`true`** | `false` |
+| 21217 | Verdienstausfall | `false` | `true` |
+| 21836 | Arztbesuch | `false` | `true` |
+
+Im Menü stünden „Verdienstausfall" und „Arztbesuch" damit doppelt, ohne
+sichtbaren Unterschied — und wer den falschen erwischt, bucht seine Pause gegen
+eine stillgelegte Konfiguration mit dem **falschen `paid`-Flag** in eine echte
+Arbeitszeiterfassung. Das ist keine Kosmetik.
+
+> **`active: false` heißt nicht „nur archivierte", sondern „nicht filtern"** —
+> es liefert alle fünf zurück. Zum Ansehen der archivierten Einträge taugt es
+> nicht.
+
+`operations.ts` filtert trotzdem zusätzlich clientseitig über `archived`, und
+behandelt alles außer einem expliziten `false` als archiviert. Doppelt gemoppelt
+mit Absicht: sollte `active` je seine Bedeutung ändern, hält die zweite Prüfung.
 
 > **Nicht verwechseln:** `attendance.breakConfigurationsConnection` existiert
 > ebenfalls, liefert aber andere IDs und durchgehend `name: null`. Für die

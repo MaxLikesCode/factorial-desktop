@@ -385,12 +385,33 @@ export function createOperations(client: GraphQLClient) {
      * `attendance.breakConfigurationsConnection` exists as well but returns
      * different ids and `name: null` for every entry.
      */
+    /**
+     * Only the break types that are still in use.
+     *
+     * Factorial keeps retired configurations and serves them alongside the live
+     * ones, distinguished by `archived` and nothing else — the names repeat.
+     * Observed on the real account: two "Verdienstausfall" and two "Arztbesuch",
+     * where the archived pair is `paid: false` and the current pair `paid: true`.
+     * Offering both is not merely an ugly menu with a duplicate in it: picking
+     * the wrong one books the break against a retired configuration with the
+     * wrong paid flag, in a real HR record.
+     *
+     * Filtered twice on purpose. `active: true` does the work server-side, and
+     * `archived` is read back and checked here as well. Belt and braces is
+     * justified by the cost of being wrong: if that argument ever changes
+     * meaning, the second filter still holds the line.
+     *
+     * `active: false` is **not** "only the archived ones" — it means "do not
+     * filter" and returns the lot. Do not use it to inspect archived entries.
+     */
     async fetchBreakConfigurations(): Promise<BreakConfigOption[]> {
       const data = await client.execute<unknown>({
         operationName: 'BreakConfigurations',
         variables: {},
         query: `query BreakConfigurations {
-          timeSettings { breakConfigurationsConnection { nodes { id name } } }
+          timeSettings {
+            breakConfigurationsConnection(active: true) { nodes { id name archived } }
+          }
         }`,
       })
 
@@ -407,6 +428,10 @@ export function createOperations(client: GraphQLClient) {
         const name = asNullableString(field(node, path, 'name'), `${path}.name`)?.trim()
         // A nameless entry would render as a blank row in the break menu.
         if (!name) return
+        // The second half of the filter described above. Anything but an
+        // explicit `false` is treated as archived: a missing or malformed flag
+        // must not let a retired configuration through.
+        if (field(node, path, 'archived') !== false) return
         options.push({ id: asId(field(node, path, 'id'), `${path}.id`), name })
       })
       return options
