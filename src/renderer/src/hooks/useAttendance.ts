@@ -11,6 +11,8 @@ const INITIAL: AppSnapshot = {
   state: { kind: 'unknown' },
   todayMinutes: 0,
   incompleteShifts: 0,
+  // No target known yet; the ring stays empty rather than assuming eight hours.
+  expectedMinutes: null,
   breakOptions: [],
   lastError: null,
   lastErrorKind: null,

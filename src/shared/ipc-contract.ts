@@ -62,6 +62,13 @@ export interface AppSnapshot {
   todayMinutes: number
   /** How many of today's records arrived without `minutes` (C4): day sum is provisional. */
   incompleteShifts: number
+  /**
+   * The day's target in minutes (`expectedMinutes`, K8), or null when the API
+   * has none — a day off, an absence, or a target lookup that failed. `0` is a
+   * real answer too and is passed through as itself: filling either case in with
+   * eight hours would put a goal on a day nobody is expected to work.
+   */
+  expectedMinutes: number | null
   breakOptions: BreakOption[]
   /**
    * The most recent failure *ever seen*, in the server's own words. A later

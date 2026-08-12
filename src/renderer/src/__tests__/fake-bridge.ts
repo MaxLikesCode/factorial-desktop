@@ -20,6 +20,7 @@ export const EMPTY_SNAPSHOT: AppSnapshot = {
   state: { kind: 'unknown' },
   todayMinutes: 0,
   incompleteShifts: 0,
+  expectedMinutes: null,
   breakOptions: [],
   lastError: null,
   lastErrorKind: null,

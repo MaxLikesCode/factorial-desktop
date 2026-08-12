@@ -8,6 +8,7 @@ const SNAPSHOT: AttendanceSnapshot = {
   state: { kind: 'out' },
   todayMinutes: 0,
   incompleteShifts: 0,
+  expectedMinutes: null,
   breakOptions: [],
   lastError: null,
   lastErrorKind: null,

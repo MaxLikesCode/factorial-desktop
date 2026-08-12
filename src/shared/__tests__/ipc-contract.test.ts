@@ -12,6 +12,7 @@ import {
 const REST = {
   todayMinutes: 0,
   incompleteShifts: 0,
+  expectedMinutes: null,
   breakOptions: [],
   lastError: null,
   lastErrorKind: null,
@@ -75,6 +76,17 @@ describe('snapshot serialisation', () => {
     expect(restored.lastError).toBe('no connection')
     expect(restored.lastErrorKind).toBe('network')
     expect(restored.stale).toBe(true)
+  })
+
+  it('carries the day’s target across, including the "no target" case', () => {
+    // The ring's goal (K8, `expectedMinutes`). `null` and `0` are both real
+    // answers — a day off — and must arrive as themselves, not as a helpful 480.
+    for (const expectedMinutes of [480, 0, null]) {
+      const restored = deserialiseSnapshot(
+        serialiseSnapshot({ ...REST, state: { kind: 'out' }, expectedMinutes }),
+      )
+      expect(restored.expectedMinutes).toBe(expectedMinutes)
+    }
   })
 
   it('produces a structured-clone-safe payload with no Date instances', () => {

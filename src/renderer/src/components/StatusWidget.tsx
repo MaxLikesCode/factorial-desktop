@@ -16,13 +16,6 @@ import { LocationSelect } from './LocationSelect'
  */
 export const UNKNOWN_TIME = '–:––:––'
 
-/**
- * Placeholder day target until Task 13 replaces it with `expectedMinutes` from
- * `attendanceEstimatedTimes` (K8). Deliberately a single constant so that task
- * has exactly one thing to delete.
- */
-const TARGET_MINUTES = 8 * 60
-
 const LABEL = {
   unknown: 'Lädt …',
   unauthenticated: 'Nicht angemeldet',
@@ -79,8 +72,23 @@ export function StatusWidget(): React.JSX.Element {
       ? snapshot.todayMinutes * 60_000 + (state.kind === 'in' ? segmentMs : 0)
       : null
 
+  /**
+   * The day's goal, or `null` when there is none to compare against.
+   *
+   * A zero target counts as "none" as well: on a holiday the API answers either
+   * `expectedMinutes: 0` or an empty node list (which `fetchExpectedMinutes`
+   * reports as `null`), and rendering the first of those as „Verbleibende Zeit
+   * 00:00" would read as "you are done for today" on a day that never had a
+   * goal. DESIGN.md, "Soll-Zeit und Fortschrittsring": on a day off the
+   * comparison is dropped and the ring shows plain elapsed time.
+   */
+  const target =
+    snapshot.expectedMinutes !== null && snapshot.expectedMinutes > 0
+      ? snapshot.expectedMinutes
+      : null
+
   const remainingMinutes =
-    workedMs === null ? null : Math.max(0, TARGET_MINUTES - workedMs / 60_000)
+    workedMs === null || target === null ? null : Math.max(0, target - workedMs / 60_000)
 
   async function run(action: () => Promise<void>): Promise<void> {
     setBusy(true)
@@ -130,7 +138,9 @@ export function StatusWidget(): React.JSX.Element {
           )}
         </div>
         <ProgressRing
-          progress={workedMs === null ? 0 : workedMs / 60_000 / TARGET_MINUTES}
+          // Without a target there is nothing to be a fraction of: the arc stays
+          // empty and the ring is just a frame around the timer.
+          progress={workedMs === null || target === null ? 0 : workedMs / 60_000 / target}
           label={workedMs === null ? UNKNOWN_TIME : formatDuration(workedMs)}
           tone={TONE[state.kind]}
         />

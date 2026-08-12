@@ -2,6 +2,7 @@ import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodeActionError, type AppSnapshot } from '@shared/ipc-contract'
 import { StatusWidget, UNKNOWN_TIME } from '@renderer/components/StatusWidget'
+import { RING_CIRCUMFERENCE } from '@renderer/components/ProgressRing'
 import { EMPTY_SNAPSHOT, installBridge, type FakeBridge } from './fake-bridge'
 
 const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }))
@@ -33,7 +34,7 @@ afterEach(() => {
 
 describe('StatusWidget — the three states', () => {
   it('clocked out: grey label, one button, no invented timer', async () => {
-    await mount({ state: { kind: 'out' }, todayMinutes: 125 })
+    await mount({ state: { kind: 'out' }, todayMinutes: 125, expectedMinutes: 480 })
 
     expect(screen.getByText('Ausgestempelt')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Einstempeln' })).toBeTruthy()
@@ -118,6 +119,64 @@ describe('StatusWidget — the three states', () => {
     const button = screen.getByRole('button', { name: 'Anmelden' })
     await act(async () => void button.click())
     expect(bridge.signOut).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('StatusWidget — the day’s target', () => {
+  /** The undrawn part of the ring; `RING_CIRCUMFERENCE` means "empty". */
+  function arcOffset(): number {
+    const arc = document.querySelector('[data-slot="progress-ring-arc"]')
+    if (!arc) throw new Error('arc not rendered')
+    return Number(arc.getAttribute('stroke-dashoffset'))
+  }
+
+  it('uses the target the API sent, not a hard-coded eight hours', async () => {
+    // 300 minutes of goal, 120 worked: 03:00 left and 40 % of the ring drawn.
+    await mount({ state: { kind: 'out' }, todayMinutes: 120, expectedMinutes: 300 })
+    expect(screen.getByText('Verbleibende Zeit 03:00')).toBeTruthy()
+    expect(arcOffset()).toBeCloseTo(RING_CIRCUMFERENCE * 0.6, 5)
+  })
+
+  it('counts the running shift towards the target while clocked in', async () => {
+    await mount({
+      state: {
+        kind: 'in',
+        shiftId: '1',
+        since: new Date(NOW.getTime() - 30 * 60_000),
+        locationType: 'office',
+        workplaceId: null,
+      },
+      todayMinutes: 120,
+      expectedMinutes: 480,
+    })
+    expect(screen.getByText('Verbleibende Zeit 05:30')).toBeTruthy()
+  })
+
+  it('drops the comparison when the API has no target for the day', async () => {
+    // A day off: no goal exists, so there is no honest "remaining" and the ring
+    // shows the plain elapsed time with an empty arc.
+    await mount({ state: { kind: 'out' }, todayMinutes: 125, expectedMinutes: null })
+    expect(screen.queryByText(/Verbleibende Zeit/)).toBeNull()
+    expect(screen.getByText('2:05:00')).toBeTruthy()
+    expect(arcOffset()).toBeCloseTo(RING_CIRCUMFERENCE, 5)
+  })
+
+  it('treats a zero target the same way — a holiday is not "done for today"', async () => {
+    await mount({ state: { kind: 'out' }, todayMinutes: 125, expectedMinutes: 0 })
+    expect(screen.queryByText(/Verbleibende Zeit/)).toBeNull()
+    expect(arcOffset()).toBeCloseTo(RING_CIRCUMFERENCE, 5)
+  })
+
+  it('stops at zero remaining and a full ring once the target is met', async () => {
+    await mount({ state: { kind: 'out' }, todayMinutes: 540, expectedMinutes: 480 })
+    expect(screen.getByText('Verbleibende Zeit 00:00')).toBeTruthy()
+    expect(arcOffset()).toBeCloseTo(0, 5)
+  })
+
+  it('shows no remaining time before the first snapshot, even with a target', async () => {
+    await mount({ state: { kind: 'unknown' }, expectedMinutes: 480 })
+    expect(screen.queryByText(/Verbleibende Zeit/)).toBeNull()
+    expect(screen.getByText(UNKNOWN_TIME)).toBeTruthy()
   })
 })
 

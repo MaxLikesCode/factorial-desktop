@@ -201,8 +201,14 @@ Die vollständige Themenliste steht in `docs/DESIGN.md`, Abschnitt
 
 **Verifiziert auf macOS (Darwin 25.5, Electron 43):**
 
-- `npm test` — 330 Tests grün, `npm run typecheck` sauber, `npm run build`
-  fehlerfrei (Stand Task 12).
+- `npm test` — 348 Tests grün, `npm run typecheck` sauber, `npm run build`
+  fehlerfrei (Stand Task 13).
+- **Die Soll-Zeit im Ring** (Task 13) — aber nur als Unit-Test. Belegt ist die
+  Verdrahtung Store → IPC → Ring gegen einen gefälschten `fetchExpectedMinutes`:
+  der Wert landet im Snapshot, übersteht die Serialisierung, ein fehlgeschlagener
+  Abruf lässt Zustand und Tagessumme unangetastet, und ohne Soll (`null` **oder**
+  `0`) verschwindet die Zeile „Verbleibende Zeit" und der Ring bleibt leer. Der
+  Abgleich mit dem echten Stundenzettel ist **nicht** gelaufen — siehe unten.
 - **Das Tray in einem echten Electron** (Task 12, Smoke-Lauf mit gefälschtem
   Store; `Menu.buildFromTemplate` wurde dabei mitgeschnitten, um das erzeugte
   Menü lesen zu können). Nachweislich gelaufen:
@@ -331,6 +337,14 @@ Die vollständige Themenliste steht in `docs/DESIGN.md`, Abschnitt
 - **Der Poll-Loop im laufenden Betrieb** (`store.startPolling()` in
   `bootstrap`). Der Store ist dafür unit-getestet, aber gestartet wurde er nie
   gegen die echte API.
+- **Die Soll-Zeit gegen die echte API** (Task 13, Schritt 5). `fetchExpectedMinutes`
+  ist seit Task 5 gegen die Live-API verifiziert (`expectedMinutes: 480` am
+  2026-08-12), aber die Kette bis in den Ring lief nie mit echten Daten: dafür
+  hätte `npm run dev` eine echte Anmeldung gebraucht. Offen ist damit auch, ob
+  ein freier Tag `expectedMinutes: 0` **oder** ein leeres `nodes`-Array liefert —
+  beide Fälle sind im Code abgedeckt, beobachtet wurde keiner. Erster Prüfpunkt,
+  sobald jemand die App angemeldet startet: zeigt „Verbleibende Zeit" dasselbe
+  wie der Stundenzettel im Factorial-Web (**nicht** das Dashboard-Widget, K9)?
 - **`window-all-closed` mit und ohne Tray.** Die Verzweigung hängt an
   `hasTray()`; beide Zweige sind nur gelesen, nicht gelaufen.
 
@@ -444,7 +458,11 @@ plus Task 12, in dieser Reihenfolge abzuarbeiten):
 
 ## 5. Wie man die Factorial-API selbst weiter erforscht
 
-Ausführlich in `docs/DESIGN.md`, Abschnitt „Windows-Übergabe → 5". Kurzfassung:
+**Vollständig und reproduzierbar in `docs/api-discovery.md`** (Introspection-Snippet,
+nützliche Einstiegsqueries, die bekannten Typ-Fallen, und warum
+`attendanceEstimatedTimes` drei Zahlen liefert, von denen nur eine das Tagessoll
+ist). Ausführlich außerdem in `docs/DESIGN.md`, Abschnitt „Windows-Übergabe → 5".
+Kurzfassung:
 
 - **Introspection ist der schnelle Weg.** In einer eingeloggten Browser-Session
   genügt ein `fetch` aus dem Seitenkontext, weil die API `credentials: 'include'`

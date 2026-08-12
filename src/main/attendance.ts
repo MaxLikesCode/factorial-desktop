@@ -38,14 +38,14 @@ import type { BreakConfigOption, LocationType, ShiftSummary } from './factorial/
 
 /**
  * Exactly the operations this store calls. Narrower than `Operations` on
- * purpose: `fetchMe` belongs to the auth flow, and the target time (`K8`) is
- * wired in a later task. It also keeps the tests honest — a fake only has to
- * provide what is really used.
+ * purpose: `fetchMe` belongs to the auth flow. It also keeps the tests honest —
+ * a fake only has to provide what is really used.
  */
 export type AttendanceOperations = Pick<
   Operations,
   | 'fetchOpenShift'
   | 'fetchTodayShifts'
+  | 'fetchExpectedMinutes'
   | 'fetchBreakConfigurations'
   | 'clockIn'
   | 'breakStart'
@@ -73,6 +73,19 @@ export interface AttendanceSnapshot {
    * silently: the UI shows the day sum as incomplete while this is above zero.
    */
   incompleteShifts: number
+  /**
+   * The day's target in minutes — `expectedMinutes` of
+   * `attendanceEstimatedTimesConnection` (K8), which the ring compares the
+   * worked time against.
+   *
+   * Three things this deliberately is not: it is not `contractMinutes` (720
+   * against a 480 target — a different quantity), it is not that query's own
+   * `minutes` (which read 480 at zero minutes worked, so it is no Ist-Zeit), and
+   * it is never filled in with eight hours. `null` means "no target known" — a
+   * day off, an absence, or a lookup that failed — and `0` is a real target that
+   * is passed through as itself.
+   */
+  expectedMinutes: number | null
   breakOptions: BreakConfigOption[]
   /** The raw reason, in whatever language the server used. */
   lastError: string | null
@@ -165,6 +178,7 @@ export function createAttendanceStore({
     state: { kind: 'unknown' },
     todayMinutes: 0,
     incompleteShifts: 0,
+    expectedMinutes: null,
     breakOptions: [],
     lastError: null,
     lastErrorKind: null,
@@ -212,13 +226,24 @@ export function createAttendanceStore({
     const ticket = (startedRefreshes += 1)
     try {
       const today = toLocalDate(now())
-      const [openShift, shifts] = await Promise.all([
+      const [openShift, shifts, expectedMinutes] = await Promise.all([
         ops.fetchOpenShift(employeeId),
         ops.fetchTodayShifts(employeeId, today),
+        // The target only decorates the ring; the timer has to work without it.
+        // So its rejection is neutralised *before* it joins the two hard queries
+        // and can never drag the state down with it. (PLAN.md fetches it in a
+        // second, sequential `try` after this `Promise.all`. Same guarantee,
+        // one round trip fewer, and no extra `await` between the ticket check
+        // and the emit below — every added await widens the window in which a
+        // newer refresh can overtake this one.)
+        ops.fetchExpectedMinutes(employeeId, today).catch(() => null),
       ])
       if (ticket < appliedRefresh) return
       appliedRefresh = ticket
       emit({
+        // Reset rather than kept: a goal that could not be re-read is a number
+        // the ring should stop showing, not one to carry forward silently.
+        expectedMinutes,
         // Throws on an unparseable timestamp, by design — caught below and shown
         // as stale. A guessed start time is worse than an old one.
         state: deriveState(openShift),

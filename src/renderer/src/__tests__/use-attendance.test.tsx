@@ -50,6 +50,7 @@ describe('useAttendance', () => {
         state: { kind: 'in', shiftId: '1', since, locationType: 'office', workplaceId: 3333333 },
         todayMinutes: 0,
         incompleteShifts: 0,
+        expectedMinutes: null,
         breakOptions: [],
         lastError: null,
         lastErrorKind: null,

@@ -43,6 +43,9 @@ function makeOps() {
         { id: '1', date: TODAY, minutes: 120 },
       ],
     ),
+    fetchExpectedMinutes: vi.fn(
+      async (_employeeId: number, _date: string): Promise<number | null> => 480,
+    ),
     fetchBreakConfigurations: vi.fn(
       async (): Promise<BreakConfigOption[]> => [{ id: '19613', name: 'Mittagspause' }],
     ),
@@ -286,6 +289,65 @@ describe('refresh', () => {
     await first
     // The stale answer must not overwrite the newer one with "clocked out".
     expect(store.getSnapshot().state.kind).toBe('in')
+  })
+})
+
+describe('daily target', () => {
+  it('is null before the first refresh', () => {
+    expect(makeStore(makeOps()).getSnapshot().expectedMinutes).toBeNull()
+  })
+
+  it('carries the day’s expectedMinutes into the snapshot', async () => {
+    const ops = makeOps()
+    const store = makeStore(ops)
+    await store.refresh()
+    expect(store.getSnapshot().expectedMinutes).toBe(480)
+    expect(ops.fetchExpectedMinutes).toHaveBeenCalledWith(EMPLOYEE_ID, TODAY)
+  })
+
+  it('stays null on a day the API has no target for', async () => {
+    const ops = makeOps()
+    ops.fetchExpectedMinutes.mockResolvedValue(null)
+    const store = makeStore(ops)
+    await store.refresh()
+    expect(store.getSnapshot().expectedMinutes).toBeNull()
+  })
+
+  it('passes a zero target through instead of inventing eight hours', async () => {
+    // A public holiday really does answer 0. A `?? 8 * 60` fallback here would
+    // put an eight-hour goal on a day nobody is expected to work.
+    const ops = makeOps()
+    ops.fetchExpectedMinutes.mockResolvedValue(0)
+    const store = makeStore(ops)
+    await store.refresh()
+    expect(store.getSnapshot().expectedMinutes).toBe(0)
+  })
+
+  it('keeps the rest of the refresh alive when only the target lookup fails', async () => {
+    // A missing target must not blank the timer — it only costs the ring its goal.
+    const ops = makeOps()
+    ops.fetchExpectedMinutes.mockRejectedValue(new FactorialError('network', 'boom'))
+    const store = makeStore(ops)
+    await store.refresh()
+    const snapshot = store.getSnapshot()
+    expect(snapshot.state.kind).toBe('out')
+    expect(snapshot.todayMinutes).toBe(120)
+    expect(snapshot.expectedMinutes).toBeNull()
+    // The read as a whole worked, so nothing is stale and no error is shown.
+    expect(snapshot.stale).toBe(false)
+    expect(snapshot.lastError).toBeNull()
+  })
+
+  it('drops a target that a later refresh could no longer read', async () => {
+    const ops = makeOps()
+    const store = makeStore(ops)
+    await store.refresh()
+    expect(store.getSnapshot().expectedMinutes).toBe(480)
+
+    ops.fetchExpectedMinutes.mockRejectedValue(new FactorialError('network', 'boom'))
+    await store.refresh()
+    // Keeping yesterday's goal on the ring would be a quietly wrong number.
+    expect(store.getSnapshot().expectedMinutes).toBeNull()
   })
 })
 
