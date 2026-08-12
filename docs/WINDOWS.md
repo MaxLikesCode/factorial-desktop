@@ -1,7 +1,7 @@
 # Factorial Desktop — Windows-Übergabe
 
-**Status:** wächst mit der Implementierung. Stand: Ende Task 10 (Widget-Fenster
-mit Positions-Persistenz). Tasks 11–15 tragen hier weiter ein.
+**Status:** wächst mit der Implementierung. Stand: Ende Task 11 (Widget-UI).
+Tasks 12–15 tragen hier weiter ein.
 
 Dieses Dokument ist für einen Agenten geschrieben, der auf einer Windows-Maschine
 weiterarbeitet und **den Gesprächsverlauf dieser Implementierung nicht kennt**.
@@ -51,12 +51,35 @@ Einstempeln, Pause, Fortsetzen, Ausstempeln — ohne den Browser zu öffnen.
 | `src/shared/ipc-contract.ts` | Kanalnamen, Snapshot-Serialisierung, Fehler-Codec (von Main **und** Renderer benutzt) |
 | `src/shared/time.ts` | Zeitrekonstruktion (der gefährlichste Code im Repo) |
 | `src/shared/attendance-state.ts` | Zustandsableitung aus `openShift` |
+| `src/renderer/src/App.tsx` | Wurzel: Widget plus `Toaster` |
+| `src/renderer/src/components/StatusWidget.tsx` | das Widget: Statuszeile, Ring, Aktionen, Fußzeile |
+| `src/renderer/src/hooks/useAttendance.ts` | Snapshot-Abo über die Bridge + Sekundentakt für den Timer |
+| `src/renderer/src/lib/errors.ts` | die einzige Stelle, die aus einem Fehler-`kind` deutschen Text macht |
+| `src/renderer/src/components/ui/` | von der shadcn-CLI generiert (Style `base-nova`). **Nicht** von Hand an einen Plan-Schnipsel anpassen — siehe K11 in Abschnitt 6 |
+
+**Zur Testeinrichtung des Renderers** (Carry-Forward C3, erledigt in Task 11):
+`vitest.config.ts` läuft mit `environment: 'jsdom'` für die **gesamte** Suite,
+kennt den Alias `@renderer` und sammelt auch `.tsx`. Die Main-Prozess-Tests
+laufen unverändert darunter durch — sie sind pure Logik plus `node:fs`, und das
+rührt jsdom nicht an. Zwei Eigenheiten, über die man sonst stolpert:
+
+- **Vitest läuft ohne `globals`**, deshalb registriert Testing Library kein
+  eigenes `afterEach(cleanup)`. Jede Komponenten-Testdatei ruft `cleanup()`
+  selbst auf; ohne das stapeln sich die Renders im selben Dokument und der
+  nächste `getBy*` scheitert mit „found multiple elements".
+- **`TZ=Europe/Berlin`** bleibt gesetzt. Die Zeitrekonstruktion braucht sie nicht
+  mehr (K6), die Formatierer und der Store-Takt schon.
 
 ## 2. Vollständige Liste der plattformabhängigen Stellen
 
-Jede Verzweigung trägt im Code einen `// PLATFORM:`-Kommentar.
-`grep -rn "// PLATFORM:" src/` liefert die vollständige Liste — diese Tabelle ist
+Jede Verzweigung trägt im Code einen `PLATFORM:`-Kommentar.
+`grep -rn "PLATFORM:" src/` liefert die vollständige Liste — diese Tabelle ist
 die erklärte Fassung davon und muss mit dem Grep-Ergebnis übereinstimmen.
+
+> **Seit Task 11 ist das Grep-Muster `PLATFORM:` statt `// PLATFORM:`.** Die
+> erste plattformabhängige Stelle außerhalb von TypeScript liegt in
+> `src/renderer/src/styles.css`, und dort ist der Kommentar `/* … */`. Wer nur
+> nach `// PLATFORM:` sucht, übersieht sie.
 
 | Datei:Zeile | Was | Warum | Auf Windows zu prüfen |
 |---|---|---|---|
@@ -68,14 +91,20 @@ die erklärte Fassung davon und muss mit dem Grep-Ergebnis übereinstimmen.
 | `src/main/index.ts:133` | `window-all-closed` beendet die App außer auf `darwin` | macOS hält Apps ohne Fenster am Leben, Windows erwartet das Ende. Seit Task 10 blendet das Schließen des Widgets nur aus, das Fenster bleibt also am Leben und der Handler feuert dabei gar nicht mehr. Übrig bleibt der Fehlerpfad: Bootstrap gescheitert, oder der Benutzer schließt das Login-Fenster. **Achtung, Zwischenstand:** solange es kein Tray gibt (Task 12), hat Windows damit *keinen* Weg mehr, die App zu beenden — auf macOS tut es ⌘Q. Nicht in diesem Zustand ausliefern. | Nach Task 12 erneut prüfen: Widget schließen darf die App nicht beenden, „Beenden" im Tray schon |
 | `src/main/windows.ts:104` | `transparent: true` + `backgroundColor: '#00000000'` | macOS zeichnet ein transparentes, frameless Fenster mit runden Ecken und weichem Schatten von selbst. Windows setzt hinter ein transparentes Fenster sonst ein weißes Rechteck und zeichnet einen eckigen Schatten drumherum. | Sichtprüfung: keine weißen Ecken hinter dem Widget, kein eckiger Schattenrahmen. Falls doch, sind `transparent`, `thickFrame: false` und ein Renderer-seitiger `border-radius` die Stellschrauben (DESIGN.md, „Frameless & Transparenz") |
 | `src/main/windows.ts:123` | `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })` nur auf `darwin` | Der Sinn eines schwebenden Zeit-Widgets ist, über Vollbild-Spaces sichtbar zu bleiben. `visibleOnFullScreen` ist eine macOS-Option; auf Windows gibt es kein Äquivalent, dort trägt allein `alwaysOnTop`. | Prüfen, ob das Widget über einer Vollbild-App sichtbar bleibt. Wenn nicht: `setAlwaysOnTop(true, 'screen-saver')` ist die Windows-taugliche Verschärfung, hat aber Nebenwirkungen auf Fokus und Taskleiste |
+| `src/renderer/src/styles.css:32` | `.drag-region { -webkit-app-region: drag }` plus `.no-drag` für alles Anklickbare darin | Das Fenster ist `frame: false` und hat keine Titelleiste zum Anfassen; die Drag-Region **ist** die einzige Möglichkeit, das Widget zu verschieben. Chromium kennt die Eigenschaft auf beiden Plattformen, verhält sich aber nicht gleich. | Widget an der Kopfzeile ziehen: es muss sich bewegen und die Position nach dem Debounce speichern. Dann drei Windows-Eigenheiten prüfen: (1) an den oberen Bildschirmrand ziehen darf **kein** Aero Snap auslösen — das Fenster ist `resizable: false`, ein Snap-Versuch führt dort erfahrungsgemäß zu einem verzerrten oder unverschiebbaren Fenster; (2) Buttons und das Arbeitsort-Select innerhalb der Region müssen klickbar bleiben (dafür ist `.no-drag` da; unter Windows greift die Vererbung teils anders); (3) `moved` feuert unter Windows beim Ziehen laufend statt einmal — der 250-ms-Debounce in `src/main/windows.ts` ist genau dafür da |
 
 Task 7 (`src/main/attendance.ts`) hat **keine** neue plattformabhängige Stelle
 hinzugefügt: der Store kennt weder Fenster noch Tray und benutzt nur Promises und
 `setTimeout`. Task 8 (IPC, Preload, Contract) ebenfalls nicht — IPC verhält sich
 auf allen Plattformen gleich. Task 9 hat drei Einträge ergänzt (Autostart),
 Task 10 zwei weitere (Transparenz, Vollbild-Sichtbarkeit) und zwei bestehende
-umgeschrieben; die Tabelle hat damit **acht** Einträge und deckt
-`grep -rn "// PLATFORM:" src/` vollständig ab.
+umgeschrieben, Task 11 einen (die Drag-Region im CSS); die Tabelle hat damit
+**neun** Einträge und deckt `grep -rn "PLATFORM:" src/` vollständig ab.
+
+Task 11 hat **keine** neue `process.platform`-Verzweigung in TypeScript
+hinzugefügt: der Renderer kennt `process` gar nicht (`contextIsolation: true`,
+`nodeIntegration: false`) und darf ihn auch nie kennenlernen. Was
+plattformabhängig ist, ist der eine CSS-Mechanismus oben.
 
 `src/main/window-position.ts` ist bewusst **nicht** plattformabhängig, obwohl
 Fensterpositionen es klassisch sind: die gesamte Logik rechnet nur mit Zahlen aus
@@ -120,14 +149,30 @@ Die vollständige Themenliste steht in `docs/DESIGN.md`, Abschnitt
 | Fensterposition | Multi-Monitor mit gemischten DPI-Skalierungen verhält sich anders. Gespeicherte Positionen werden vor Gebrauch gegen die aktuell angeschlossenen Displays validiert — beim Start **und** bei jedem `display-added`/`display-removed`/`display-metrics-changed`. Gerechnet wird mit `workArea` (ohne Taskleiste), Koordinaten sind in DIP, nicht in physischen Pixeln | `src/main/window-position.ts` (getestet), `src/main/windows.ts` (Verdrahtung) |
 | Schließen-Verhalten | Das Schließen blendet aus statt zu beenden (DESIGN.md, „Tray"). Auf Windows ist die Erwartung „X beendet die App" stärker als auf macOS; das Tray-Icon aus Task 12 ist dort deshalb keine Zierde, sondern der einzige sichtbare Beleg, dass die App noch läuft — zumal `skipTaskbar: true` gesetzt ist | `src/main/windows.ts` |
 | Positionsdatei | `%APPDATA%\factorial-desktop\window-position.json`, gleiche Schreibweise wie bei den Einstellungen (`.tmp` + `rename`). Schreibfehler werden hier bewusst **verschluckt**, weil der Schreibvorgang aus einem `moved`-Handler kommt | `src/main/window-position.ts` |
+| Drag-Region | siehe Abschnitt 2, letzte Zeile. Kurz: Aero Snap, `.no-drag`-Vererbung, `moved`-Frequenz | `src/renderer/src/styles.css` (geschrieben, auf Windows ungetestet) |
+| Schriftart | `@fontsource-variable/geist` wird als WOFF2 mitgebaut und nicht vom System geholt — es gibt also keinen Fallback-Unterschied zwischen macOS und Windows. Was sich unterscheidet, ist das **Rendering**: Windows hinted anders, die Zeilen im Widget können dadurch 1–2 px höher ausfallen. Das Fenster ist `resizable: false` bei 340×224, ein Überlauf würde also abgeschnitten statt zu scrollen | `src/renderer/src/styles.css`, `src/main/windows.ts` (`WIDGET_SIZE`) |
+| Renderer-Fonts und Emoji | Die UI benutzt bewusst **keine** Emoji oder Unicode-Blockzeichen als Icons (der Plan-Schnipsel hatte `❙❙` für „Pause") — auf Windows rendern die als farbiges Emoji oder als Ersatzkästchen. Stattdessen Lucide-SVGs plus deutsches Wort | `src/renderer/src/components/BreakMenu.tsx` |
+| Toasts | `sonner` rendert in denselben transparenten, 340×224 großen Renderer. Position ist `bottom-center`, damit ein Toast nicht über die abgerundete Ecke hinausragt. Ob er auf Windows in ein transparentes, frameless Fenster genauso sauber zeichnet, ist ungeprüft | `src/renderer/src/App.tsx` |
 | Tray, Packaging | noch nicht gebaut | Tasks 12, 14 |
 
 ## 4. Was verifiziert wurde und was nicht
 
 **Verifiziert auf macOS (Darwin 25.5, Electron 43):**
 
-- `npm test` — 252 Tests grün, `npm run typecheck` sauber, `npm run build`
-  fehlerfrei (Stand Task 10).
+- `npm test` — 297 Tests grün, `npm run typecheck` sauber, `npm run build`
+  fehlerfrei (Stand Task 11).
+- **Die Widget-UI in jsdom** (Task 11, 43 neue Tests): alle fünf Zustände
+  (`unknown`, `unauthenticated`, `out`, `in`, `break`) werden gerendert und
+  geprüft — Beschriftung, welche Buttons existieren, die aus `since` neu
+  gerechnete laufende Zeit über zwei Ticks, die eingefrorene Ist-Zeit während
+  einer Pause, der Stale-Hinweis (an *und* wieder aus, obwohl `lastError` stehen
+  bleibt), der Unvollständig-Hinweis aus C4, das Sperren der Buttons während
+  einer laufenden Aktion, und dass eine abgelehnte Aktion **deutschen** Text
+  erzeugt statt der internen englischen Meldung. Das Pausen-Dropdown wird
+  aufgeklappt und ein Eintrag angeklickt — genau der Pfad, den K11 gefährdet
+  sah.
+  **Das ist eine DOM-Prüfung, keine optische.** Sie belegt, dass die richtigen
+  Texte und Zustände entstehen; sie belegt **nicht**, dass 340×224 dafür reicht.
 - **Das Widget-Fenster in einem echten Electron** (Task 10, zwei Smoke-Läufe auf
   einer Maschine mit zwei Monitoren: intern `id 1`, `workArea {0,39,2056,1223}`,
   extern `id 5`, `workArea {1622,-1860,3360,1860}` — der zweite Monitor liegt also
@@ -231,10 +276,33 @@ Die vollständige Themenliste steht in `docs/DESIGN.md`, Abschnitt
   Preload überhaupt (Renderer-Konsole: `typeof window.factorial === 'object'`),
   (2) liefert `window.factorial.getSnapshot()` ein Objekt mit `state.sinceMs` als
   Zahl, (3) kommt nach einem `refresh()` ein Push über `onSnapshot` an.
+- **Die Widget-UI in einem echten Chromium** (Task 11). jsdom rendert kein
+  Layout: es kennt keine Zeilenhöhen, kein Flexbox-Ergebnis und keine Overflow-
+  Berechnung. Damit ist **ungeprüft**, ob der Inhalt in die 340×224 des Fensters
+  passt, ob der Fortschrittsring neben der Statusspalte Platz hat, ob der
+  Popup-Inhalt des Pausen-Menüs und des Arbeitsort-Selects innerhalb des
+  Fensters landet (beide sind portaliert und werden von Base UI positioniert —
+  in einem 340×224-Fenster ist „unten anschlagen" der Normalfall, nicht der
+  Ausnahmefall), und ob ein Toast sichtbar ist. **Wer die App als Erstes mit
+  echter Anmeldung startet, sieht hier zuerst hin.**
+- **Der komplette Klickpfad gegen die echte API** (Plan-Task 11, Schritt 8:
+  Einstempeln → Pause → Fortsetzen → Ausstempeln). Nicht gelaufen, und zwar
+  bewusst: dieser Durchlauf schreibt echte Einträge in eine echte
+  Arbeitszeiterfassung. Das ist eine Handlung, die der Mensch auslöst, nicht ein
+  Agent nebenbei. Gilt entsprechend für die drei `locationType`-Werte (siehe
+  Abschnitt 6).
+- **`npm run dev` mit Widget-UI**: der Main-Prozess bootet, der Renderer-
+  Dev-Server läuft (`http://localhost:5173`), Electron startet — aber der
+  Bootstrap bleibt vor `createWidgetWindow` in der Anmeldung stehen, weil keine
+  gültige Session vorliegt. Es ist also weiterhin **kein einziges Mal** ein
+  Renderer mit dieser UI in einem Electron-Fenster gelaufen. Insbesondere ist
+  ungeprüft, ob `window.factorial` im Widget wirklich ankommt — der erste Punkt
+  der Checkliste weiter oben.
 - Sämtlicher Windows-Code.
 
-**Nur kompiliert, nie ausgeführt:** die drei `// PLATFORM:`-Zweige aus Abschnitt 2
-in ihrer Windows-Ausprägung; `npm run package:win`.
+**Nur kompiliert, nie ausgeführt:** die Windows-Ausprägung der
+`PLATFORM:`-Zweige aus Abschnitt 2, inklusive der neuen Drag-Region;
+`npm run package:win`.
 
 ## 5. Wie man die Factorial-API selbst weiter erforscht
 
@@ -276,17 +344,60 @@ Ausführlich in `docs/DESIGN.md`, Abschnitt „Windows-Übergabe → 5". Kurzfas
   optimistisch `now` an; die Antwort des nächsten Refresh überschreibt das nach
   spätestens einem Request. Sichtbar wäre ein Fehler als kurzes Springen des
   Timers beim Klick auf „Pause".
-- **Fehlermeldungen sind noch englisch.** Der Store legt zu jedem Fehler ein
-  `lastErrorKind` (`network` / `graphql` / `malformed` / `unauthenticated` /
-  `unknown`) in den Snapshot, damit die UI daraus deutschen Text bilden kann.
-  Diese Zuordnung ist noch nicht gebaut (Task 11/12) — bis dahin würde eine
-  Anzeige die internen englischen Meldungen durchreichen. Task 8 hat die
-  Voraussetzung dafür geschaffen: eine abgelehnte Aktion trägt ihre Art im
-  Fehlertext mit (`encodeActionError` / `decodeActionError` in
-  `src/shared/ipc-contract.ts`), inklusive der zusätzlichen Art `busy` für den
-  abgelehnten zweiten Klick. **Die UI muss `decodeActionError(err.message)`
-  benutzen und den deutschen Text aus `kind` bilden** — gibt sie `err.message`
-  roh aus, steht dort die interne englische Meldung samt Präfix.
+- ~~**Fehlermeldungen sind noch englisch.**~~ — erledigt in Task 11 für den
+  Renderer. `src/renderer/src/lib/errors.ts` ist die einzige Stelle, an der aus
+  einem `kind` deutscher Text wird: `describeActionError(error)` für den Toast
+  (dekodiert `encodeActionError` und wirft die interne Meldung weg — außer bei
+  `graphql`, wo DESIGN.md ausdrücklich die Server-Meldung sehen will) und
+  `describeStaleReason(kind)` für den Hinweis neben der Statuszeile.
+  **Noch offen für Task 12:** das Tray zeigt bisher gar nichts an, wird aber
+  dieselben Fehler sehen. Es soll `describeActionError` mitbenutzen und keine
+  zweite Übersetzungstabelle aufmachen — sonst driften die Formulierungen
+  auseinander, und die englischen Originale (`another action is already in
+  flight`, `request timed out after 15000 ms`, `session rejected (HTTP 401)`)
+  stehen wieder in einer Benachrichtigung.
+
+- **K11-Abweichungen: Nova ist Base UI, nicht Radix.** Die UI-Schnipsel in
+  `docs/PLAN.md`, Task 11, sind gegen Radix-Props geschrieben. Alle folgenden
+  Stellen wurden gegen die tatsächlich generierten Komponenten in
+  `src/renderer/src/components/ui/` korrigiert. Sie kommen bei einem
+  shadcn-Update wieder — dann hier zuerst nachsehen:
+
+  | Plan (Radix) | Tatsächlich (Base UI 1.7) | Folge, wenn man den Plan übernimmt |
+  |---|---|---|
+  | `<DropdownMenuTrigger asChild>` | `render={<Button … />}` | `asChild` ist kein Prop; der Trigger rendert seinen eigenen `<button>` **um** den Button herum → zwei verschachtelte Buttons |
+  | `<DropdownMenuItem onSelect={…}>` | `onClick={…}` | **Stiller Ausfall.** `onSelect` wird als unbekanntes DOM-Prop durchgereicht, kompiliert sauber und feuert nie. Das Pausen-Menü öffnet sich und tut nichts |
+  | `<Select value onValueChange={(v: string) => …}>` | Handler bekommt `(value: string \| null, eventDetails)` | Typfehler beim direkten Durchreichen — der einzige Fall hier, den `tsc` fängt |
+  | `<SelectValue />` zeigt das Label | zeigt den **rohen Wert**, solange `<Select items={…}>` fehlt | **Stiller Ausfall.** Im Widget stünde `work_from_home` statt `Homeoffice` |
+  | `<Button size="icon">` mit `❙❙` als Beschriftung | Größen heißen `xs`/`sm`/`default`/`lg` bzw. `icon-xs`/`icon-sm`/`icon`/`icon-lg` | `size="icon"` existiert, aber der Unicode-Glyph rendert auf Windows als Emoji oder Ersatzkästchen — deshalb Lucide-SVG plus Wort |
+
+  `npm run typecheck` fängt davon nur die dritte Zeile. Die zweite und die vierte
+  sind der Grund, warum `src/renderer/src/__tests__/break-menu.test.tsx` das Menü
+  wirklich aufklappt und anklickt, statt nur zu rendern.
+
+- **Die Werte `work_from_home` und `business_trip` sind ungeprüft.** Live
+  beobachtet wurde nur `office`. Die drei stehen als
+  `AttendanceShiftLocationTypeEnum` im Schema und werden im Main-Prozess gegen
+  `LOCATION_TYPES` (`src/main/factorial/types.ts`) validiert, bevor sie zur API
+  gehen. Wer zum ersten Mal mit echter Anmeldung arbeitet: jeden der drei einmal
+  beim Einstempeln senden. Lehnt die API einen ab, kommt der Fehler **in-band mit
+  HTTP 200** zurück (`undefinedArgument`/`invalidValue`) und landet als
+  `graphql`-Fehler im Toast — dann den korrigierten Enum-Wert in
+  `src/main/factorial/types.ts` **und** in
+  `src/renderer/src/components/LocationSelect.tsx` nachziehen.
+
+- **Das Tagesziel ist bis Task 13 hart auf 8 Stunden verdrahtet.**
+  `TARGET_MINUTES` in `src/renderer/src/components/StatusWidget.tsx`. „Verbleibende
+  Zeit" und die Füllung des Rings sind bis dahin also für jeden anderen
+  Arbeitsvertrag und für jeden Feiertag falsch. Task 13 ersetzt die Konstante
+  durch `expectedMinutes` (K8) und muss dabei den Fall „kein Ziel" bauen: dann
+  entfällt die Zeile ganz, statt 8 Stunden zu erfinden.
+
+- **Die Ring-Mitte zeigt die Ist-Zeit des Tages, nicht die laufende Schicht** —
+  bewusste Abweichung vom Plan-Schnipsel, siehe die Begründung im Commit und in
+  `StatusWidget.tsx`. Falls jemand später doch die Segmentzeit dort erwartet:
+  sie steht während einer Pause bereits in der Fußzeile
+  (`Mittagspause · 0:12:34`), und `segmentMs` in derselben Datei ist der Wert.
 - ~~**Snapshot-Push geht derzeit an *alle* Fenster**~~ — erledigt in Task 10:
   `src/main/index.ts` übergibt `targets: () => [getWidget()]` (leer, solange es
   kein Widget gibt). Der Default in `src/main/ipc.ts` bleibt bestehen, wird aber

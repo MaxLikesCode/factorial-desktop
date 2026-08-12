@@ -3,6 +3,49 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
 
+/*
+ * The widget is a frameless, transparent, always-on-top window. Everything the
+ * user sees is the rounded card the renderer draws, so the page itself must be
+ * fully transparent and exactly the window's height — a default white body
+ * would show up as a square behind the rounded corners.
+ */
+html,
+body,
+#root {
+    height: 100%;
+    margin: 0;
+    background: transparent;
+}
+
+/* A frameless window has no title bar to grab; text selection inside a widget
+   that is dragged by its surface is only ever accidental. */
+body {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/*
+ * Drag regions live here rather than in inline styles: `-webkit-app-region` is
+ * not part of React's `CSSProperties`, so setting it from TSX needs a cast on
+ * every use. One CSS rule needs none.
+ *
+ * PLATFORM: `-webkit-app-region: drag` is Chromium's own mechanism and works on
+ * both targets, but Windows applies it to a window that has no native frame at
+ * all differently — dragging near the screen edge can trigger Aero Snap, which
+ * would resize a window declared `resizable: false`. Untested on Windows; see
+ * docs/WINDOWS.md.
+ */
+.drag-region {
+    -webkit-app-region: drag;
+}
+
+/* Any control inside a drag region needs this or the click becomes a drag. */
+.no-drag,
+.drag-region button,
+.drag-region input {
+    -webkit-app-region: no-drag;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
