@@ -19,6 +19,13 @@ async function mount(
   const bridge = installBridge(snapshot, settings)
   render(<StatusWidget />)
   await act(async () => {})
+  // The progress arc draws itself in on the frame after mount, so its first
+  // frame is deliberately empty. Every assertion here is about the settled arc,
+  // so carry the clock past that frame. 32 ms is under a second and therefore
+  // cannot move any of the timer readings below.
+  await act(async () => {
+    vi.advanceTimersByTime(32)
+  })
   return bridge
 }
 
@@ -238,6 +245,45 @@ describe('StatusWidget — the day’s target', () => {
     await mount({ state: { kind: 'unknown' }, expectedMinutes: 480 })
     expect(screen.queryByText(/Verbleibende Zeit/)).toBeNull()
     expect(screen.getByText(UNKNOWN_TIME)).toBeTruthy()
+  })
+})
+
+describe('StatusWidget — the advisory line', () => {
+  /**
+   * Regression. The two hints used to render as separate stacked lines, which
+   * added 28 px to a card with 7 px of room and pushed the work-location select
+   * clean off the bottom edge — a control the user could no longer reach.
+   */
+  it('puts both hints on one line rather than stacking them', async () => {
+    await mount({
+      state: { kind: 'out' },
+      todayMinutes: 233,
+      expectedMinutes: 480,
+      incompleteShifts: 1,
+      stale: true,
+      lastErrorKind: 'network',
+      lastError: 'request timed out after 15000 ms',
+    })
+
+    const line = screen.getByText(/keine Verbindung · Tagessumme unvollständig/)
+    expect(line).toBeTruthy()
+    // One element carries both, so the card grows by one line and not by two.
+    expect(screen.queryAllByText(/Tagessumme unvollständig/)).toHaveLength(1)
+  })
+
+  it('shows the connection problem first — it explains why the rest may be old', async () => {
+    await mount({
+      state: { kind: 'out' },
+      incompleteShifts: 1,
+      stale: true,
+      lastErrorKind: 'network',
+    })
+    expect(screen.getByText(/^keine Verbindung/)).toBeTruthy()
+  })
+
+  it('renders no advisory line at all when there is nothing to say', async () => {
+    await mount({ state: { kind: 'out' }, incompleteShifts: 0, stale: false })
+    expect(screen.queryByText(/Verbindung|unvollständig/)).toBeNull()
   })
 })
 

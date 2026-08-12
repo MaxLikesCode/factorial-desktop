@@ -125,35 +125,38 @@ export function StatusWidget(): React.JSX.Element {
     void window.factorial.setSettings({ lastLocationType: value }).catch(() => {})
   }
 
+  /**
+   * True once the first real answer has arrived. Drives a single fade-in of the
+   * card's contents — the one moment per launch where "Lädt …" and the dash
+   * placeholder are replaced wholesale, and the only place a whole-card
+   * animation is affordable.
+   */
+  const ready = state.kind !== 'unknown'
+
+  /**
+   * The advisory line under the status. Order matters: a lost connection
+   * explains why everything else might be old, so it is read first.
+   *
+   * C4: a record without `minutes` counts as 0 — visibly, not silently.
+   */
+  const hints = [
+    snapshot.stale ? describeStaleReason(snapshot.lastErrorKind) : null,
+    snapshot.incompleteShifts > 0 ? 'Tagessumme unvollständig' : null,
+  ].filter((hint): hint is string => hint !== null)
+
   return (
-    <div className="flex h-full flex-col justify-between rounded-xl border bg-background/95 p-3 backdrop-blur">
-      <div className="drag-region flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className={`size-2 shrink-0 rounded-full ${DOT[state.kind]}`} />
-            <span className="truncate text-sm font-semibold">{LABEL[state.kind]}</span>
-          </div>
-          {/*
-            Keyed off `stale`, never off `lastError !== null`: a successful
-            refresh clears `stale` but keeps `lastError` forever (see the
-            contract's note on `AppSnapshot.lastError`), so the other test would
-            glue this hint to the widget for the rest of the session.
-          */}
-          {snapshot.stale && (
-            <p className="mt-0.5 text-[10px] text-muted-foreground">
-              · {describeStaleReason(snapshot.lastErrorKind)}
-            </p>
-          )}
-          {remainingMinutes !== null && (
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Verbleibende Zeit {formatHoursMinutes(remainingMinutes)}
-            </p>
-          )}
-          {/* C4: a record without `minutes` counts as 0 — visibly, not silently. */}
-          {snapshot.incompleteShifts > 0 && (
-            <p className="mt-0.5 text-[10px] text-muted-foreground">Tagessumme unvollständig</p>
-          )}
-        </div>
+    <div className="flex h-full flex-col rounded-xl border bg-background/95 p-2.5 backdrop-blur">
+      {/*
+        The ring is the subject, centred in the space the actions leave over.
+        `flex-1` plus `justify-center` is what removed the dead band the old
+        `justify-between` opened up between the header and the buttons: the room
+        now belongs to the composition instead of falling out of it.
+      */}
+      <div
+        className={`drag-region flex flex-1 flex-col items-center justify-center gap-1 transition-[opacity,transform] duration-[220ms] ease-(--ease-out) ${
+          ready ? 'scale-100 opacity-100' : 'scale-[0.98] opacity-0'
+        }`}
+      >
         <ProgressRing
           // Without a target there is nothing to be a fraction of: the arc stays
           // empty and the ring is just a frame around the timer.
@@ -161,26 +164,79 @@ export function StatusWidget(): React.JSX.Element {
           label={workedMs === null ? UNKNOWN_TIME : formatDuration(workedMs)}
           tone={TONE[state.kind]}
         />
+
+        <div className="flex min-w-0 flex-col items-center gap-0.5 text-center">
+          <div className="flex items-center gap-1.5">
+            <span
+              // The dot and the ring are the only carriers of the state change.
+              // Both transition their colour rather than cutting to it.
+              className={`size-2 shrink-0 rounded-full transition-colors duration-300 ease-(--ease-out) ${DOT[state.kind]}`}
+            />
+            <span className="truncate text-sm font-semibold">{LABEL[state.kind]}</span>
+          </div>
+          {remainingMinutes !== null && (
+            <p className="text-xs text-muted-foreground">
+              Verbleibende Zeit {formatHoursMinutes(remainingMinutes)}
+            </p>
+          )}
+          {/*
+            One line, not two stacked ones.
+
+            Both hints are advisory and both are rare, but together they used to
+            add 28 px to a card with 7 px to spare — which pushed the work-location
+            select clean off the bottom edge. Losing a control the user can still
+            click at is far worse than reading two short warnings side by side.
+
+            `stale` is keyed off the flag, never off `lastError !== null`: a
+            successful refresh clears `stale` but keeps `lastError` forever (see
+            the contract's note on `AppSnapshot.lastError`), so the other test
+            would glue this hint to the widget for the rest of the session.
+
+            Fades rather than appearing: these arrive on their own, with no click
+            behind them to explain the change. No slide — a warning should be
+            noticed, not performed.
+          */}
+          {hints.length > 0 && (
+            <p className="animate-in fade-in-0 max-w-full truncate text-[10px] text-muted-foreground duration-[140ms] ease-(--ease-out)">
+              {hints.join(' · ')}
+            </p>
+          )}
+        </div>
       </div>
 
-      <div className="no-drag">
-        <ActionBar
-          snapshot={snapshot}
-          busy={busy}
-          onClockIn={() =>
-            void run(() =>
-              window.factorial.clockIn({
-                locationType: settings?.lastLocationType ?? 'office',
-                workplaceId: settings?.lastWorkplaceId ?? null,
-              }),
-            )
-          }
-          onClockOut={() => void run(() => window.factorial.clockOut())}
-          onStartBreak={(id) => void run(() => window.factorial.startBreak(id))}
-          onEndBreak={() => void run(() => window.factorial.endBreak())}
-          onSignIn={() => void run(() => window.factorial.signOut())}
-        />
-        <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+      <div className="no-drag flex flex-col items-center gap-2">
+        {/*
+          Keyed by state so React remounts the row and replays the entrance. The
+          whole set of buttons changes shape between states (one button becomes
+          two), and swapping that in a single frame is the most abrupt thing this
+          widget does — at a handful of times a day it can well afford 180 ms.
+          Enter only: the outgoing buttons are replaced, not dismissed, and
+          holding them around to fade would delay the state the user just asked
+          for.
+        */}
+        <div
+          key={state.kind}
+          className="animate-in fade-in-0 slide-in-from-bottom-1 duration-[180ms] ease-(--ease-out)"
+        >
+          <ActionBar
+            snapshot={snapshot}
+            busy={busy}
+            onClockIn={() =>
+              void run(() =>
+                window.factorial.clockIn({
+                  locationType: settings?.lastLocationType ?? 'office',
+                  workplaceId: settings?.lastWorkplaceId ?? null,
+                }),
+              )
+            }
+            onClockOut={() => void run(() => window.factorial.clockOut())}
+            onStartBreak={(id) => void run(() => window.factorial.startBreak(id))}
+            onEndBreak={() => void run(() => window.factorial.endBreak())}
+            onSignIn={() => void run(() => window.factorial.signOut())}
+          />
+        </div>
+
+        <div className="flex w-full items-center justify-between gap-2 text-xs text-muted-foreground">
           <LocationSelect
             value={displayedLocation}
             // The location is only sent with a clock-in, so changing it mid-shift

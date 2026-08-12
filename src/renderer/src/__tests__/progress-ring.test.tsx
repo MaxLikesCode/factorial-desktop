@@ -1,4 +1,4 @@
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ProgressRing, RING_CIRCUMFERENCE } from '@renderer/components/ProgressRing'
 
@@ -7,34 +7,43 @@ import { ProgressRing, RING_CIRCUMFERENCE } from '@renderer/components/ProgressR
 // the next `getBy*` fails with "found multiple elements".
 afterEach(cleanup)
 
-function arcOffset(progress: number): number {
+/**
+ * The arc draws itself in on mount, so its very first frame is deliberately
+ * empty — that is what gives the CSS transition something to animate from.
+ * Every geometry assertion here is about the *settled* value, so each render is
+ * carried one real animation frame forward first.
+ */
+async function arcOffset(progress: number): Promise<number> {
   const { container } = render(<ProgressRing progress={progress} label="0:00:00" tone="idle" />)
+  await act(async () => {
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
+  })
   const arc = container.querySelector('[data-slot="progress-ring-arc"]')
   if (!arc) throw new Error('arc not rendered')
   return Number(arc.getAttribute('stroke-dashoffset'))
 }
 
 describe('ProgressRing', () => {
-  it('draws nothing at zero and a full circle at one', () => {
-    expect(arcOffset(0)).toBeCloseTo(RING_CIRCUMFERENCE, 5)
-    expect(arcOffset(1)).toBeCloseTo(0, 5)
+  it('draws nothing at zero and a full circle at one', async () => {
+    expect(await arcOffset(0)).toBeCloseTo(RING_CIRCUMFERENCE, 5)
+    expect(await arcOffset(1)).toBeCloseTo(0, 5)
   })
 
-  it('draws half a circle at one half', () => {
-    expect(arcOffset(0.5)).toBeCloseTo(RING_CIRCUMFERENCE / 2, 5)
+  it('draws half a circle at one half', async () => {
+    expect(await arcOffset(0.5)).toBeCloseTo(RING_CIRCUMFERENCE / 2, 5)
   })
 
-  it('clamps overtime instead of overdrawing the ring', () => {
-    expect(arcOffset(2.4)).toBeCloseTo(0, 5)
+  it('clamps overtime instead of overdrawing the ring', async () => {
+    expect(await arcOffset(2.4)).toBeCloseTo(0, 5)
   })
 
-  it('clamps a negative progress rather than drawing backwards', () => {
-    expect(arcOffset(-1)).toBeCloseTo(RING_CIRCUMFERENCE, 5)
+  it('clamps a negative progress rather than drawing backwards', async () => {
+    expect(await arcOffset(-1)).toBeCloseTo(RING_CIRCUMFERENCE, 5)
   })
 
-  it('treats a non-finite progress as empty — a NaN dash offset erases the ring', () => {
-    expect(arcOffset(Number.NaN)).toBeCloseTo(RING_CIRCUMFERENCE, 5)
-    expect(arcOffset(Number.POSITIVE_INFINITY)).toBeCloseTo(0, 5)
+  it('treats a non-finite progress as empty — a NaN dash offset erases the ring', async () => {
+    expect(await arcOffset(Number.NaN)).toBeCloseTo(RING_CIRCUMFERENCE, 5)
+    expect(await arcOffset(Number.POSITIVE_INFINITY)).toBeCloseTo(0, 5)
   })
 
   it('shows the label it is given and nothing it invented', () => {

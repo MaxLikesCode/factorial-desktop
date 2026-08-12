@@ -46,6 +46,37 @@ body {
     -webkit-app-region: no-drag;
 }
 
+/*
+ * The motion vocabulary. Two curves for the whole app: everything the user
+ * triggers or that arrives on its own uses `--ease-out`, which starts fast and
+ * settles — the shape that reads as responsive. `--ease-in-out` is kept for the
+ * rare symmetric move.
+ *
+ * This is an always-on-top window sitting in someone's peripheral vision for
+ * eight hours. That is the binding constraint on every animation here: motion is
+ * spent only on the few-times-a-day state changes, never on anything that
+ * repeats. The per-second timer and the progress arc deliberately do not move.
+ */
+@theme {
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+/*
+ * Reduced motion collapses durations instead of removing transitions. Setting
+ * `animation: none` would also remove the *state change* the animation carries —
+ * the point is to stop the movement, not to hide that something happened.
+ */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 1ms !important;
+    }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
