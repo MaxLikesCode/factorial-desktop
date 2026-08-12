@@ -359,10 +359,17 @@ Der Timer zählt **nicht** selbst hoch. Bei jedem Tick wird die Differenz zu ein
 rekonstruierten Startzeitpunkt neu gerechnet. Damit driftet er nicht und
 übersteht Standby.
 
-Der Startzeitpunkt wird nach der Regel aus "Fallstrick 2" gebildet: `shift.date`
-plus Uhrzeit-Komponente aus `clockInWithSeconds`, in lokaler Zeitzone, mit
-Tagesrücksprung falls das Ergebnis in der Zukunft liegt. Diese Rekonstruktion
-liegt in **einer** Funktion in `time.ts` und wird nirgends dupliziert.
+Der Startzeitpunkt wird nach der Regel aus "Fallstrick 2" gebildet: lokales
+Kalenderdatum plus Uhrzeit-Komponente des API-Zeitstempels plus Zonen-Offset aus
+`clockInOffset`. Für den abgeschlossenen Shift sind das `shift.date` +
+`clockInWithSeconds` + `clockInOffset`, für den offenen `openShift.date` +
+`openShift.clockIn` + `openShift.clockInOffset` — `AttendanceOpenShift` kennt
+weder `clockInWithSeconds` noch `minutes`. Die frühere „Tagesrücksprung, falls
+das Ergebnis in der Zukunft liegt"-Heuristik entfällt ersatzlos: der Offset kommt
+mit den Daten, also wird nichts geraten und weder die aktuelle Uhr noch die
+Zeitzone der Maschine geht ein. Diese Rekonstruktion liegt in **einer** Funktion
+in `time.ts` (`reconstructInstant(localDate, apiTimestamp, offset)`) und wird
+nirgends dupliziert.
 
 Die Tagessumme ist die Summe über `minutes` aller heutigen Shifts plus die
 laufende Zeit des offenen Shifts — Pausen splitten den Shift in mehrere Records.
