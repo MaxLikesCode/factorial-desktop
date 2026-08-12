@@ -1,0 +1,35 @@
+appId: com.maxgiess.factorial-desktop
+productName: Factorial
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  # Not optional: src/main/tray.ts resolves its icons as
+  # `import.meta.dirname/../../resources`, i.e. from inside the asar.
+  - resources/**/*
+  - package.json
+
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch: [arm64]
+    - target: zip
+      arch: [arm64]
+  # No signing identity: the app is unsigned by choice for now.
+  identity: null
+  # LSUIElement hides the dock icon — this is a menubar app.
+  extendInfo:
+    LSUIElement: 1
+
+# PLATFORM: never verified. Icon sizes, NSIS behaviour and the Run-key autostart
+# all need checking on a real Windows machine.
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true

@@ -1,7 +1,7 @@
 # Factorial Desktop — Windows-Übergabe
 
-**Status:** wächst mit der Implementierung. Stand: Ende Task 12 (Tray +
-Sync-Hooks). Tasks 13–15 tragen hier weiter ein.
+**Status:** wächst mit der Implementierung. Stand: Ende Task 14 (Packaging).
+Task 15 trägt hier weiter ein.
 
 > **Für Windows ist Task 12 der wichtigste Abschnitt dieses Dokuments.** Der
 > Live-Timer in der Menubar ist ein macOS-Feature; auf Windows tragen ihn
@@ -33,7 +33,12 @@ Einstempeln, Pause, Fortsetzen, Ausstempeln — ohne den Browser zu öffnen.
 | `npm test` | Vitest, ohne Electron-Laufzeit |
 | `npm run typecheck` | `tsconfig.node.json` (Main/Preload/Shared) + `tsconfig.web.json` (Renderer) |
 | `npm run build` | Typecheck + electron-vite build nach `out/` |
+| `npm run package:mac` | Build + electron-builder DMG/ZIP arm64, unsigniert (auf macOS ausgeführt, siehe Abschnitt 4) |
 | `npm run package:win` | Build + electron-builder NSIS (**nie ausgeführt**) |
+
+Beide `package:`-Skripte laufen über `npm run build`, also **inklusive
+Typecheck** — ein Typfehler bricht das Packaging ab, bevor electron-builder
+überhaupt startet. Die Artefakte landen in `release/`, das in `.gitignore` steht.
 
 **Einstiegspunkte:**
 
@@ -56,6 +61,8 @@ Einstempeln, Pause, Fortsetzen, Ausstempeln — ohne den Browser zu öffnen.
 | `src/main/tray-menu.ts` | was das Tray anzeigt und anbietet: Label, Statuszeile, Tooltip, Menü, deutscher Fehlertext (Electron-frei, getestet) |
 | `src/shared/errors.ts` | die **einzige** Stelle, die aus einem Fehler-`kind` deutschen Text macht — seit Task 12 in `shared`, weil Renderer *und* Main sie brauchen |
 | `resources/` | Tray-Icons plus `make-tray-icons.py`, das sie erzeugt |
+| `electron-builder.yml` | Packaging: `appId`, Artefakt-Targets, `files`-Globs, NSIS-Optionen |
+| `build/` | App-Icons (`icon.icns`, `icon.ico`) plus `make-app-icon.py`, das sie erzeugt. Das Verzeichnis ist `directories.buildResources` und wird von electron-builder **nicht** mit ins Paket gelegt |
 | `src/preload/index.ts` | `contextBridge` — die einzigen zehn Funktionen, die der Renderer sieht |
 | `src/shared/ipc-contract.ts` | Kanalnamen, Snapshot-Serialisierung, Fehler-Codec (von Main **und** Renderer benutzt) |
 | `src/shared/time.ts` | Zeitrekonstruktion (der gefährlichste Code im Repo) |
@@ -89,6 +96,11 @@ die erklärte Fassung davon und muss mit dem Grep-Ergebnis übereinstimmen.
 > erste plattformabhängige Stelle außerhalb von TypeScript liegt in
 > `src/renderer/src/styles.css`, und dort ist der Kommentar `/* … */`. Wer nur
 > nach `// PLATFORM:` sucht, übersieht sie.
+>
+> **Seit Task 14 reicht `src/` als Suchraum nicht mehr.** Die
+> Windows-Konfiguration steht in `electron-builder.yml`, also außerhalb von
+> `src/`. Vollständig ist erst `grep -rn "PLATFORM:" src/ electron-builder.yml`
+> — 16 Treffer in `src/`, einer in der YAML.
 
 | Datei:Zeile | Was | Warum | Auf Windows zu prüfen |
 |---|---|---|---|
@@ -109,6 +121,8 @@ die erklärte Fassung davon und muss mit dem Grep-Ergebnis übereinstimmen.
 | `src/main/windows.ts:123` | `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })` nur auf `darwin` | Der Sinn eines schwebenden Zeit-Widgets ist, über Vollbild-Spaces sichtbar zu bleiben. `visibleOnFullScreen` ist eine macOS-Option; auf Windows gibt es kein Äquivalent, dort trägt allein `alwaysOnTop`. | Prüfen, ob das Widget über einer Vollbild-App sichtbar bleibt. Wenn nicht: `setAlwaysOnTop(true, 'screen-saver')` ist die Windows-taugliche Verschärfung, hat aber Nebenwirkungen auf Fokus und Taskleiste |
 | `src/renderer/src/styles.css:32` | `.drag-region { -webkit-app-region: drag }` plus `.no-drag` für alles Anklickbare darin | Das Fenster ist `frame: false` und hat keine Titelleiste zum Anfassen; die Drag-Region **ist** die einzige Möglichkeit, das Widget zu verschieben. Chromium kennt die Eigenschaft auf beiden Plattformen, verhält sich aber nicht gleich. | Widget an der Kopfzeile ziehen: es muss sich bewegen und die Position nach dem Debounce speichern. Dann drei Windows-Eigenheiten prüfen: (1) an den oberen Bildschirmrand ziehen darf **kein** Aero Snap auslösen — das Fenster ist `resizable: false`, ein Snap-Versuch führt dort erfahrungsgemäß zu einem verzerrten oder unverschiebbaren Fenster; (2) Buttons und das Arbeitsort-Select innerhalb der Region müssen klickbar bleiben (dafür ist `.no-drag` da; unter Windows greift die Vererbung teils anders); (3) `moved` feuert unter Windows beim Ziehen laufend statt einmal — der 250-ms-Debounce in `src/main/windows.ts` ist genau dafür da |
 
+| `electron-builder.yml:26` | der ganze `win:`-Block (`nsis`, `x64`) plus die `nsis:`-Optionen | Die einzige plattformabhängige Stelle außerhalb von `src/`: macOS bekommt DMG + ZIP, Windows einen NSIS-Installer. Kein Code, sondern Konfiguration — und die einzige im Repo, die **nie** ausgeführt wurde. | `npm run package:win` als Allererstes ausprobieren. Danach: enthält `build/icon.ico` genug Auflösungen (16–256 px sind drin), installiert der Installer in ein wählbares Verzeichnis (`allowToChangeInstallationDirectory: true`), und läuft er ohne Adminrechte durch (`perMachine: false`)? Siehe Abschnitt 4 für das, was auf macOS belegt ist |
+
 Task 7 (`src/main/attendance.ts`) hat **keine** neue plattformabhängige Stelle
 hinzugefügt: der Store kennt weder Fenster noch Tray und benutzt nur Promises und
 `setTimeout`. Task 8 (IPC, Preload, Contract) ebenfalls nicht — IPC verhält sich
@@ -116,9 +130,12 @@ auf allen Plattformen gleich. Task 9 hat drei Einträge ergänzt (Autostart),
 Task 10 zwei weitere (Transparenz, Vollbild-Sichtbarkeit) und zwei bestehende
 umgeschrieben, Task 11 einen (die Drag-Region im CSS), Task 12 sieben (fünf im
 Tray, zwei erklärende Kommentare in `tray-menu.ts`) und den
-`window-all-closed`-Eintrag komplett umgeschrieben; die Tabelle hat damit
-**sechzehn** Einträge und deckt `grep -rn "PLATFORM:" src/` vollständig ab
-(Stand Task 12: 16 Treffer in sechs Dateien).
+`window-all-closed`-Eintrag komplett umgeschrieben; Task 14 einen
+(`electron-builder.yml`). Die Tabelle hat damit **siebzehn** Einträge und deckt
+`grep -rn "PLATFORM:" src/ electron-builder.yml` vollständig ab (Stand Task 14:
+16 Treffer in sechs Dateien unter `src/`, plus einer in der YAML). Die Tasks 13
+(Soll-Zeit im Ring) und 14 haben in `src/` **keine** neue Verzweigung erzeugt:
+die Soll-Zeit ist reine Rechnung, und das Packaging ist Konfiguration.
 
 Die nachgereichte **„Einstellungen"-Ebene im Tray-Menü** (Autostart, Immer im
 Vordergrund, Abmelden) hat **keinen** neuen Eintrag erzeugt: sie ist reine
@@ -195,14 +212,40 @@ Die vollständige Themenliste steht in `docs/DESIGN.md`, Abschnitt
 | Schriftart | `@fontsource-variable/geist` wird als WOFF2 mitgebaut und nicht vom System geholt — es gibt also keinen Fallback-Unterschied zwischen macOS und Windows. Was sich unterscheidet, ist das **Rendering**: Windows hinted anders, die Zeilen im Widget können dadurch 1–2 px höher ausfallen. Das Fenster ist `resizable: false` bei 340×224, ein Überlauf würde also abgeschnitten statt zu scrollen | `src/renderer/src/styles.css`, `src/main/windows.ts` (`WIDGET_SIZE`) |
 | Renderer-Fonts und Emoji | Die UI benutzt bewusst **keine** Emoji oder Unicode-Blockzeichen als Icons (der Plan-Schnipsel hatte `❙❙` für „Pause") — auf Windows rendern die als farbiges Emoji oder als Ersatzkästchen. Stattdessen Lucide-SVGs plus deutsches Wort | `src/renderer/src/components/BreakMenu.tsx` |
 | Toasts | `sonner` rendert in denselben transparenten, 340×224 großen Renderer. Position ist `bottom-center`, damit ein Toast nicht über die abgerundete Ecke hinausragt. Ob er auf Windows in ein transparentes, frameless Fenster genauso sauber zeichnet, ist ungeprüft | `src/renderer/src/App.tsx` |
-| Packaging | noch nicht gebaut. **Wichtig für Task 14:** `resources/` muss ins Paket. `src/main/tray.ts` sucht die Icons unter `import.meta.dirname/../../resources`, also `app.asar/resources` — das trifft zu, solange electron-builder das Verzeichnis nicht ausschließt. Wird es ausgeschlossen oder nach `extraResources` verschoben, ist `ICON_DIR` nachzuziehen | Task 14 |
+| Packaging | macOS ist gebaut (DMG + ZIP, arm64, unsigniert), Windows ist **nur konfiguriert**. Zwei Dinge, die auf Windows anders sind: das Artefakt (NSIS-Installer statt DMG) und das App-Icon (`build/icon.ico` statt `build/icon.icns`). `resources/` liegt nachweislich im Paket — `src/main/tray.ts` sucht die Icons unter `import.meta.dirname/../../resources`, also `app.asar/resources`, und genau diese zwölf Dateien sind im gebauten `app.asar` enthalten (nachgezählt, Abschnitt 4). Wird das Verzeichnis je ausgeschlossen oder nach `extraResources` verschoben, ist `ICON_DIR` nachzuziehen | `electron-builder.yml`, `build/`, `src/main/tray.ts` |
+| App-Icon | `build/icon.icns` (macOS) und `build/icon.ico` (Windows, 16/24/32/48/64/128/256 px) erzeugt `build/make-app-icon.py` aus **einem** 1024-px-Master. Der `.icns`-Teil des Skripts ruft `iconutil` auf und läuft deshalb **nur auf macOS**; die fertige Datei ist eingecheckt, Windows braucht sie nicht. Der `.ico`-Teil ist reines Pillow und läuft überall | `build/` |
 
 ## 4. Was verifiziert wurde und was nicht
 
 **Verifiziert auf macOS (Darwin 25.5, Electron 43):**
 
-- `npm test` — 348 Tests grün, `npm run typecheck` sauber, `npm run build`
-  fehlerfrei (Stand Task 13).
+- `npm test` — 364 Tests grün, `npm run typecheck` sauber, `npm run build`
+  fehlerfrei (Stand Task 14).
+- **Das macOS-Packaging** (Task 14). `npm run package:mac` ist gelaufen und hat
+  `release/Factorial-0.1.0-arm64.dmg` (119,2 MB) und
+  `release/Factorial-0.1.0-arm64-mac.zip` (119,1 MB) erzeugt. Am Ergebnis
+  nachgeprüft, nicht am Log:
+  - `Contents/Info.plist` des gebauten Bundles: `CFBundleIdentifier =
+    com.maxgiess.factorial-desktop`, `CFBundleName = Factorial`,
+    `CFBundleIconFile = icon.icns`, `CFBundleShortVersionString = 0.1.0` und
+    **`LSUIElement = 1`** — das gepackte Programm bringt also kein Dock-Icon mit.
+  - `codesign -dvv` meldet `Signature=adhoc`, `TeamIdentifier=not set`:
+    unsigniert wie beabsichtigt (`identity: null`), electron-builder protokolliert
+    dazu `skipped macOS code signing`. Der erste Start muss deshalb über
+    **Rechtsklick → Öffnen** gehen.
+  - Das DMG wurde read-only gemountet: es enthält `Factorial.app` und den
+    üblichen Symlink auf `/Applications`; dieselben Info.plist-Werte wie oben.
+    Das ZIP enthält dasselbe Bundle (587 Einträge).
+  - Inhalt von `Contents/Resources/app.asar`, ausgezählt: `out/main/index.js`,
+    `out/preload/index.mjs`, zehn Dateien unter `out/renderer/` und **alle zwölf
+    Dateien aus `resources/`**, inklusive `trayTemplate.png`, `trayTemplate@2x.png`
+    und der vier `.ico`. Der Pfad, den `src/main/tray.ts` erwartet
+    (`app.asar/resources`), existiert also im Paket.
+  - **Carry-Forward C1 ist am Artefakt belegt, nicht nur an der `package.json`:**
+    im `app.asar` liegt weder `shadcn` noch `@fontsource-variable/geist` noch
+    `tw-animate-css`. Die Geist-Schrift ist stattdessen als fünf `.woff2` in
+    `out/renderer/assets/` einkompiliert, kommt also weiterhin mit — nur eben
+    gebündelt statt als Paket.
 - **Die Soll-Zeit im Ring** (Task 13) — aber nur als Unit-Test. Belegt ist die
   Verdrahtung Store → IPC → Ring gegen einen gefälschten `fetchExpectedMinutes`:
   der Wert landet im Snapshot, übersteht die Serialisierung, ein fehlgeschlagener
@@ -432,6 +475,26 @@ Die vollständige Themenliste steht in `docs/DESIGN.md`, Abschnitt
   Tray-Aktion das sichtbare Widget aktualisiert (sie muss, beide hängen am
   selben Store), ob `Fenster zeigen/ausblenden` das echte Widget schaltet, und
   ob `Anmelden` aus dem Tray die Session wirklich neu aufbaut.
+- **Die gepackte App im Betrieb** (Plan-Task 14, Schritt 4). Das DMG ist gebaut
+  und sein Inhalt ausgelesen, aber `Factorial.app` wurde **nie gestartet** —
+  weder aus dem Volume noch aus `/Applications`. Zwei Gründe, beide bewusst:
+  `src/main/index.ts` ruft beim Start `applyLoginItem(settings.get().openAtLogin)`
+  auf, und `openAtLogin` ist per Voreinstellung `true` — ein Start hätte also
+  einen echten Eintrag in den macOS-Anmeldeobjekten erzeugt, der auf den
+  Release-Ordner zeigt. Und der interessante Teil des Schritts (Ein-/Ausstempeln
+  aus der gepackten App) schreibt in eine echte Arbeitszeiterfassung. Beides ist
+  eine Handlung, die der Mensch auslöst. **Damit ist ungeprüft:** ob die App aus
+  dem Bundle heraus überhaupt hochkommt, ob das Tray-Icon aus `app.asar/resources`
+  wirklich geladen wird (der Pfad existiert nachweislich, das Laden nicht),
+  ob `LSUIElement` das Dock-Icon tatsächlich unterdrückt, ob die Session aus
+  `~/Library/Application Support/factorial-desktop` auch für das Bundle gilt,
+  und ob der Anmeldeobjekt-Eintrag den richtigen Pfad bekommt.
+- **`npm run package:win`.** Nie ausgeführt — es gab keine Windows-Maschine.
+  Belegt ist nur, dass electron-builder die Konfiguration **lädt** (es
+  protokolliert `loaded configuration file=…/electron-builder.yml` beim
+  macOS-Lauf) und dass `build/icon.ico` die von electron-builder geforderte
+  256-px-Auflösung enthält (im Test nachgerechnet, nicht von einem Windows-Build
+  akzeptiert).
 - Sämtlicher Windows-Code.
 
 **Nur kompiliert, nie ausgeführt:** die Windows-Ausprägung der
@@ -455,6 +518,18 @@ plus Task 12, in dieser Reihenfolge abzuarbeiten):
 8. Erst danach der vollständige Klickpfad gegen die echte API (Einstempeln →
    Pause → Fortsetzen → Ausstempeln) und die drei `locationType`-Werte — das
    schreibt echte Einträge in eine echte Arbeitszeiterfassung.
+9. **Und ganz zuletzt dasselbe noch einmal mit der gepackten App** (Plan-Task 14,
+   Schritt 4): `release/Factorial-0.1.0-arm64.dmg` öffnen, `Factorial.app` nach
+   `/Applications` ziehen, per **Rechtsklick → Öffnen** starten (unsigniert, ein
+   Doppelklick wird von Gatekeeper abgewiesen). Zu prüfen: kein Dock-Icon, nur
+   das Tray; die Anmeldung besteht weiter oder das Login-Fenster erscheint; das
+   Tray-Icon ist sichtbar (das ist der Beleg, dass `app.asar/resources` gelesen
+   wird); Ein- und Ausstempeln funktioniert; und unter
+   `Systemeinstellungen → Allgemein → Anmeldeobjekte` steht ein Eintrag, der auf
+   `/Applications/Factorial.app` zeigt — **nicht** auf einen Release- oder
+   Entwicklungsordner. Steht dort ein falscher Pfad, ist das ein echter Fehler
+   und kein Schönheitsfehler: die App startet dann bei jedem Login aus einem
+   Ordner, den es vielleicht nicht mehr gibt.
 
 ## 5. Wie man die Factorial-API selbst weiter erforscht
 
@@ -475,6 +550,40 @@ Kurzfassung:
 
 ## 6. Offene Punkte und Verdachtsmomente
 
+- **Das Paket schleppt 36,8 MB toter `node_modules` mit.** Gemessen am gebauten
+  `app.asar` (40,0 MB gesamt): `node_modules` 36,8 MB, `out/` 1,3 MB,
+  `resources/` 0,1 MB. electron-builder kopiert **alle** `dependencies` ins
+  Paket, aber geladen wird davon zur Laufzeit nichts: der Renderer ist von Vite
+  vollständig gebündelt, und die gebauten `out/main/index.js` und
+  `out/preload/index.mjs` importieren nachweislich nur `electron`, `node:fs` und
+  `node:path` (nachgezählt an den Bundles). React, Base UI, Lucide und Sonner
+  liegen also doppelt im Paket — einmal einkompiliert, einmal als Quelldateien.
+  Carry-Forward C1 hat nur die drei ausdrücklich genannten Build-Zeit-Pakete
+  entfernt; der Rest wäre über ein `- '!node_modules'` in `files` (oder einen
+  Umzug aller Renderer-Pakete nach `devDependencies`) zu erledigen. **Bewusst
+  nicht gemacht:** die gepackte App wurde nie gestartet (Abschnitt 4), und eine
+  Verschlankung, deren Ergebnis niemand starten kann, ist kein guter Tausch. Wer
+  sie angeht, muss die App danach wirklich starten. Größenordnung: das DMG wäre
+  danach etwa 36 MB kleiner, von 119 MB — der Löwenanteil ist Electron selbst.
+- **Im Dev-Modus erscheint weiterhin ein Dock-Icon.** `LSUIElement: 1` steht in
+  `Info.plist` und wirkt deshalb nur für das gepackte Bundle. `npm run dev`
+  startet die generische Electron-App und zeigt deren Dock-Icon. Der Code ruft
+  bewusst kein `app.dock.hide()` — das wäre eine weitere Plattformverzweigung
+  für einen reinen Entwicklungs-Nebeneffekt. Wenn das stört, ist
+  `app.dock?.hide()` in `src/main/index.ts` die Stelle, und dann gehört sie in
+  die Tabelle in Abschnitt 2.
+- **`build/icon.icns` lässt sich nur auf macOS neu erzeugen.**
+  `build/make-app-icon.py` ruft für die `.icns` das Systemwerkzeug `iconutil`
+  auf. Auf Windows schlägt das Skript an dieser Stelle fehl — die fertige Datei
+  ist eingecheckt und wird dort auch nicht gebraucht. Nur die `.ico` (Pillow)
+  entsteht plattformunabhängig. Wer das Icon ändert, macht das also auf macOS
+  und checkt beide Dateien ein.
+- **`js-yaml` ist eine reine Test-Abhängigkeit.** `src/shared/__tests__/packaging.test.ts`
+  liest `electron-builder.yml` und prüft die Struktur (Targets, `identity: null`,
+  `LSUIElement`, die `files`-Globs). Ohne echten Parser würde ein falsch
+  eingerückter Schlüssel durch jede Textprüfung rutschen, und genau das ist die
+  Fehlerart, die man hier fürchtet. Das Paket steht in `devDependencies` und
+  landet nicht im Produkt.
 - **`redirect: 'manual'` bei `ses.fetch`.** Siehe Abschnitt 4. Wenn auf Windows
   ein abgelaufener Login sichtbar wird: prüfen, welchen Status die Antwort
   wirklich trägt, und die Normalisierung in `session-fetch.ts` entsprechend
