@@ -93,7 +93,14 @@ export type SerialisedState =
       locationType: string | null
       workplaceId: number | null
     }
-  | { kind: 'break'; shiftId: string; sinceMs: number; breakId: string; breakName: string }
+  | {
+      kind: 'break'
+      shiftId: string
+      sinceMs: number
+      breakId: string
+      breakName: string
+      locationType: string | null
+    }
 
 export interface SerialisedSnapshot extends Omit<AppSnapshot, 'state'> {
   state: SerialisedState
@@ -117,6 +124,7 @@ export function serialiseSnapshot(snapshot: AppSnapshot): SerialisedSnapshot {
             sinceMs: state.since.getTime(),
             breakId: state.breakId,
             breakName: state.breakName,
+            locationType: state.locationType,
           }
         : { kind: state.kind }
   return { ...snapshot, state: serialised }
@@ -140,6 +148,7 @@ export function deserialiseSnapshot(snapshot: SerialisedSnapshot): AppSnapshot {
             since: new Date(state.sinceMs),
             breakId: state.breakId,
             breakName: state.breakName,
+            locationType: state.locationType,
           }
         : { kind: state.kind }
   return { ...snapshot, state: restored }

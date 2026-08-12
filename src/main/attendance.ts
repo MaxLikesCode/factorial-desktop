@@ -381,6 +381,11 @@ export function createAttendanceStore({
           since: now(),
           breakId: breakConfigurationId,
           breakName: option?.name ?? FALLBACK_BREAK_NAME,
+          // Carried over from the shift being interrupted: a break inherits the
+          // work location, it does not pick a new one. Taken from the state
+          // rather than from settings, because settings hold the preference for
+          // the *next* clock-in, which may differ from where this shift runs.
+          locationType: snapshot.state.kind === 'in' ? snapshot.state.locationType : null,
         },
         () => ops.breakStart({ now: now(), breakConfigurationId }),
       )

@@ -53,7 +53,7 @@ function clockedIn(since: Date): AppSnapshot['state'] {
 }
 
 function onBreak(since: Date): AppSnapshot['state'] {
-  return { kind: 'break', shiftId: '1', since, breakId: '19613', breakName: 'Mittagspause' }
+  return { kind: 'break', shiftId: '1', since, breakId: '19613', breakName: 'Mittagspause', locationType: 'office' }
 }
 
 function noopActions(): TrayActions {

@@ -11,12 +11,19 @@ import {
  * `src/main/factorial/types.ts`. That list is the one the main process validates
  * against (K4) — this one only supplies the German words.
  *
- * Only `office` was observed on the live API; the other two come from the schema
- * enum and are noted as unverified in `docs/WINDOWS.md` §6.
+ * The words are Factorial's own, not a fresh translation: someone comparing this
+ * widget with the web app should not have to work out that two different terms
+ * mean the same thing. Factorial's German UI calls `work_from_home` **"Mobiles
+ * Arbeiten"** — confirmed on the real account, where the dashboard widget showed
+ * exactly that for a running shift.
+ *
+ * `office` and `work_from_home` are both confirmed against the live API;
+ * `business_trip` comes from the schema enum and is still unverified
+ * (`docs/WINDOWS.md` §6).
  */
 export const LOCATIONS = [
   { value: 'office', label: 'Büro' },
-  { value: 'work_from_home', label: 'Homeoffice' },
+  { value: 'work_from_home', label: 'Mobiles Arbeiten' },
   { value: 'business_trip', label: 'Dienstreise' },
 ] as const
 
@@ -30,7 +37,7 @@ interface Props {
  * K11 — Base UI, not Radix. Two differences from the plan's snippet:
  *
  * - `<Select.Value>` renders the *raw value* unless the root is given `items`.
- *   Without it the footer would read "work_from_home" instead of "Homeoffice" —
+ *   Without it the footer would read "work_from_home" instead of "Mobiles Arbeiten" —
  *   type-correct and wrong on screen, exactly the class of deviation `tsc`
  *   cannot catch.
  * - `onValueChange` is called with `string | null` plus an event-details second

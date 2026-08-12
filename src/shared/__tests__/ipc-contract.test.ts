@@ -43,12 +43,22 @@ describe('snapshot serialisation', () => {
     const restored = deserialiseSnapshot(
       serialiseSnapshot({
         ...REST,
-        state: { kind: 'break', shiftId: '1', since, breakId: '19613', breakName: 'Mittagspause' },
+        state: {
+          kind: 'break',
+          shiftId: '1',
+          since,
+          breakId: '19613',
+          breakName: 'Mittagspause',
+          locationType: 'work_from_home',
+        },
       }),
     )
     if (restored.state.kind !== 'break') throw new Error('unreachable')
     expect(restored.state.breakName).toBe('Mittagspause')
     expect(restored.state.since.getTime()).toBe(since.getTime())
+    // The widget shows this while a break runs; losing it across IPC would put
+    // the saved preference back on screen instead of the shift's real location.
+    expect(restored.state.locationType).toBe('work_from_home')
   })
 
   it('round-trips states that carry no date', () => {

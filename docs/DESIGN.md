@@ -490,8 +490,24 @@ Drag-Region. Position wird pro Monitor gemerkt.
   - aus → **Einstempeln**
   - ein → **Pause** (Dropdown mit Pausentypen) + **Ausstempeln**
   - Pause → **Fortsetzen** + **Ausstempeln**
-- Fußzeile: Arbeitsort-Selector (Büro / Homeoffice / Dienstreise), bei aktiver
-  Pause zusätzlich der Pausenname
+- Fußzeile: Arbeitsort-Selector (Büro / Mobiles Arbeiten / Dienstreise), bei
+  aktiver Pause zusätzlich der Pausenname
+
+> **Der Selector zeigt bei offener Schicht deren echten Arbeitsort, nicht die
+> gespeicherte Voreinstellung.** Die Voreinstellung sagt nur, was das *nächste*
+> Einstempeln benutzen würde — beides fällt auseinander, sobald jemand über das
+> Web oder das Handy einstempelt. Die erste Fassung zeigte „Büro" für eine
+> Schicht, die auf „Mobiles Arbeiten" lief: eine Absicht als Tatsache dargestellt.
+> Nur wenn die API zur offenen Schicht keinen Ort liefert, greift die
+> Voreinstellung als Rückfall — dann gibt es nichts Wahreres zu zeigen.
+>
+> Deshalb trägt auch der Pausenzustand den `locationType` mit: eine Pause wählt
+> keinen neuen Ort, sie erbt den der unterbrochenen Schicht.
+>
+> **Die Beschriftungen sind Factorials eigene Wörter**, keine eigene Übersetzung.
+> `work_from_home` heißt dort **„Mobiles Arbeiten"** (am echten Konto bestätigt),
+> nicht „Homeoffice" — wer Widget und Weboberfläche nebeneinander legt, soll
+> nicht erst übersetzen müssen.
 
 **Farbcodierung:** grün = eingestempelt, amber = Pause, neutral = ausgestempelt.
 

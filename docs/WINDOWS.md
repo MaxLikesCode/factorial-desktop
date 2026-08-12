@@ -741,8 +741,9 @@ Kurzfassung:
   sind der Grund, warum `src/renderer/src/__tests__/break-menu.test.tsx` das Menü
   wirklich aufklappt und anklickt, statt nur zu rendern.
 
-- **Die Werte `work_from_home` und `business_trip` sind ungeprüft.** Live
-  beobachtet wurde nur `office`. Die drei stehen als
+- **`business_trip` ist ungeprüft.** `office` und `work_from_home` sind beide am
+  echten Konto bestätigt — `work_from_home` dadurch, dass eine laufende Schicht
+  damit im Widget angezeigt wurde (Factorial nennt es „Mobiles Arbeiten"). Die drei stehen als
   `AttendanceShiftLocationTypeEnum` im Schema und werden im Main-Prozess gegen
   `LOCATION_TYPES` (`src/main/factorial/types.ts`) validiert, bevor sie zur API
   gehen. Wer zum ersten Mal mit echter Anmeldung arbeitet: jeden der drei einmal

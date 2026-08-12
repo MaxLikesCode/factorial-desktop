@@ -39,7 +39,19 @@ export type AttendanceState =
       locationType: string | null
       workplaceId: number | null
     }
-  | { kind: 'break'; shiftId: string; since: Date; breakId: string; breakName: string }
+  | {
+      kind: 'break'
+      shiftId: string
+      since: Date
+      breakId: string
+      breakName: string
+      /**
+       * For display only. A break does not choose a work location — it inherits
+       * the one the open shift already carries, and the widget must show that
+       * rather than the user's saved preference for the *next* clock-in.
+       */
+      locationType: string | null
+    }
 
 /**
  * Shown when the API gives a break configuration no usable label. Exported so
@@ -80,6 +92,7 @@ export function deriveState(openShift: OpenShift | null): AttendanceState {
       // A blank name is as unusable as a missing one and would render an empty
       // label in the widget and the tray menu.
       breakName: name ? name : FALLBACK_BREAK_NAME,
+      locationType: openShift.locationType,
     }
   }
 

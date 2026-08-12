@@ -43,7 +43,7 @@ describe('BreakMenu', () => {
 describe('LocationSelect', () => {
   it('shows the German label of the current value, not the enum member', () => {
     render(<LocationSelect value="work_from_home" disabled={false} onChange={vi.fn()} />)
-    expect(screen.getByText('Homeoffice')).toBeTruthy()
+    expect(screen.getByText('Mobiles Arbeiten')).toBeTruthy()
     expect(screen.queryByText('work_from_home')).toBeNull()
   })
 

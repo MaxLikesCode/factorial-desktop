@@ -12,8 +12,11 @@ vi.mock('sonner', () => ({ toast: { error: toastError, success: vi.fn() } }))
 const NOW = new Date('2026-08-12T10:00:00+02:00')
 
 /** Mounts the widget and flushes the two promises it fires on mount. */
-async function mount(snapshot: Partial<AppSnapshot>): Promise<FakeBridge> {
-  const bridge = installBridge(snapshot)
+async function mount(
+  snapshot: Partial<AppSnapshot>,
+  settings: Partial<Parameters<typeof installBridge>[1]> = {},
+): Promise<FakeBridge> {
+  const bridge = installBridge(snapshot, settings)
   render(<StatusWidget />)
   await act(async () => {})
   return bridge
@@ -62,6 +65,63 @@ describe('StatusWidget — the three states', () => {
     expect(screen.getByRole('button', { name: 'Pause' })).toBeTruthy()
   })
 
+  /**
+   * Reported from the real app: the shift was running on "Mobiles Arbeiten" and
+   * the footer read "Büro" — the saved preference, not the shift. The preference
+   * only says what the *next* clock-in would use, and the two diverge as soon as
+   * someone clocks in from the web or their phone.
+   */
+  it('shows the running shift’s location, not the saved preference', async () => {
+    await mount(
+      {
+        state: {
+          kind: 'in',
+          shiftId: '1',
+          since: NOW,
+          locationType: 'work_from_home',
+          workplaceId: 3333333,
+        },
+      },
+      { lastLocationType: 'office' },
+    )
+
+    expect(screen.getByText('Mobiles Arbeiten')).toBeTruthy()
+    expect(screen.queryByText('Büro')).toBeNull()
+  })
+
+  it('keeps showing the shift’s location during a break', async () => {
+    await mount(
+      {
+        state: {
+          kind: 'break',
+          shiftId: '1',
+          since: NOW,
+          breakId: '19613',
+          breakName: 'Mittagspause',
+          locationType: 'work_from_home',
+        },
+      },
+      { lastLocationType: 'office' },
+    )
+
+    expect(screen.getByText('Mobiles Arbeiten')).toBeTruthy()
+  })
+
+  it('falls back to the preference when the open shift carries no location', async () => {
+    await mount(
+      { state: { kind: 'in', shiftId: '1', since: NOW, locationType: null, workplaceId: null } },
+      { lastLocationType: 'business_trip' },
+    )
+
+    expect(screen.getByText('Dienstreise')).toBeTruthy()
+  })
+
+  it('shows the preference while clocked out — there it is the honest answer', async () => {
+    await mount({ state: { kind: 'out' } }, { lastLocationType: 'work_from_home' })
+
+    expect(screen.getByText('Mobiles Arbeiten')).toBeTruthy()
+  })
+
   it('recomputes the timer from `since` on every tick instead of counting up', async () => {
     await mount({
       state: {
@@ -88,6 +148,7 @@ describe('StatusWidget — the three states', () => {
         since: new Date(NOW.getTime() - 754_000),
         breakId: '19613',
         breakName: 'Mittagspause',
+        locationType: 'office',
       },
       todayMinutes: 120,
     })
@@ -247,7 +308,14 @@ describe('StatusWidget — actions', () => {
 
   it('ends a break', async () => {
     const bridge = await mount({
-      state: { kind: 'break', shiftId: '1', since: NOW, breakId: '19613', breakName: 'Mittagspause' },
+      state: {
+        kind: 'break',
+        shiftId: '1',
+        since: NOW,
+        breakId: '19613',
+        breakName: 'Mittagspause',
+        locationType: 'office',
+      },
     })
     await act(async () => void screen.getByRole('button', { name: 'Fortsetzen' }).click())
     expect(bridge.endBreak).toHaveBeenCalledTimes(1)

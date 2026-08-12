@@ -102,6 +102,23 @@ export function StatusWidget(): React.JSX.Element {
     }
   }
 
+  /**
+   * What the footer shows.
+   *
+   * While a shift is open this is the location **that shift actually runs on**,
+   * read back from the API. It is not the saved preference: that is only what
+   * the *next* clock-in would use, and the two differ the moment someone clocks
+   * in from the web, from their phone, or picks something else and forgets. It
+   * showed "Büro" for a shift running on "Mobiles Arbeiten" — the widget was
+   * reporting an intention as if it were a fact.
+   *
+   * `null` from the API falls back to the preference: an open shift the server
+   * gives no location for leaves nothing truer to show.
+   */
+  const shiftLocation =
+    state.kind === 'in' || state.kind === 'break' ? state.locationType : null
+  const displayedLocation = shiftLocation ?? settings?.lastLocationType ?? 'office'
+
   /** Remembering the choice is a preference, not part of the clock-in. */
   function chooseLocation(value: string): void {
     setSettings((current) => (current === null ? current : { ...current, lastLocationType: value }))
@@ -165,7 +182,7 @@ export function StatusWidget(): React.JSX.Element {
         />
         <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <LocationSelect
-            value={settings?.lastLocationType ?? 'office'}
+            value={displayedLocation}
             // The location is only sent with a clock-in, so changing it mid-shift
             // would silently do nothing.
             disabled={busy || settings === null || state.kind !== 'out'}
