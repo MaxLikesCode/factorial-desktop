@@ -1,7 +1,7 @@
 # Factorial Desktop — Windows-Übergabe
 
-**Status:** wächst mit der Implementierung. Stand: Ende Task 8 (IPC-Vertrag und
-Preload). Tasks 9–15 tragen hier weiter ein.
+**Status:** wächst mit der Implementierung. Stand: Ende Task 9 (Einstellungen und
+Autostart). Tasks 10–15 tragen hier weiter ein.
 
 Dieses Dokument ist für einen Agenten geschrieben, der auf einer Windows-Maschine
 weiterarbeitet und **den Gesprächsverlauf dieser Implementierung nicht kennt**.
@@ -44,6 +44,7 @@ Einstempeln, Pause, Fortsetzen, Ausstempeln — ohne den Browser zu öffnen.
 | `src/main/attendance.ts` | Store: Polling, optimistische Updates, Snapshot |
 | `src/main/ipc.ts` | Registrierung der Kanäle auf `ipcMain`, Snapshot-Push in die Fenster (Electron-Teil) |
 | `src/main/ipc-handlers.ts` | was hinter jedem Kanal passiert: Payload-Prüfung, Fehler-Klassifizierung (Electron-frei, getestet) |
+| `src/main/settings.ts` | persistierte Einstellungen als JSON + `buildLoginItemSettings` (Electron-frei, getestet) |
 | `src/preload/index.ts` | `contextBridge` — die einzigen zehn Funktionen, die der Renderer sieht |
 | `src/shared/ipc-contract.ts` | Kanalnamen, Snapshot-Serialisierung, Fehler-Codec (von Main **und** Renderer benutzt) |
 | `src/shared/time.ts` | Zeitrekonstruktion (der gefährlichste Code im Repo) |
@@ -57,15 +58,27 @@ die erklärte Fassung davon und muss mit dem Grep-Ergebnis übereinstimmen.
 
 | Datei:Zeile | Was | Warum | Auf Windows zu prüfen |
 |---|---|---|---|
-| `src/main/index.ts:111` | `app.requestSingleInstanceLock()`, sonst `app.quit()` | Ohne Lock startet auf Windows bei jedem Aufruf eine zweite komplette Instanz, inklusive zweitem Tray-Icon und zweitem Poll-Loop. Auf macOS übernimmt das die Plattform. | Zweiten Start auslösen (Verknüpfung, Autostart, Doppelklick): es darf keine zweite Instanz erscheinen |
-| `src/main/index.ts:114` | `second-instance`-Handler holt das vorhandene Fenster nach vorn | Gegenstück zum Lock: der zweite Start gibt hier ab, sonst passiert für den Nutzer sichtbar gar nichts. Auf macOS feuert das Event praktisch nie. | Zweiten Start auslösen; das laufende Fenster muss in den Vordergrund kommen und aus dem minimierten Zustand zurückkehren. Der Handler nimmt derzeit das **erste** Fenster aus `getAllWindows()` — sobald Task 10 das Widget-Fenster einführt, ist das auf das Widget umzustellen |
-| `src/main/index.ts:128` | `window-all-closed` beendet die App außer auf `darwin` | macOS hält Apps ohne Fenster am Leben, Windows erwartet das Ende. **Achtung:** Sobald es Tray + „Schließen blendet aus" gibt (Task 10/12), ist diese Regel neu zu bewerten — dann darf das Schließen des Widgets die App gerade *nicht* beenden. | Verhalten nach Einführung des Trays erneut prüfen |
+| `src/main/settings.ts:143` | `platform === 'win32'` → `{ openAtLogin, path, args: [] }` | Windows-Autostart ist ein Eintrag im Registry-Run-Key und braucht einen Pfad auf eine `.exe`. Ohne explizites `path` trägt Electron das ein, was gerade läuft — im Dev-Modus `electron.exe`, im gepackten Zustand potenziell der falsche Launcher (DESIGN.md, Zeile „Autostart"). | Haken „Autostart" setzen, abmelden/anmelden: die App muss starten. Danach `reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Run"` — der Eintrag muss auf die installierte `.exe` zeigen, nicht auf `electron.exe`. Haken entfernen → Eintrag verschwindet. **Im Dev-Modus bewusst nicht ausprobieren**, sonst startet dauerhaft eine Electron-Instanz mit |
+| `src/main/settings.ts:150` | alles außer `win32` → `{ openAtLogin }` ohne Pfad | macOS registriert das `.app`-Bundle selbst über die Service-Management-API; ein `path` würde auf das Helper-Binary im Bundle zeigen. Linux fällt in denselben Zweig, wo `setLoginItemSettings` ein No-op ist — das ist das harmlose Ergebnis. | Nichts; der Zweig ist auf Windows unerreichbar |
+| `src/main/index.ts:57` | `applyLoginItem` liest `process.platform`/`process.execPath` und gibt sie an `buildLoginItemSettings` weiter | Die einzige Stelle, die `app.setLoginItemSettings` aufruft. Die Verzweigung selbst ist absichtlich ausgelagert und rein, damit der Windows-Zweig auf macOS getestet werden kann. | Nur zusammen mit den beiden Zeilen oben |
+| `src/main/index.ts:118` | `app.requestSingleInstanceLock()`, sonst `app.quit()` | Ohne Lock startet auf Windows bei jedem Aufruf eine zweite komplette Instanz, inklusive zweitem Tray-Icon und zweitem Poll-Loop. Auf macOS übernimmt das die Plattform. | Zweiten Start auslösen (Verknüpfung, Autostart, Doppelklick): es darf keine zweite Instanz erscheinen |
+| `src/main/index.ts:121` | `second-instance`-Handler holt das vorhandene Fenster nach vorn | Gegenstück zum Lock: der zweite Start gibt hier ab, sonst passiert für den Nutzer sichtbar gar nichts. Auf macOS feuert das Event praktisch nie. | Zweiten Start auslösen; das laufende Fenster muss in den Vordergrund kommen und aus dem minimierten Zustand zurückkehren. Der Handler nimmt derzeit das **erste** Fenster aus `getAllWindows()` — sobald Task 10 das Widget-Fenster einführt, ist das auf das Widget umzustellen |
+| `src/main/index.ts:135` | `window-all-closed` beendet die App außer auf `darwin` | macOS hält Apps ohne Fenster am Leben, Windows erwartet das Ende. **Achtung:** Sobald es Tray + „Schließen blendet aus" gibt (Task 10/12), ist diese Regel neu zu bewerten — dann darf das Schließen des Widgets die App gerade *nicht* beenden. | Verhalten nach Einführung des Trays erneut prüfen |
 
 Task 7 (`src/main/attendance.ts`) hat **keine** neue plattformabhängige Stelle
 hinzugefügt: der Store kennt weder Fenster noch Tray und benutzt nur Promises und
 `setTimeout`. Task 8 (IPC, Preload, Contract) ebenfalls nicht — IPC verhält sich
-auf allen Plattformen gleich. Die Tabelle ist damit weiterhin vollständig
-(drei Einträge).
+auf allen Plattformen gleich. Task 9 hat drei Einträge ergänzt (Autostart); die
+Tabelle hat damit **sechs** Einträge und deckt `grep -rn "// PLATFORM:" src/`
+vollständig ab.
+
+Die Persistenz der Einstellungen selbst ist **nicht** plattformabhängig: das
+Format ist JSON, der Ort kommt aus `app.getPath('userData')`
+(`%APPDATA%\factorial-desktop\settings.json` bzw.
+`~/Library/Application Support/factorial-desktop/settings.json`), und der Pfad
+wird mit `node:path` zusammengesetzt. `src/main/settings.ts` importiert absichtlich
+kein Electron — der Dateipfad und der Login-Item-Effekt kommen als Argumente
+herein, deshalb ist der Store gegen ein echtes Temp-Verzeichnis testbar.
 
 **Nicht plattformabhängig, aber plattformübergreifend wichtig:**
 `src/main/index.ts` setzt am Widget-Fenster `sandbox: false`. Grund: `package.json`
@@ -80,7 +93,7 @@ diesem Code.
 ## 3. Bekannte Windows-Themen
 
 Die vollständige Themenliste steht in `docs/DESIGN.md`, Abschnitt
-„Windows-Übergabe". Für die bisher gebauten Teile (Tasks 1–8) sind relevant:
+„Windows-Übergabe". Für die bisher gebauten Teile (Tasks 1–9) sind relevant:
 
 | Thema | Was auf Windows anders ist | Betrifft |
 |---|---|---|
@@ -88,19 +101,33 @@ Die vollständige Themenliste steht in `docs/DESIGN.md`, Abschnitt
 | IPC und Preload | kein Unterschied. Der Pfad zum Preload wird aus `import.meta.dirname` zusammengesetzt, nicht als String gebaut — auf Windows kommen dabei Backslashes heraus, was `BrowserWindow` erwartet | `src/main/index.ts`, `src/preload/index.ts` |
 | Login-Fenster | Frameless/Transparenz spielt hier keine Rolle — das Fenster ist bewusst ein normales Fenster mit Titelleiste. Titel `Bei Factorial anmelden` erscheint auf Windows in der Titelleiste, auf macOS nur im Fenstermenü | `src/main/auth.ts` |
 | Session-Partition | `persist:factorial` liegt unter `%APPDATA%\factorial-desktop`; auf macOS unter `~/Library/Application Support/factorial-desktop`. Kein Codeunterschied, aber der relevante Ort zum Zurücksetzen | `src/main/session.ts` |
-| Autostart, Tray, Fensterposition, Packaging | noch nicht gebaut | Tasks 9, 10, 12, 14 |
+| Autostart | `app.setLoginItemSettings` schreibt auf Windows in den Registry-Run-Key, auf macOS in die Service-Management-Datenbank. Auf Windows **müssen** `path` und `args` gesetzt sein (siehe Tabelle in Abschnitt 2), auf macOS dürfen sie es nicht. `openAsHidden` ist macOS-only und wird bewusst nicht gesetzt — das Widget soll beim Start sichtbar sein | `src/main/settings.ts` (`buildLoginItemSettings`), `src/main/index.ts` (`applyLoginItem`) — geschrieben, auf Windows ungetestet |
+| Einstellungsdatei | gleicher Code, anderer Ort: `%APPDATA%\factorial-desktop\settings.json`. Geschrieben wird über eine `.tmp`-Datei plus `renameSync`; das ist auf NTFS ebenso atomar wie auf APFS, **aber** ein Virenscanner kann das `rename` kurzzeitig mit `EBUSY` blockieren. Wenn Einstellungen auf Windows sporadisch nicht speichern: hier zuerst nachsehen | `src/main/settings.ts` |
+| Tray, Fensterposition, Packaging | noch nicht gebaut | Tasks 10, 12, 14 |
 
 ## 4. Was verifiziert wurde und was nicht
 
 **Verifiziert auf macOS (Darwin 25.5, Electron 43):**
 
-- `npm test` — 190 Tests grün, `npm run typecheck` sauber, `npm run build`
-  fehlerfrei (Stand Task 8).
+- `npm test` — 216 Tests grün, `npm run typecheck` sauber, `npm run build`
+  fehlerfrei (Stand Task 9).
 - `npm run dev` startet, der Main-Prozess bootet ohne Fehler, und mit leerer
   Partition öffnet sich das Login-Fenster statt eines Absturzes. Belegt über den
   laufenden Renderer-Prozess und drei stehende TLS-Verbindungen. Damit ist der
   Pfad „leere Session → `unauthenticated` → Login-Fenster" einmal echt gelaufen;
   die Live-API antwortet ohne Session mit HTTP 401.
+- **Der Einstellungs-Store gegen ein echtes Dateisystem** (Task 9, 23 Tests):
+  Anlegen, Schreiben, Neuladen, fehlende Datei, kaputte Datei, unbekannte Keys,
+  nicht anlegbares Verzeichnis. Kein Mock von `node:fs` — die Tests arbeiten in
+  einem echten Temp-Verzeichnis. Ebenfalls getestet sind **beide** Zweige von
+  `buildLoginItemSettings`, weil die Funktion die Plattform als Argument nimmt
+  statt `process.platform` selbst zu lesen.
+- `app.whenReady()` **feuert in dieser Umgebung doch** (entgegen der Notiz aus
+  Task 8): ein minimales Electron-Skript ohne Fenster wurde ready, lieferte
+  `app.getPath('userData')` und `app.getLoginItemSettings()`. Damit ist belegt,
+  dass die Login-Item-API zur Laufzeit erreichbar ist. **Geschrieben** wurde
+  nichts: `setLoginItemSettings` verändert echte Systemeinstellungen des
+  Benutzers und wurde deshalb bewusst nicht ausgelöst.
 
 **Nicht verifiziert, auf keiner Plattform:**
 
@@ -116,6 +143,20 @@ Die vollständige Themenliste steht in `docs/DESIGN.md`, Abschnitt
   (per `curl` am 2026-08-12 nachgemessen). Die Redirect-Behandlung ist reine
   Vorsorge und ungetestet gegen echten Verkehr.
 - `clearSession()` (Logout) — geschrieben, nie ausgeführt.
+- **Der Autostart als Effekt** (Task 9): `app.setLoginItemSettings` wurde nie
+  aufgerufen — weder auf macOS noch auf Windows. Getestet ist nur, *was* der App
+  übergeben würde. Ob macOS die App danach wirklich beim Login startet, ist offen;
+  im ungepackten Dev-Modus würde ohnehin das Electron-Binary registriert, nicht
+  die App. Sinnvoll prüfbar ist das erst nach Task 14 (Packaging).
+- **Die Einstellungsdatei am echten Ort**: dass unter
+  `app.getPath('userData')/settings.json` tatsächlich geschrieben wird, ist nie
+  gelaufen — `bootstrap()` erreicht den Einstellungs-Store erst nach erfolgreicher
+  Anmeldung. Der Store selbst ist gegen ein echtes Verzeichnis getestet, die
+  Verdrahtung in `src/main/index.ts` nicht.
+- **`alwaysOnTop`** wird beim Erzeugen des Fensters aus den Einstellungen gesetzt,
+  aber zur Laufzeit nicht nachgezogen: ein Umschalten wirkt erst beim nächsten
+  Start. Das Fenster gehört Task 10, dort ist `win.setAlwaysOnTop()` beim
+  `set`-Aufruf nachzurüsten.
 - **Der Attendance-Store** (`src/main/attendance.ts`, Task 7): 34 Unit-Tests
   gegen gefälschte Operations, aber **kein einziger Lauf gegen die echte API**.
   Seit Task 8 ist er in `src/main/index.ts` verdrahtet, aber ein Start der App
@@ -200,6 +241,18 @@ Ausführlich in `docs/DESIGN.md`, Abschnitt „Windows-Übergabe → 5". Kurzfas
   Task 7, im Contract dokumentiert). Die UI muss „keine Verbindung" deshalb an
   `stale` festmachen, nicht an `lastError !== null` — sonst klebt die alte
   Meldung für den Rest der Sitzung im Widget.
+- **Autostart wird bei jedem Start einmal abgeglichen.** `src/main/index.ts` ruft
+  `applyLoginItem(settings.get().openAtLogin)` nach dem Laden der Einstellungen
+  auf, weil der Store nur *Änderungen* meldet: ohne diesen Abgleich würde bei
+  einer Neuinstallation nie ein Login-Item entstehen, obwohl der Standard „an"
+  ist, und ein außerhalb der App entfernter Eintrag käme nie zurück. Nebenwirkung:
+  die App schreibt die Systemeinstellung bei jedem Start, auch wenn der Benutzer
+  sie von Hand geändert hat — der gespeicherte Wert gewinnt. Falls das auf Windows
+  unerwünscht ist, ist `app.getLoginItemSettings()` die Stelle, an der man
+  vergleichen statt schreiben könnte.
+- **Einstellungen werden nur beim Start gelesen.** Zwei parallel laufende
+  Instanzen würden sich gegenseitig überschreiben. Der Single-Instance-Lock
+  verhindert das auf Windows — genau deshalb ist er dort nicht optional.
 - **Refresh bei Fensterfokus und nach Standby** (`powerMonitor`-Resume) fehlt
   noch. Der Store bietet `refresh()` dafür an, aufgerufen wird es erst in
   Task 10/12. Ohne den Resume-Hook zeigt der Timer nach dem Zuklappen des

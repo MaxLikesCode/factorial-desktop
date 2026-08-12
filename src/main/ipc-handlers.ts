@@ -133,15 +133,28 @@ function asBreakId(payload: unknown): string {
  * Copies only the keys this app knows, with the types it knows them by. The
  * settings store sanitises again when it writes; this keeps a malformed patch
  * from getting that far and makes the drop visible in one place.
+ *
+ * Every unusable value is dropped silently and the rest of the patch is applied.
+ * Rejecting the whole call is reserved for an action that would otherwise write
+ * a wrong time — a preference the UI got wrong is not that, and taking the valid
+ * keys down with the bad one only makes the bug harder to see.
  */
 function asSettingsPatch(payload: unknown): Partial<AppSettings> {
   const raw = asRecord(payload, IPC.setSettings)
   const patch: Partial<AppSettings> = {}
   if (typeof raw.openAtLogin === 'boolean') patch.openAtLogin = raw.openAtLogin
   if (typeof raw.alwaysOnTop === 'boolean') patch.alwaysOnTop = raw.alwaysOnTop
-  if (typeof raw.lastLocationType === 'string') patch.lastLocationType = raw.lastLocationType
-  if (raw.lastWorkplaceId === null || typeof raw.lastWorkplaceId === 'number') {
-    patch.lastWorkplaceId = asWorkplaceId(raw.lastWorkplaceId)
+  // Whitelisted here as well as in the settings store: a value that is not in
+  // `LOCATION_TYPES` fails the clock-in mutation in-band with HTTP 200, so it
+  // must never be offered a way to become the remembered default.
+  if (typeof raw.lastLocationType === 'string' && isLocationType(raw.lastLocationType)) {
+    patch.lastLocationType = raw.lastLocationType
+  }
+  // K4: `Int`. A fraction is as unusable as a string and is dropped the same way.
+  if (raw.lastWorkplaceId === null) {
+    patch.lastWorkplaceId = null
+  } else if (typeof raw.lastWorkplaceId === 'number' && Number.isInteger(raw.lastWorkplaceId)) {
+    patch.lastWorkplaceId = raw.lastWorkplaceId
   }
   return patch
 }

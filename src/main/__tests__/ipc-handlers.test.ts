@@ -240,6 +240,26 @@ describe('settings and session channels', () => {
     expect(settings.set).toHaveBeenCalledWith({})
   })
 
+  it('drops a non-integer workplace id instead of rejecting the whole call (K4)', async () => {
+    // Every other wrong-typed value is dropped silently; a fraction used to
+    // throw and take the valid keys of the same patch down with it.
+    const { handlers, settings } = handlersFor(fakeStore())
+    await handlers[IPC.setSettings]({ alwaysOnTop: false, lastWorkplaceId: 1.5 })
+    expect(settings.set).toHaveBeenCalledWith({ alwaysOnTop: false })
+  })
+
+  it('drops a location type the API does not know', async () => {
+    const { handlers, settings } = handlersFor(fakeStore())
+    await handlers[IPC.setSettings]({ lastLocationType: 'moon_base' })
+    expect(settings.set).toHaveBeenCalledWith({})
+  })
+
+  it('passes a known location type through', async () => {
+    const { handlers, settings } = handlersFor(fakeStore())
+    await handlers[IPC.setSettings]({ lastLocationType: 'work_from_home' })
+    expect(settings.set).toHaveBeenCalledWith({ lastLocationType: 'work_from_home' })
+  })
+
   it('accepts an explicit null workplace, which means "no workplace"', async () => {
     const { handlers, settings } = handlersFor(fakeStore())
     await handlers[IPC.setSettings]({ lastWorkplaceId: null })
