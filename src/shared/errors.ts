@@ -74,6 +74,17 @@ export function describeActionError(error: unknown): string {
 }
 
 /**
+ * A setting that did not reach the disk.
+ *
+ * Deliberately not an `ActionErrorKind`: nothing was sent to Factorial and no
+ * time record was touched — the file write failed, so the value simply did not
+ * stick. It lives here rather than in the tray because this file is where the
+ * app's internals stop being English, and there is to be one such place
+ * (`docs/WINDOWS.md` §6).
+ */
+export const SETTINGS_WRITE_FAILED = 'Einstellung konnte nicht gespeichert werden.'
+
+/**
  * The short hint next to the status line while the snapshot is stale. Lower case
  * and clause-shaped because it is rendered after a separator dot, not as a
  * sentence of its own.

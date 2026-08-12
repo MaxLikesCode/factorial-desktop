@@ -23,7 +23,7 @@
 
 import type { MenuItemConstructorOptions } from 'electron'
 import { describeActionError, describeActionFailure, describeStaleReason } from '@shared/errors'
-import type { AppSnapshot } from '@shared/ipc-contract'
+import type { AppSettings, AppSnapshot } from '@shared/ipc-contract'
 import { classifyActionError } from './ipc-handlers'
 
 /** Drives the colour-coded Windows icon; macOS uses one template icon for all. */
@@ -37,8 +37,12 @@ export interface TrayActions {
   clockOut: () => void
   /** Drops the rejected cookie and opens the login window — same as the widget. */
   signIn: () => void
+  /** Drops the *current* session and offers the login page — the same call. */
+  signOut: () => void
   toggleWindow: () => void
   refresh: () => void
+  setOpenAtLogin: (value: boolean) => void
+  setAlwaysOnTop: (value: boolean) => void
   quit: () => void
 }
 
@@ -48,6 +52,8 @@ export interface TrayMenuInput {
   windowVisible: boolean
   /** The last tray action that failed, already in German, or `null`. */
   lastActionError: string | null
+  /** What the checkboxes under "Einstellungen" show, read fresh on every render. */
+  settings: AppSettings
   actions: TrayActions
 }
 
@@ -187,11 +193,60 @@ export function trayActionErrorText(error: unknown): string {
   return describeActionError(error)
 }
 
+/**
+ * The "Einstellungen" submenu — the app's only settings surface.
+ *
+ * DESIGN.md lists three items under "Einstellungen" (Autostart, Always-on-Top,
+ * Abmelden) and names the entry in the tray's context menu. Nothing else in the
+ * app offers them: the widget has no settings UI, and its "Anmelden" button
+ * exists only in the signed-out state, so an authenticated user would otherwise
+ * have no way to sign out at all.
+ *
+ * Both toggles invert the *stored* value rather than the menu item's own
+ * `checked` flag. Electron flips that flag by itself on click, and a menu built
+ * by an earlier render would then write back the value that is already set.
+ *
+ * The label is "Autostart", not DESIGN.md's longer "Autostart beim Login": this
+ * menu already uses "Anmelden"/"Abmelden" for the Factorial session, and
+ * "Beim Anmelden starten" three lines above "Abmelden" reads as if it were about
+ * the same login.
+ */
+function settingsSubmenu(
+  snapshot: AppSnapshot,
+  settings: AppSettings,
+  actions: TrayActions,
+): MenuItemConstructorOptions[] {
+  const items: MenuItemConstructorOptions[] = [
+    {
+      label: 'Autostart',
+      type: 'checkbox',
+      checked: settings.openAtLogin,
+      click: () => actions.setOpenAtLogin(!settings.openAtLogin),
+    },
+    {
+      label: 'Immer im Vordergrund',
+      type: 'checkbox',
+      checked: settings.alwaysOnTop,
+      click: () => actions.setAlwaysOnTop(!settings.alwaysOnTop),
+    },
+  ]
+
+  // With no session there is nothing to drop, and the top-level entry already
+  // says "Anmelden" for the very same call — naming one action twice, with
+  // opposite words, in one menu would be worse than leaving this out.
+  if (snapshot.state.kind !== 'unauthenticated') {
+    items.push({ type: 'separator' }, { label: 'Abmelden', click: () => actions.signOut() })
+  }
+
+  return items
+}
+
 export function buildTrayMenu({
   snapshot,
   now,
   windowVisible,
   lastActionError,
+  settings,
   actions,
 }: TrayMenuInput): MenuItemConstructorOptions[] {
   const { state } = snapshot
@@ -252,6 +307,7 @@ export function buildTrayMenu({
       click: () => actions.toggleWindow(),
     },
     { label: 'Aktualisieren', click: () => actions.refresh() },
+    { label: 'Einstellungen', submenu: settingsSubmenu(snapshot, settings, actions) },
     { type: 'separator' },
     // Always present, in every state: closing the widget only hides it and the
     // window is kept out of the taskbar, so this is the only way out of the app

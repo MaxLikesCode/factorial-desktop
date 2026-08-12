@@ -15,7 +15,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import type { MenuItemConstructorOptions } from 'electron'
-import { encodeActionError, type AppSnapshot } from '@shared/ipc-contract'
+import { encodeActionError, type AppSettings, type AppSnapshot } from '@shared/ipc-contract'
 import { FactorialError } from '../factorial/client'
 import { ACTION_IN_FLIGHT_MESSAGE } from '../attendance'
 import {
@@ -40,6 +40,13 @@ const base: AppSnapshot = {
 
 const NOW = new Date(2026, 7, 12, 11, 0, 0)
 
+const settings: AppSettings = {
+  openAtLogin: true,
+  alwaysOnTop: true,
+  lastLocationType: 'office',
+  lastWorkplaceId: null,
+}
+
 function clockedIn(since: Date): AppSnapshot['state'] {
   return { kind: 'in', shiftId: '1', since, locationType: 'office', workplaceId: null }
 }
@@ -55,8 +62,11 @@ function noopActions(): TrayActions {
     endBreak: vi.fn(),
     clockOut: vi.fn(),
     signIn: vi.fn(),
+    signOut: vi.fn(),
     toggleWindow: vi.fn(),
     refresh: vi.fn(),
+    setOpenAtLogin: vi.fn(),
+    setAlwaysOnTop: vi.fn(),
     quit: vi.fn(),
   }
 }
@@ -215,6 +225,7 @@ describe('buildTrayMenu', () => {
       now: NOW,
       windowVisible: true,
       lastActionError: null,
+      settings,
       actions: noopActions(),
       ...overrides,
     })
@@ -235,6 +246,7 @@ describe('buildTrayMenu', () => {
       '---',
       'Fenster ausblenden',
       'Aktualisieren',
+      'Einstellungen',
       '---',
       'Beenden',
     ])
@@ -308,6 +320,89 @@ describe('buildTrayMenu', () => {
     const items = menu(base, { lastActionError: 'Die Aktion ist fehlgeschlagen.' })
     expect(items[1]?.label).toBe('Die Aktion ist fehlgeschlagen.')
     expect(items[1]?.enabled).toBe(false)
+  })
+
+  describe('Einstellungen', () => {
+    // DESIGN.md, "Tray": the context menu carries "Einstellungen", and
+    // DESIGN.md, "Einstellungen" names exactly these three items. The tray is
+    // the app's only surface for them — the widget shows "Anmelden" only while
+    // the session is gone and has no settings UI at all.
+    it('is offered in every state, because there is no other settings surface', () => {
+      for (const state of [
+        base.state,
+        clockedIn(NOW),
+        onBreak(NOW),
+        { kind: 'unknown' } as const,
+        { kind: 'unauthenticated' } as const,
+      ]) {
+        expect(labels(menu({ ...base, state }))).toContain('Einstellungen')
+      }
+    })
+
+    it('shows the two toggles as checkboxes reflecting what is stored', () => {
+      const entries = submenuOf(itemAt(menu(base), 'Einstellungen'))
+      const autostart = itemAt(entries, 'Autostart')
+      const onTop = itemAt(entries, 'Immer im Vordergrund')
+
+      expect(autostart.type).toBe('checkbox')
+      expect(onTop.type).toBe('checkbox')
+      expect(autostart.checked).toBe(true)
+      expect(onTop.checked).toBe(true)
+
+      const off = submenuOf(
+        itemAt(
+          menu(base, { settings: { ...settings, openAtLogin: false, alwaysOnTop: false } }),
+          'Einstellungen',
+        ),
+      )
+      expect(itemAt(off, 'Autostart').checked).toBe(false)
+      expect(itemAt(off, 'Immer im Vordergrund').checked).toBe(false)
+    })
+
+    it('writes the opposite of the stored value, not of the menu item’s own state', () => {
+      // Electron flips a checkbox item's `checked` on click by itself. The
+      // handler must ask the settings for the value it inverts, otherwise a
+      // menu built from a stale render would write back what is already there.
+      const actions = noopActions()
+      const entries = submenuOf(itemAt(menu(base, { actions }), 'Einstellungen'))
+
+      fire(itemAt(entries, 'Autostart'))
+      expect(actions.setOpenAtLogin).toHaveBeenCalledWith(false)
+
+      fire(itemAt(entries, 'Immer im Vordergrund'))
+      expect(actions.setAlwaysOnTop).toHaveBeenCalledWith(false)
+
+      const offActions = noopActions()
+      const off = submenuOf(
+        itemAt(
+          menu(base, {
+            actions: offActions,
+            settings: { ...settings, openAtLogin: false, alwaysOnTop: false },
+          }),
+          'Einstellungen',
+        ),
+      )
+      fire(itemAt(off, 'Autostart'))
+      expect(offActions.setOpenAtLogin).toHaveBeenCalledWith(true)
+      fire(itemAt(off, 'Immer im Vordergrund'))
+      expect(offActions.setAlwaysOnTop).toHaveBeenCalledWith(true)
+    })
+
+    it('offers "Abmelden" while there is a session to drop', () => {
+      const actions = noopActions()
+      const entries = submenuOf(itemAt(menu(base, { actions }), 'Einstellungen'))
+      fire(itemAt(entries, 'Abmelden'))
+      expect(actions.signOut).toHaveBeenCalledOnce()
+    })
+
+    it('does not offer "Abmelden" when the session is already gone', () => {
+      // The top-level entry there is "Anmelden", which runs the same code;
+      // offering both at once would name one action twice, with opposite words.
+      const items = menu({ ...base, state: { kind: 'unauthenticated' } })
+      const entries = submenuOf(itemAt(items, 'Einstellungen'))
+      expect(entries.map((entry) => entry.label)).not.toContain('Abmelden')
+      expect(labels(items)).toContain('Anmelden')
+    })
   })
 })
 

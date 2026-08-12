@@ -20,7 +20,10 @@
 
 import { Menu, Tray, app, nativeImage, type NativeImage } from 'electron'
 import { join } from 'node:path'
+import { SETTINGS_WRITE_FAILED } from '@shared/errors'
+import type { AppSettings } from '@shared/ipc-contract'
 import type { AttendanceStore, ClockInInput } from './attendance'
+import type { Settings } from './settings'
 import {
   buildTrayMenu,
   trayActionErrorText,
@@ -40,12 +43,27 @@ export type TrayStore = Pick<
 export interface TrayDeps {
   store: TrayStore
   /**
+   * The persisted settings behind the "Einstellungen" submenu — the app's only
+   * surface for them (DESIGN.md, "Einstellungen").
+   *
+   * `index.ts` passes the same `withWindowEffects`-wrapped store the IPC layer
+   * gets, so an Always-on-Top toggled here applies to the live window
+   * immediately instead of on the next start.
+   */
+  settings: Settings
+  /**
    * The remembered work location, read at click time. The tray must not keep a
    * second default: hard-coding `office` here would file a shift at the wrong
    * *place* whenever the user's saved preference is something else.
    */
   clockInInput: () => ClockInInput
-  /** Drops the rejected cookie and opens the login window — as the widget does. */
+  /**
+   * Drops the session cookie and opens the login window — as the widget does.
+   *
+   * One callback for both menu entries: "Anmelden" (no session left to keep) and
+   * "Abmelden" (a session the user wants gone) differ only in which of the two
+   * the wording fits, not in what has to happen.
+   */
   onSignIn: () => void
   onQuit: () => void
 }
@@ -154,6 +172,10 @@ export function createTray(deps: TrayDeps): Tray {
           now,
           windowVisible: getWidget()?.isVisible() ?? false,
           lastActionError,
+          // Read per render, not captured once: the widget's IPC path writes to
+          // the same store, and a checkbox may not keep showing a value that has
+          // since been changed elsewhere.
+          settings: deps.settings.get(),
           actions: {
             clockIn: () => run(() => deps.store.clockIn(deps.clockInInput())),
             startBreak: (id) => run(() => deps.store.startBreak(id)),
@@ -163,6 +185,13 @@ export function createTray(deps: TrayDeps): Tray {
               lastActionError = null
               deps.onSignIn()
             },
+            // Same call: see `TrayDeps.onSignIn`.
+            signOut: () => {
+              lastActionError = null
+              deps.onSignIn()
+            },
+            setOpenAtLogin: (value) => applySetting({ openAtLogin: value }),
+            setAlwaysOnTop: (value) => applySetting({ alwaysOnTop: value }),
             toggleWindow: () => {
               toggleWidget()
               // `isVisible()` decides the menu's wording, so the menu has to be
@@ -197,6 +226,27 @@ export function createTray(deps: TrayDeps): Tray {
       lastActionError = trayActionErrorText(error)
       render()
     })
+  }
+
+  /**
+   * Writes one setting and rebuilds the menu from what is actually stored.
+   *
+   * Electron has already flipped the clicked checkbox by the time this runs, so
+   * a silent failure would leave a tick standing next to a setting that never
+   * changed. `Settings.set` persists before it commits, and the write can fail
+   * for real — `docs/WINDOWS.md` §3 records a virus scanner blocking the
+   * `rename` with `EBUSY`. The re-render then restores the old tick and the
+   * German sentence says why.
+   */
+  function applySetting(patch: Partial<AppSettings>): void {
+    lastActionError = null
+    try {
+      deps.settings.set(patch)
+    } catch (error) {
+      console.error('[tray] settings write failed:', error)
+      lastActionError = SETTINGS_WRITE_FAILED
+    }
+    render()
   }
 
   let lastOpenRefresh = 0

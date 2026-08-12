@@ -85,6 +85,11 @@ async function bootstrap(): Promise<void> {
     applyLoginItem,
   })
 
+  // One wrapped instance for both writers — the widget through IPC and the
+  // tray's "Einstellungen" submenu. Wrapping twice would work but would make it
+  // possible for one route to gain the window side effect and the other not.
+  const settingsWithWindowEffects = withWindowEffects(settings)
+
   // The store only reports *changes*, so on a fresh install nothing would ever
   // register the login item even though the default is on — and if the user
   // removed the entry outside the app, the toggle would keep claiming it exists.
@@ -122,7 +127,7 @@ async function bootstrap(): Promise<void> {
   // an unanswered `invoke` would reject in its first effect.
   registerIpc({
     store,
-    settings: withWindowEffects(settings),
+    settings: settingsWithWindowEffects,
     onSignOut: signInAgain,
     // Only the widget listens. The login window loads a third-party page with no
     // preload, so a broadcast there is at best wasted and at worst hands app
@@ -144,6 +149,7 @@ async function bootstrap(): Promise<void> {
   // widget and no way to quit it.
   createTray({
     store,
+    settings: settingsWithWindowEffects,
     clockInInput,
     onSignIn: () => {
       void signInAgain()
