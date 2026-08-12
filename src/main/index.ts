@@ -2,10 +2,10 @@
  * App lifecycle and wiring. At this point in the build it claims the
  * single-instance lock, authenticates, builds the attendance store, loads the
  * persisted settings, registers the IPC contract and shows the widget window.
- * The widget's own module and the tray plug in here in tasks 10 and 12.
+ * The tray, the poll loop and the resume/focus refresh plug in here in Task 12.
  */
 
-import { app, BrowserWindow, dialog } from 'electron'
+import { app, dialog } from 'electron'
 import { join } from 'node:path'
 import { createAttendanceStore } from './attendance'
 import { ensureAuthenticated, openLoginWindow } from './auth'
@@ -13,33 +13,23 @@ import { createClient } from './factorial/client'
 import { createOperations } from './factorial/operations'
 import { registerIpc } from './ipc'
 import { clearSession, createNetFetch, getFactorialSession } from './session'
-import { buildLoginItemSettings, createSettings } from './settings'
+import { buildLoginItemSettings, createSettings, type Settings } from './settings'
+import { createWidgetWindow, getWidget, setWidgetAlwaysOnTop, showWidget } from './windows'
 
-function createWindow(alwaysOnTop: boolean): void {
-  const win = new BrowserWindow({
-    width: 340,
-    height: 220,
-    show: false,
-    // Only the value at startup. Toggling it while the app runs needs the window
-    // handle the settings store does not have; that wiring belongs to Task 10.
-    alwaysOnTop,
-    webPreferences: {
-      preload: join(import.meta.dirname, '../preload/index.mjs'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      // electron-vite emits an ESM preload (`.mjs`, because package.json says
-      // "type": "module"), and Electron refuses to load one into a sandboxed
-      // renderer. The preload still gets nothing but `contextBridge` and
-      // `ipcRenderer`; the renderer itself keeps context isolation and no Node.
-      sandbox: false,
+/**
+ * Makes `alwaysOnTop` take effect the moment it is toggled instead of on the
+ * next start (carry-forward from Task 9). The settings store owns persistence
+ * and validation and deliberately knows nothing about windows, so the window
+ * side effect is layered on here, where the wiring lives.
+ */
+function withWindowEffects(settings: Settings): Settings {
+  return {
+    get: () => settings.get(),
+    set: (patch) => {
+      const next = settings.set(patch)
+      setWidgetAlwaysOnTop(next.alwaysOnTop)
+      return next
     },
-  })
-  win.once('ready-to-show', () => win.show())
-
-  if (process.env.ELECTRON_RENDERER_URL) {
-    void win.loadURL(process.env.ELECTRON_RENDERER_URL)
-  } else {
-    void win.loadFile(join(import.meta.dirname, '../renderer/index.html'))
   }
 }
 
@@ -100,18 +90,30 @@ async function bootstrap(): Promise<void> {
   // an unanswered `invoke` would reject in its first effect.
   registerIpc({
     store,
-    settings,
+    settings: withWindowEffects(settings),
     onSignOut: async () => {
       await clearSession()
       openLoginWindow()
     },
+    // Only the widget listens. The login window loads a third-party page with no
+    // preload, so a broadcast there is at best wasted and at worst hands app
+    // state to someone else's renderer. `getWidget` is called per push, so this
+    // is correct before the window exists and after it is gone.
+    targets: () => {
+      const widget = getWidget()
+      return widget ? [widget] : []
+    },
   })
 
-  createWindow(settings.get().alwaysOnTop)
+  createWidgetWindow({
+    positionFile: join(app.getPath('userData'), 'window-position.json'),
+    alwaysOnTop: settings.get().alwaysOnTop,
+  })
 
   // One read so the widget has real numbers immediately. Polling, the resume
-  // hook and the focus refresh belong to the window/tray lifecycle (Task 10/12)
-  // and are deliberately not started here.
+  // hook and the focus refresh come with the tray in Task 12, whose plan body
+  // specifies the whole lifecycle at once; starting half of it here would leave
+  // a poll loop no quit command can stop.
   await store.refresh()
 }
 
@@ -119,13 +121,10 @@ async function bootstrap(): Promise<void> {
 // macOS reuses the running instance by itself. Harmless on macOS, required there.
 if (app.requestSingleInstanceLock()) {
   // PLATFORM: the Windows counterpart of the lock — the second launch hands over
-  // here and expects the running instance to come to the front.
-  app.on('second-instance', () => {
-    const existing = BrowserWindow.getAllWindows()[0]
-    if (!existing) return
-    if (existing.isMinimized()) existing.restore()
-    existing.focus()
-  })
+  // here and expects the running instance to come to the front. It targets the
+  // widget specifically: taking "the first window" would have raised the login
+  // window whenever one was open.
+  app.on('second-instance', () => showWidget())
 
   void app.whenReady().then(bootstrap)
 } else {
@@ -134,6 +133,14 @@ if (app.requestSingleInstanceLock()) {
 
 // PLATFORM: macOS keeps an app alive with no windows open; every other platform
 // expects the last window to end it.
+//
+// Since Task 10 the widget's close button only hides it, so the widget keeps
+// this from firing for as long as it exists — which is the intended behaviour
+// for a tray app. What is left is the failure path: bootstrap died before the
+// widget was built, or the user closed the login window. Ending there is right
+// on Windows and Linux. Task 12 re-checks this once the tray provides a real
+// quit command; until then ⌘Q is the only way out on macOS and there is **no**
+// way out on Windows, because there is no tray yet (see docs/WINDOWS.md §4).
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
