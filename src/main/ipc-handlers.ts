@@ -74,7 +74,15 @@ export type IpcHandler = (payload: unknown) => Promise<unknown>
 
 export type IpcHandlers = Record<InvokeChannel, IpcHandler>
 
-function classify(error: unknown): ActionErrorKind {
+/**
+ * Why an action failed, from the error object alone.
+ *
+ * Exported because the tray calls the store directly and needs the same verdict
+ * without going through IPC (`trayActionErrorText` in `tray-menu.ts`). One
+ * classifier for both paths means a new error kind cannot be German in the
+ * widget and English in the tray.
+ */
+export function classifyActionError(error: unknown): ActionErrorKind {
   if (error instanceof FactorialError) return error.kind
   // Compared against the store's exported constant, so renaming the sentence
   // there is a compile-time visible change here, not a silent regression.
@@ -92,7 +100,7 @@ function guard(handler: IpcHandler): IpcHandler {
     try {
       return await handler(payload)
     } catch (error) {
-      throw new Error(encodeActionError(classify(error), describe(error)))
+      throw new Error(encodeActionError(classifyActionError(error), describe(error)))
     }
   }
 }

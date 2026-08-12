@@ -1,19 +1,25 @@
 /**
- * App lifecycle and wiring. At this point in the build it claims the
- * single-instance lock, authenticates, builds the attendance store, loads the
- * persisted settings, registers the IPC contract and shows the widget window.
- * The tray, the poll loop and the resume/focus refresh plug in here in Task 12.
+ * App lifecycle and wiring: it claims the single-instance lock, authenticates,
+ * builds the attendance store, loads the persisted settings, registers the IPC
+ * contract, shows the widget window, puts the tray in place and starts the
+ * background synchronisation.
+ *
+ * Since Task 12 this is a tray application. The widget's close button hides it,
+ * and the only way out is the tray's "Beenden" (or ⌘Q on macOS) — see the
+ * `window-all-closed` handler at the bottom.
  */
 
-import { app, dialog } from 'electron'
+import { app, dialog, powerMonitor } from 'electron'
 import { join } from 'node:path'
-import { createAttendanceStore } from './attendance'
+import { createAttendanceStore, type ClockInInput } from './attendance'
 import { ensureAuthenticated, openLoginWindow } from './auth'
 import { createClient } from './factorial/client'
 import { createOperations } from './factorial/operations'
+import { isLocationType } from './factorial/types'
 import { registerIpc } from './ipc'
 import { clearSession, createNetFetch, getFactorialSession } from './session'
 import { buildLoginItemSettings, createSettings, type Settings } from './settings'
+import { createTray, hasTray } from './tray'
 import { createWidgetWindow, getWidget, setWidgetAlwaysOnTop, showWidget } from './windows'
 
 /**
@@ -86,15 +92,38 @@ async function bootstrap(): Promise<void> {
   // idempotent.
   applyLoginItem(settings.get().openAtLogin)
 
+  /**
+   * Drops the rejected session cookie and offers Factorial's login page again.
+   * Used by the widget's "Anmelden" button and by the tray entry of the same
+   * name, so both routes do exactly the same thing.
+   */
+  async function signInAgain(): Promise<void> {
+    await clearSession()
+    openLoginWindow()
+  }
+
+  /**
+   * What a clock-in from the *tray* sends. The remembered work location is a
+   * persisted preference and there must be exactly one of it: a second default
+   * in the tray would file shifts at the wrong place whenever the user picked
+   * something other than "Büro" in the widget.
+   */
+  function clockInInput(): ClockInInput {
+    const { lastLocationType, lastWorkplaceId } = settings.get()
+    return {
+      // Re-checked on read: the field is a plain string in the contract, and an
+      // unknown value fails the mutation in-band with HTTP 200 (K4).
+      locationType: isLocationType(lastLocationType) ? lastLocationType : 'office',
+      workplaceId: lastWorkplaceId,
+    }
+  }
+
   // Before the window exists: the renderer asks for a snapshot as it mounts, and
   // an unanswered `invoke` would reject in its first effect.
   registerIpc({
     store,
     settings: withWindowEffects(settings),
-    onSignOut: async () => {
-      await clearSession()
-      openLoginWindow()
-    },
+    onSignOut: signInAgain,
     // Only the widget listens. The login window loads a third-party page with no
     // preload, so a broadcast there is at best wasted and at worst hands app
     // state to someone else's renderer. `getWidget` is called per push, so this
@@ -105,16 +134,45 @@ async function bootstrap(): Promise<void> {
     },
   })
 
-  createWidgetWindow({
+  const widget = createWidgetWindow({
     positionFile: join(app.getPath('userData'), 'window-position.json'),
     alwaysOnTop: settings.get().alwaysOnTop,
   })
 
-  // One read so the widget has real numbers immediately. Polling, the resume
-  // hook and the focus refresh come with the tray in Task 12, whose plan body
-  // specifies the whole lifecycle at once; starting half of it here would leave
-  // a poll loop no quit command can stop.
+  // Built before the first read so that a failing refresh still leaves a tray
+  // behind — otherwise a bad network on start would produce an app with a hidden
+  // widget and no way to quit it.
+  createTray({
+    store,
+    clockInInput,
+    onSignIn: () => {
+      void signInAgain()
+    },
+    onQuit: () => app.quit(),
+  })
+
+  // One read so the widget and the tray have real numbers immediately.
   await store.refresh()
+
+  // DESIGN.md, "Synchronisation": every 60 s in the background.
+  store.startPolling()
+
+  // The timer is recomputed from the shift's start on every render, so it cannot
+  // drift while the machine sleeps — but `todayMinutes` and the state itself
+  // can be hours out of date on wake. Polling is stopped for the duration
+  // because a request fired into a suspending network stack just fails and marks
+  // the snapshot stale for no reason.
+  powerMonitor.on('suspend', () => store.stopPolling())
+  powerMonitor.on('resume', () => {
+    void store.refresh()
+    store.startPolling()
+  })
+
+  // DESIGN.md, "Synchronisation": window focus. Bringing the widget forward is
+  // the moment someone is about to trust what it says.
+  widget.on('focus', () => {
+    void store.refresh()
+  })
 }
 
 // PLATFORM: Windows starts a whole second app on every launch without this lock;
@@ -126,21 +184,38 @@ if (app.requestSingleInstanceLock()) {
   // window whenever one was open.
   app.on('second-instance', () => showWidget())
 
-  void app.whenReady().then(bootstrap)
+  void app
+    .whenReady()
+    .then(bootstrap)
+    .catch((error: unknown) => {
+      // Anything escaping `bootstrap` (the auth failure has its own handler) —
+      // a tray that could not be created, an unreadable settings directory —
+      // would otherwise leave a running process with no tray and, on Windows,
+      // nothing at all to click. Say so and end.
+      dialog.showErrorBox('Factorial Desktop', `Start fehlgeschlagen: ${describeError(error)}`)
+      app.quit()
+    })
 } else {
   app.quit()
 }
 
-// PLATFORM: macOS keeps an app alive with no windows open; every other platform
-// expects the last window to end it.
+// PLATFORM: the classic version of this handler quits everywhere except macOS.
+// Since Task 12 the platform is no longer what decides it — the tray is, on
+// every platform alike:
 //
-// Since Task 10 the widget's close button only hides it, so the widget keeps
-// this from firing for as long as it exists — which is the intended behaviour
-// for a tray app. What is left is the failure path: bootstrap died before the
-// widget was built, or the user closed the login window. Ending there is right
-// on Windows and Linux. Task 12 re-checks this once the tray provides a real
-// quit command; until then ⌘Q is the only way out on macOS and there is **no**
-// way out on Windows, because there is no tray yet (see docs/WINDOWS.md §4).
+// - **With a tray**, this is a tray application. Closing the widget only hides
+//   it (Task 10), so this handler is reached only in odd cases such as a login
+//   window being closed while the widget is hidden. Quitting there would end the
+//   app behind the user's back although its icon is sitting in the menubar,
+//   offering "Beenden". So it stays alive, on Windows too.
+// - **Without a tray**, the app has no visible surface and no way to be quit:
+//   `skipTaskbar` keeps the widget out of the taskbar and there is no icon to
+//   click. That only happens on the failure path — bootstrap died before the
+//   tray existed, or the user closed the login window — and there the last
+//   window closing is the end, on macOS as well.
+//
+// Electron quits by itself when the last window is *destroyed* and no listener
+// is registered, so this handler must exist even though it usually does nothing.
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  if (!hasTray()) app.quit()
 })

@@ -173,8 +173,9 @@ export function createWidgetWindow(deps: {
   screen.on('display-added', revalidatePosition)
   screen.on('display-metrics-changed', revalidatePosition)
 
-  // DESIGN.md, "Tray": closing hides, quitting happens through the tray. Until
-  // Task 12 adds that tray, ⌘Q (macOS) is the way out — `before-quit` covers it.
+  // DESIGN.md, "Tray": closing hides, quitting happens through the tray's
+  // "Beenden" (Task 12) or ⌘Q on macOS — `before-quit` covers both, plus an OS
+  // shutdown.
   win.on('close', (event) => {
     if (quitting) {
       flushPosition()

@@ -1,7 +1,12 @@
 # Factorial Desktop — Windows-Übergabe
 
-**Status:** wächst mit der Implementierung. Stand: Ende Task 11 (Widget-UI).
-Tasks 12–15 tragen hier weiter ein.
+**Status:** wächst mit der Implementierung. Stand: Ende Task 12 (Tray +
+Sync-Hooks). Tasks 13–15 tragen hier weiter ein.
+
+> **Für Windows ist Task 12 der wichtigste Abschnitt dieses Dokuments.** Der
+> Live-Timer in der Menubar ist ein macOS-Feature; auf Windows tragen ihn
+> Tooltip, farbcodiertes Icon und der erste, deaktivierte Menüeintrag. Und erst
+> seit diesem Task gibt es auf Windows überhaupt einen Weg, die App zu beenden.
 
 Dieses Dokument ist für einen Agenten geschrieben, der auf einer Windows-Maschine
 weiterarbeitet und **den Gesprächsverlauf dieser Implementierung nicht kennt**.
@@ -47,6 +52,10 @@ Einstempeln, Pause, Fortsetzen, Ausstempeln — ohne den Browser zu öffnen.
 | `src/main/settings.ts` | persistierte Einstellungen als JSON + `buildLoginItemSettings` (Electron-frei, getestet) |
 | `src/main/windows.ts` | das Widget-`BrowserWindow`: frameless, alwaysOnTop, Schließen blendet aus (Electron-Teil) |
 | `src/main/window-position.ts` | wohin das Fenster darf: Clamping, Auflösung pro Monitor, Positionsdatei (Electron-frei, getestet) |
+| `src/main/tray.ts` | das `Tray`-Objekt: Icons, Menubar-Titel, Tooltip, Render-Takt, Klick-Verhalten (Electron-Teil) |
+| `src/main/tray-menu.ts` | was das Tray anzeigt und anbietet: Label, Statuszeile, Tooltip, Menü, deutscher Fehlertext (Electron-frei, getestet) |
+| `src/shared/errors.ts` | die **einzige** Stelle, die aus einem Fehler-`kind` deutschen Text macht — seit Task 12 in `shared`, weil Renderer *und* Main sie brauchen |
+| `resources/` | Tray-Icons plus `make-tray-icons.py`, das sie erzeugt |
 | `src/preload/index.ts` | `contextBridge` — die einzigen zehn Funktionen, die der Renderer sieht |
 | `src/shared/ipc-contract.ts` | Kanalnamen, Snapshot-Serialisierung, Fehler-Codec (von Main **und** Renderer benutzt) |
 | `src/shared/time.ts` | Zeitrekonstruktion (der gefährlichste Code im Repo) |
@@ -54,7 +63,7 @@ Einstempeln, Pause, Fortsetzen, Ausstempeln — ohne den Browser zu öffnen.
 | `src/renderer/src/App.tsx` | Wurzel: Widget plus `Toaster` |
 | `src/renderer/src/components/StatusWidget.tsx` | das Widget: Statuszeile, Ring, Aktionen, Fußzeile |
 | `src/renderer/src/hooks/useAttendance.ts` | Snapshot-Abo über die Bridge + Sekundentakt für den Timer |
-| `src/renderer/src/lib/errors.ts` | die einzige Stelle, die aus einem Fehler-`kind` deutschen Text macht |
+| `src/renderer/src/lib/errors.ts` | nur noch ein Re-Export von `src/shared/errors.ts` (Task 12) |
 | `src/renderer/src/components/ui/` | von der shadcn-CLI generiert (Style `base-nova`). **Nicht** von Hand an einen Plan-Schnipsel anpassen — siehe K11 in Abschnitt 6 |
 
 **Zur Testeinrichtung des Renderers** (Carry-Forward C3, erledigt in Task 11):
@@ -85,10 +94,17 @@ die erklärte Fassung davon und muss mit dem Grep-Ergebnis übereinstimmen.
 |---|---|---|---|
 | `src/main/settings.ts:143` | `platform === 'win32'` → `{ openAtLogin, path, args: [] }` | Windows-Autostart ist ein Eintrag im Registry-Run-Key und braucht einen Pfad auf eine `.exe`. Ohne explizites `path` trägt Electron das ein, was gerade läuft — im Dev-Modus `electron.exe`, im gepackten Zustand potenziell der falsche Launcher (DESIGN.md, Zeile „Autostart"). | Haken „Autostart" setzen, abmelden/anmelden: die App muss starten. Danach `reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Run"` — der Eintrag muss auf die installierte `.exe` zeigen, nicht auf `electron.exe`. Haken entfernen → Eintrag verschwindet. **Im Dev-Modus bewusst nicht ausprobieren**, sonst startet dauerhaft eine Electron-Instanz mit |
 | `src/main/settings.ts:150` | alles außer `win32` → `{ openAtLogin }` ohne Pfad | macOS registriert das `.app`-Bundle selbst über die Service-Management-API; ein `path` würde auf das Helper-Binary im Bundle zeigen. Linux fällt in denselben Zweig, wo `setLoginItemSettings` ein No-op ist — das ist das harmlose Ergebnis. | Nichts; der Zweig ist auf Windows unerreichbar |
-| `src/main/index.ts:57` | `applyLoginItem` liest `process.platform`/`process.execPath` und gibt sie an `buildLoginItemSettings` weiter | Die einzige Stelle, die `app.setLoginItemSettings` aufruft. Die Verzweigung selbst ist absichtlich ausgelagert und rein, damit der Windows-Zweig auf macOS getestet werden kann. | Nur zusammen mit den beiden Zeilen oben |
-| `src/main/index.ts:118` | `app.requestSingleInstanceLock()`, sonst `app.quit()` | Ohne Lock startet auf Windows bei jedem Aufruf eine zweite komplette Instanz, inklusive zweitem Tray-Icon und zweitem Poll-Loop. Auf macOS übernimmt das die Plattform. | Zweiten Start auslösen (Verknüpfung, Autostart, Doppelklick): es darf keine zweite Instanz erscheinen |
-| `src/main/index.ts:122` | `second-instance`-Handler ruft `showWidget()` | Gegenstück zum Lock: der zweite Start gibt hier ab, sonst passiert für den Nutzer sichtbar gar nichts. Auf macOS feuert das Event praktisch nie. Seit Task 10 zielt der Handler ausdrücklich auf das Widget statt auf `getAllWindows()[0]` — letzteres hätte das Login-Fenster nach vorn geholt, wenn gerade eines offen war. | Zweiten Start auslösen (Verknüpfung, Autostart, Doppelklick); das Widget muss sichtbar und fokussiert nach vorn kommen, auch wenn es vorher ausgeblendet oder minimiert war |
-| `src/main/index.ts:133` | `window-all-closed` beendet die App außer auf `darwin` | macOS hält Apps ohne Fenster am Leben, Windows erwartet das Ende. Seit Task 10 blendet das Schließen des Widgets nur aus, das Fenster bleibt also am Leben und der Handler feuert dabei gar nicht mehr. Übrig bleibt der Fehlerpfad: Bootstrap gescheitert, oder der Benutzer schließt das Login-Fenster. **Achtung, Zwischenstand:** solange es kein Tray gibt (Task 12), hat Windows damit *keinen* Weg mehr, die App zu beenden — auf macOS tut es ⌘Q. Nicht in diesem Zustand ausliefern. | Nach Task 12 erneut prüfen: Widget schließen darf die App nicht beenden, „Beenden" im Tray schon |
+| `src/main/index.ts:53` | `applyLoginItem` liest `process.platform`/`process.execPath` und gibt sie an `buildLoginItemSettings` weiter | Die einzige Stelle, die `app.setLoginItemSettings` aufruft. Die Verzweigung selbst ist absichtlich ausgelagert und rein, damit der Windows-Zweig auf macOS getestet werden kann. | Nur zusammen mit den beiden Zeilen oben |
+| `src/main/index.ts:178` | `app.requestSingleInstanceLock()`, sonst `app.quit()` | Ohne Lock startet auf Windows bei jedem Aufruf eine zweite komplette Instanz, inklusive zweitem Tray-Icon und zweitem Poll-Loop. Auf macOS übernimmt das die Plattform. | Zweiten Start auslösen (Verknüpfung, Autostart, Doppelklick): es darf keine zweite Instanz erscheinen |
+| `src/main/index.ts:181` | `second-instance`-Handler ruft `showWidget()` | Gegenstück zum Lock: der zweite Start gibt hier ab, sonst passiert für den Nutzer sichtbar gar nichts. Auf macOS feuert das Event praktisch nie. Seit Task 10 zielt der Handler ausdrücklich auf das Widget statt auf `getAllWindows()[0]` — letzteres hätte das Login-Fenster nach vorn geholt, wenn gerade eines offen war. | Zweiten Start auslösen (Verknüpfung, Autostart, Doppelklick); das Widget muss sichtbar und fokussiert nach vorn kommen, auch wenn es vorher ausgeblendet oder minimiert war |
+| `src/main/index.ts:192` | `window-all-closed` beendet die App **nur, wenn es kein Tray gibt** | Seit Task 12 entscheidet nicht mehr die Plattform, sondern das Tray. Mit Tray ist das hier eine Tray-App: Schließen des Widgets blendet nur aus (Task 10), und die App hinter dem Rücken des Benutzers zu beenden, während ihr Icon im Infobereich „Beenden" anbietet, wäre falsch — auf Windows genauso wie auf macOS. Ohne Tray (Bootstrap gescheitert, Login-Fenster geschlossen) gibt es keine sichtbare Oberfläche und wegen `skipTaskbar: true` auch keinen Weg zurück: dann ist das letzte geschlossene Fenster das Ende. Der Handler muss registriert bleiben, weil Electron sonst von sich aus beendet, sobald das letzte Fenster **zerstört** wird. | Widget schließen → App läuft weiter, Tray-Icon bleibt. „Beenden" im Tray → Prozess ist wirklich weg (Task-Manager). Login-Fenster bei fehlgeschlagenem Bootstrap schließen → App beendet sich, es bleibt kein unsichtbarer Prozess übrig |
+| `src/main/tray.ts:87` | `iconFor`: `darwin` → `trayTemplate.png` + `setTemplateImage(true)`, sonst → `tray-<tone>.ico` | macOS erwartet ein monochromes Template-Bild und färbt es selbst für Hell-/Dunkelmodus und die hervorgehobene Menubar; ein farbiges Icon würde gegen das System arbeiten. Weil macOS den Zustand daneben als Text zeigt, reicht dort **ein** Icon. Windows hat diesen Text nicht — dort **ist** die Farbe der Zustand, deshalb vier `.ico` (grau/grün/amber/rot, dieselben Farben wie der Statuspunkt im Widget) mit je 16/32/48 px. | Icon in allen vier Zuständen ansehen: ausgestempelt grau, eingestempelt grün, Pause amber, Sitzung abgelaufen rot. Bei 100 %, 150 % und 200 % Skalierung prüfen, ob die 16/32/48-Auflösungen sauber greifen und das Glyph nicht matschig ist |
+| `src/main/tray.ts:99` | Fallback auf `tray-<tone>.png`, wenn das `.ico` leer dekodiert | Ob die `.ico`-Dateien auf Windows dekodieren, war auf macOS **nicht** prüfbar: Electron hat dort überhaupt keinen ICO-Decoder (gemessen: jede `.ico` kommt als leeres 0×0-Bild zurück, auch eine mit klassischen BMP-Einträgen). Ein leeres Tray-Bild ist auf Windows ein unsichtbares Icon — und damit eine App, die man weder zeigen noch beenden kann. PNG dekodiert überall. | Wenn das Icon sichtbar ist, hat das `.ico` funktioniert. Erscheint stattdessen `[tray] icon missing or unreadable` in der Konsole, greift der Fallback: dann `resources/make-tray-icons.py` anpassen (z. B. `bitmap_format` entfernen, um PNG-Einträge zu schreiben) und erneut probieren |
+| `src/main/tray.ts:136` | `setTitle` nur auf `darwin` | Der Live-Timer in der Menubar ist ein macOS-Feature (DESIGN.md, „Tray"): `tray.setTitle` existiert auf Windows nicht. | Nichts; auf Windows unerreichbar. Die Zeit muss stattdessen im Tooltip und im ersten Menüeintrag stehen — genau das ist unten zu prüfen |
+| `src/main/tray.ts:142` | sonst `setImage(iconFor(trayTone(snapshot)))` bei jedem Render | Das Gegenstück: ohne Text neben dem Icon trägt allein die Icon-Farbe den Zustand, also muss das Bild bei jedem Zustandswechsel neu gesetzt werden. | Ein-/Ausstempeln und Pause auslösen: das Icon muss binnen 15 s (Render-Takt) bzw. sofort (Store-Änderung) die Farbe wechseln, ohne zu flackern |
+| `src/main/tray.ts:217` | Linksklick → `toggleWidget()`, nur wenn **nicht** `darwin` | Auf Windows öffnet das Kontextmenü per Rechtsklick, der Linksklick ist per Konvention „App öffnen". Auf macOS öffnet der Linksklick das Menü selbst — dort zusätzlich das Fenster zu schalten, würde gegen die Plattform arbeiten. | Linksklick auf das Tray-Icon blendet das Widget ein und wieder aus; Rechtsklick öffnet das Menü. Zusätzlich prüfen, ob der Doppelklick (beide Plattformen, `showWidget`) nicht mit dem Einfachklick kollidiert — auf Windows feuert vor dem Doppelklick immer auch ein `click` |
+| `src/main/tray-menu.ts:110` | `trayLabel` ist der Text für `setTitle` — Kommentar, keine Verzweigung | Dokumentiert, dass diese Funktion auf Windows **keinen** Konsumenten hat. Ihr Inhalt taucht dort nur über `trayStatusLine` auf. | Nichts direkt |
+| `src/main/tray-menu.ts:137` | `trayStatusLine` ist auf Windows die einzige Stelle mit der laufenden Zeit — Kommentar, keine Verzweigung | Sie füllt den Tooltip **und** den ersten, deaktivierten Menüeintrag. Beide sind auf Windows der Ersatz für den fehlenden Menubar-Titel. | Tooltip anzeigen lassen: `Factorial · Eingestempelt · 1:30`. Menü öffnen: derselbe Text als erster, ausgegrauter Eintrag. Beides muss sich mit der Zeit fortschreiben |
 | `src/main/windows.ts:104` | `transparent: true` + `backgroundColor: '#00000000'` | macOS zeichnet ein transparentes, frameless Fenster mit runden Ecken und weichem Schatten von selbst. Windows setzt hinter ein transparentes Fenster sonst ein weißes Rechteck und zeichnet einen eckigen Schatten drumherum. | Sichtprüfung: keine weißen Ecken hinter dem Widget, kein eckiger Schattenrahmen. Falls doch, sind `transparent`, `thickFrame: false` und ein Renderer-seitiger `border-radius` die Stellschrauben (DESIGN.md, „Frameless & Transparenz") |
 | `src/main/windows.ts:123` | `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })` nur auf `darwin` | Der Sinn eines schwebenden Zeit-Widgets ist, über Vollbild-Spaces sichtbar zu bleiben. `visibleOnFullScreen` ist eine macOS-Option; auf Windows gibt es kein Äquivalent, dort trägt allein `alwaysOnTop`. | Prüfen, ob das Widget über einer Vollbild-App sichtbar bleibt. Wenn nicht: `setAlwaysOnTop(true, 'screen-saver')` ist die Windows-taugliche Verschärfung, hat aber Nebenwirkungen auf Fokus und Taskleiste |
 | `src/renderer/src/styles.css:32` | `.drag-region { -webkit-app-region: drag }` plus `.no-drag` für alles Anklickbare darin | Das Fenster ist `frame: false` und hat keine Titelleiste zum Anfassen; die Drag-Region **ist** die einzige Möglichkeit, das Widget zu verschieben. Chromium kennt die Eigenschaft auf beiden Plattformen, verhält sich aber nicht gleich. | Widget an der Kopfzeile ziehen: es muss sich bewegen und die Position nach dem Debounce speichern. Dann drei Windows-Eigenheiten prüfen: (1) an den oberen Bildschirmrand ziehen darf **kein** Aero Snap auslösen — das Fenster ist `resizable: false`, ein Snap-Versuch führt dort erfahrungsgemäß zu einem verzerrten oder unverschiebbaren Fenster; (2) Buttons und das Arbeitsort-Select innerhalb der Region müssen klickbar bleiben (dafür ist `.no-drag` da; unter Windows greift die Vererbung teils anders); (3) `moved` feuert unter Windows beim Ziehen laufend statt einmal — der 250-ms-Debounce in `src/main/windows.ts` ist genau dafür da |
@@ -98,8 +114,21 @@ hinzugefügt: der Store kennt weder Fenster noch Tray und benutzt nur Promises u
 `setTimeout`. Task 8 (IPC, Preload, Contract) ebenfalls nicht — IPC verhält sich
 auf allen Plattformen gleich. Task 9 hat drei Einträge ergänzt (Autostart),
 Task 10 zwei weitere (Transparenz, Vollbild-Sichtbarkeit) und zwei bestehende
-umgeschrieben, Task 11 einen (die Drag-Region im CSS); die Tabelle hat damit
-**neun** Einträge und deckt `grep -rn "PLATFORM:" src/` vollständig ab.
+umgeschrieben, Task 11 einen (die Drag-Region im CSS), Task 12 sieben (fünf im
+Tray, zwei erklärende Kommentare in `tray-menu.ts`) und den
+`window-all-closed`-Eintrag komplett umgeschrieben; die Tabelle hat damit
+**sechzehn** Einträge und deckt `grep -rn "PLATFORM:" src/` vollständig ab
+(Stand Task 12: 16 Treffer in sechs Dateien).
+
+Zwei der sechzehn Treffer sind **Kommentare ohne Verzweigung**
+(`src/main/tray-menu.ts`): die Datei ist bewusst plattformfrei und pur, aber sie
+produziert Texte, deren Konsument je nach Plattform ein anderer ist. Das gehört
+in dieselbe Liste, sonst sucht jemand die Windows-Entsprechung von `setTitle` im
+falschen Modul.
+
+Die Tray-Tests (`src/main/__tests__/tray-menu.test.ts`) tragen **absichtlich
+keine** `PLATFORM:`-Marker, obwohl sie plattformabhängiges Verhalten festhalten:
+die Liste soll produktiven Code auflisten, nicht Testkommentare.
 
 Task 11 hat **keine** neue `process.platform`-Verzweigung in TypeScript
 hinzugefügt: der Renderer kennt `process` gar nicht (`contextIsolation: true`,
@@ -134,7 +163,7 @@ diesem Code.
 ## 3. Bekannte Windows-Themen
 
 Die vollständige Themenliste steht in `docs/DESIGN.md`, Abschnitt
-„Windows-Übergabe". Für die bisher gebauten Teile (Tasks 1–9) sind relevant:
+„Windows-Übergabe". Für die bisher gebauten Teile (Tasks 1–12) sind relevant:
 
 | Thema | Was auf Windows anders ist | Betrifft |
 |---|---|---|
@@ -147,20 +176,50 @@ Die vollständige Themenliste steht in `docs/DESIGN.md`, Abschnitt
 | Frameless & Transparenz | Keine macOS-Vibrancy, kein automatischer runder Schatten. Ecken und Schatten kommen auf Windows aus dem Renderer bzw. gar nicht. Das Fenster ist `resizable: false`, damit entfällt das abweichende Resize-Verhalten transparenter Fenster | `src/main/windows.ts` (geschrieben, auf Windows ungetestet) |
 | Always-on-Top | `alwaysOnTop` wird beim Erzeugen gesetzt **und** zur Laufzeit über `setWidgetAlwaysOnTop` nachgezogen. Die Level-Namen (`'floating'`, `'screen-saver'`, …) sind plattformspezifisch; hier wird bewusst kein Level angegeben, es gilt der Standard | `src/main/windows.ts`, `src/main/index.ts` (`withWindowEffects`) |
 | Fensterposition | Multi-Monitor mit gemischten DPI-Skalierungen verhält sich anders. Gespeicherte Positionen werden vor Gebrauch gegen die aktuell angeschlossenen Displays validiert — beim Start **und** bei jedem `display-added`/`display-removed`/`display-metrics-changed`. Gerechnet wird mit `workArea` (ohne Taskleiste), Koordinaten sind in DIP, nicht in physischen Pixeln | `src/main/window-position.ts` (getestet), `src/main/windows.ts` (Verdrahtung) |
-| Schließen-Verhalten | Das Schließen blendet aus statt zu beenden (DESIGN.md, „Tray"). Auf Windows ist die Erwartung „X beendet die App" stärker als auf macOS; das Tray-Icon aus Task 12 ist dort deshalb keine Zierde, sondern der einzige sichtbare Beleg, dass die App noch läuft — zumal `skipTaskbar: true` gesetzt ist | `src/main/windows.ts` |
+| Schließen-Verhalten | Das Schließen blendet aus statt zu beenden (DESIGN.md, „Tray"). Auf Windows ist die Erwartung „X beendet die App" stärker als auf macOS; das Tray-Icon ist dort deshalb keine Zierde, sondern der einzige sichtbare Beleg, dass die App noch läuft — zumal `skipTaskbar: true` gesetzt ist. Seit Task 12 gibt es „Beenden" im Tray-Menü, und `window-all-closed` beendet nur noch, wenn gar kein Tray existiert | `src/main/windows.ts`, `src/main/index.ts`, `src/main/tray.ts` |
+| Tray-Titel | `tray.setTitle()` ist macOS-only und trägt dort den Live-Timer. Windows bekommt stattdessen **drei** Ersatzkanäle: farbcodiertes Icon (Zustand), Tooltip (`Factorial · Eingestempelt · 1:30`) und die Zeit als ersten, deaktivierten Menüeintrag. Der Live-Timer *in der Taskleiste* bleibt ein macOS-Feature — auf Windows aktualisiert sich der Text erst beim Hovern bzw. Öffnen des Menüs | `src/main/tray.ts`, `src/main/tray-menu.ts` (geschrieben, auf Windows ungetestet) |
+| Tray-Icon | macOS: `trayTemplate.png` @1x/@2x, monochrom, System färbt. Windows: `tray-{idle,active,paused,alert}.ico`, farbig, je 16/32/48 px. Erzeugt von `resources/make-tray-icons.py` (Pillow), die Dateien sind eingecheckt. **Auf macOS nicht prüfbar**: Electron hat dort keinen ICO-Decoder, deshalb der PNG-Fallback in `iconFor` | `resources/`, `src/main/tray.ts` (ungetestet) |
+| Tray-Menü | Gleiche Einträge auf beiden Plattformen, aber auf Windows ist es der Hauptzugang: Zustand + Zeit (deaktiviert), letzte Fehlermeldung (deaktiviert, deutsch), Ein-/Ausstempeln bzw. Pause-Untermenü/Fortsetzen, Fenster zeigen/ausblenden, Aktualisieren, Beenden. Untermenüs mit dynamischen Einträgen (die Pausentypen) sind auf Windows unauffällig, aber das Menü wird bei **jedem** Render neu gebaut — falls es dort beim Öffnen flackert, ist der 15-s-Takt in `RENDER_INTERVAL_MS` die Stellschraube | `src/main/tray.ts`, `src/main/tray-menu.ts` |
+| Standby und Bildschirmsperre | `powerMonitor.on('suspend'/'resume')` ist auf beiden Plattformen vorhanden, feuert auf Windows aber auch bei „Moderner Standby" (S0) anders als beim klassischen S3. Die App stoppt beim Suspend das Polling und lädt beim Resume einmal neu. Bleibt die Uhr nach dem Zuklappen stehen, ist zuerst zu prüfen, ob `resume` überhaupt kam | `src/main/index.ts` (geschrieben, ungetestet) |
 | Positionsdatei | `%APPDATA%\factorial-desktop\window-position.json`, gleiche Schreibweise wie bei den Einstellungen (`.tmp` + `rename`). Schreibfehler werden hier bewusst **verschluckt**, weil der Schreibvorgang aus einem `moved`-Handler kommt | `src/main/window-position.ts` |
 | Drag-Region | siehe Abschnitt 2, letzte Zeile. Kurz: Aero Snap, `.no-drag`-Vererbung, `moved`-Frequenz | `src/renderer/src/styles.css` (geschrieben, auf Windows ungetestet) |
 | Schriftart | `@fontsource-variable/geist` wird als WOFF2 mitgebaut und nicht vom System geholt — es gibt also keinen Fallback-Unterschied zwischen macOS und Windows. Was sich unterscheidet, ist das **Rendering**: Windows hinted anders, die Zeilen im Widget können dadurch 1–2 px höher ausfallen. Das Fenster ist `resizable: false` bei 340×224, ein Überlauf würde also abgeschnitten statt zu scrollen | `src/renderer/src/styles.css`, `src/main/windows.ts` (`WIDGET_SIZE`) |
 | Renderer-Fonts und Emoji | Die UI benutzt bewusst **keine** Emoji oder Unicode-Blockzeichen als Icons (der Plan-Schnipsel hatte `❙❙` für „Pause") — auf Windows rendern die als farbiges Emoji oder als Ersatzkästchen. Stattdessen Lucide-SVGs plus deutsches Wort | `src/renderer/src/components/BreakMenu.tsx` |
 | Toasts | `sonner` rendert in denselben transparenten, 340×224 großen Renderer. Position ist `bottom-center`, damit ein Toast nicht über die abgerundete Ecke hinausragt. Ob er auf Windows in ein transparentes, frameless Fenster genauso sauber zeichnet, ist ungeprüft | `src/renderer/src/App.tsx` |
-| Tray, Packaging | noch nicht gebaut | Tasks 12, 14 |
+| Packaging | noch nicht gebaut. **Wichtig für Task 14:** `resources/` muss ins Paket. `src/main/tray.ts` sucht die Icons unter `import.meta.dirname/../../resources`, also `app.asar/resources` — das trifft zu, solange electron-builder das Verzeichnis nicht ausschließt. Wird es ausgeschlossen oder nach `extraResources` verschoben, ist `ICON_DIR` nachzuziehen | Task 14 |
 
 ## 4. Was verifiziert wurde und was nicht
 
 **Verifiziert auf macOS (Darwin 25.5, Electron 43):**
 
-- `npm test` — 297 Tests grün, `npm run typecheck` sauber, `npm run build`
-  fehlerfrei (Stand Task 11).
+- `npm test` — 330 Tests grün, `npm run typecheck` sauber, `npm run build`
+  fehlerfrei (Stand Task 12).
+- **Das Tray in einem echten Electron** (Task 12, Smoke-Lauf mit gefälschtem
+  Store; `Menu.buildFromTemplate` wurde dabei mitgeschnitten, um das erzeugte
+  Menü lesen zu können). Nachweislich gelaufen:
+  - `trayTemplate.png` lädt als 16×16-Bild, `new Tray(...)` erzeugt ein echtes
+    Icon in der Menubar, `hasTray()` stimmt.
+  - `tray.getTitle()` ist `" 5:30"` bei 240 gebuchten Minuten plus 90 Minuten
+    laufender Schicht — der Menubar-Timer zeigt also dieselbe Tageszeit wie der
+    Ring im Widget.
+  - Eine Store-Änderung rendert das Tray ohne Zutun neu: nach dem Wechsel in die
+    Pause steht `" Pause 0:15"` im Titel und
+    `In einer Pause · Mittagspause · 0:15` als erster, deaktivierter
+    Menüeintrag.
+  - Das Pausen-Untermenü trägt die echten Namen aus dem Snapshot
+    (`Mittagspause`, `Arztbesuch`), das Menü enthält `Ausstempeln` und
+    `Beenden`.
+  - **Der Fehlerpfad**: `Ausstempeln` gegen einen Store, der mit
+    `FactorialError('network', 'request timed out after 15000 ms')` ablehnt →
+    im Menü steht `Keine Verbindung zu Factorial. Es wurde nichts gespeichert.`
+    als deaktivierter Eintrag. Die englische Originalmeldung taucht nirgends
+    auf. Beim Start der nächsten Aktion verschwindet der Eintrag wieder.
+  - `Einstempeln` schickt die **gemerkte** Arbeitsort-Einstellung
+    (`{locationType:'work_from_home', workplaceId:3333333}`), nicht das
+    hartkodierte `office` aus dem Plan-Schnipsel.
+  - `Aktualisieren` ruft `store.refresh()`.
+  - `Beenden` beendet die App wirklich, und `before-quit` zerstört das Tray
+    (`hasTray() === false`).
 - **Die Widget-UI in jsdom** (Task 11, 43 neue Tests): alle fünf Zustände
   (`unknown`, `unauthenticated`, `out`, `in`, `break`) werden gerendert und
   geprüft — Beschriftung, welche Buttons existieren, die aus `since` neu
@@ -218,6 +277,32 @@ Die vollständige Themenliste steht in `docs/DESIGN.md`, Abschnitt
   Benutzers und wurde deshalb bewusst nicht ausgelöst.
 
 **Nicht verifiziert, auf keiner Plattform:**
+
+- **Die `.ico`-Dateien.** Electron kann auf macOS überhaupt kein ICO lesen:
+  `nativeImage.createFromPath('resources/tray-active.ico')` liefert ein leeres
+  0×0-Bild — auch dann, wenn die Datei klassische BMP-Einträge statt
+  eingebetteter PNGs enthält (beides ausprobiert). Ob die Dateien *inhaltlich*
+  in Ordnung sind, kann hier also niemand feststellen. Deshalb der PNG-Fallback
+  in `iconFor` und die Fehlerzeile `[tray] icon missing or unreadable` in der
+  Konsole. **Erster Prüfpunkt auf Windows.**
+- **Der farbcodierte Icon-Wechsel, der Tooltip und der Linksklick auf das Tray**
+  — alles Windows-Zweige, auf macOS unerreichbar.
+- **Der 15-Sekunden-Render-Takt über längere Zeit.** Im Smoke-Lauf wurde nur der
+  Render selbst ausgelöst, nicht abgewartet. Ob der Menubar-Titel über Stunden
+  sauber weiterzählt, ist ungeprüft — er wird bei jedem Tick neu gerechnet, kann
+  also nicht driften, aber der Takt selbst ist nicht beobachtet worden.
+- **Der Refresh beim Öffnen des Trays.** Electron meldet kein „Menü geöffnet";
+  ersatzweise lösen `mouse-enter`, `click` und `right-click` einen Refresh aus,
+  gedrosselt auf einen alle 10 s. Ausgelöst wurde davon nichts — dazu braucht es
+  eine echte Maus.
+- **`powerMonitor`-Suspend/Resume und der Focus-Refresh des Widgets.**
+  Verdrahtet in `src/main/index.ts`, nie ausgelöst: Suspend hätte einen echten
+  Standby gebraucht, Focus ein Fenster hinter einer echten Anmeldung.
+- **Der Poll-Loop im laufenden Betrieb** (`store.startPolling()` in
+  `bootstrap`). Der Store ist dafür unit-getestet, aber gestartet wurde er nie
+  gegen die echte API.
+- **`window-all-closed` mit und ohne Tray.** Die Verzweigung hängt an
+  `hasTray()`; beide Zweige sind nur gelesen, nicht gelaufen.
 
 - Der **vollständige Login** (Formular ausfüllen, 2FA, Fenster schließt sich
   selbst, `[auth] signed in as …` erscheint) — braucht echte Zugangsdaten und
@@ -298,11 +383,34 @@ Die vollständige Themenliste steht in `docs/DESIGN.md`, Abschnitt
   Renderer mit dieser UI in einem Electron-Fenster gelaufen. Insbesondere ist
   ungeprüft, ob `window.factorial` im Widget wirklich ankommt — der erste Punkt
   der Checkliste weiter oben.
+- **Das Zusammenspiel Tray ↔ echter Store ↔ Widget.** Der Smoke-Lauf benutzte
+  einen gefälschten Store und kein Fenster. Ungeprüft bleiben damit: ob eine
+  Tray-Aktion das sichtbare Widget aktualisiert (sie muss, beide hängen am
+  selben Store), ob `Fenster zeigen/ausblenden` das echte Widget schaltet, und
+  ob `Anmelden` aus dem Tray die Session wirklich neu aufbaut.
 - Sämtlicher Windows-Code.
 
 **Nur kompiliert, nie ausgeführt:** die Windows-Ausprägung der
-`PLATFORM:`-Zweige aus Abschnitt 2, inklusive der neuen Drag-Region;
-`npm run package:win`.
+`PLATFORM:`-Zweige aus Abschnitt 2, inklusive der neuen Drag-Region und
+sämtlicher Tray-Zweige; `npm run package:win`.
+
+**Checkliste für den ersten echten Start mit Anmeldung** (die Punkte aus Task 11
+plus Task 12, in dieser Reihenfolge abzuarbeiten):
+
+1. `typeof window.factorial === 'object'` in der Renderer-Konsole.
+2. `window.factorial.getSnapshot()` liefert ein Objekt mit `state.sinceMs` als
+   Zahl; nach `refresh()` kommt ein Push über `onSnapshot` an.
+3. Passt der Inhalt in die 340×224? Landen die Popups von Pausen-Menü und
+   Arbeitsort-Select im Fenster? Ist ein Toast sichtbar?
+4. Erscheint das Tray-Icon, und zeigt die Menubar (macOS) nach dem Einstempeln
+   binnen 15 s eine laufende Zeit?
+5. Zeigt das Tray-Menü die echten Pausennamen aus `timeSettings`?
+6. Ein-/Ausstempeln **aus dem Tray**, ohne das Fenster zu öffnen: übernimmt das
+   Widget den Zustand?
+7. Widget schließen → App läuft weiter, Tray bleibt. „Beenden" → Prozess ist weg.
+8. Erst danach der vollständige Klickpfad gegen die echte API (Einstempeln →
+   Pause → Fortsetzen → Ausstempeln) und die drei `locationType`-Werte — das
+   schreibt echte Einträge in eine echte Arbeitszeiterfassung.
 
 ## 5. Wie man die Factorial-API selbst weiter erforscht
 
@@ -350,12 +458,18 @@ Ausführlich in `docs/DESIGN.md`, Abschnitt „Windows-Übergabe → 5". Kurzfas
   (dekodiert `encodeActionError` und wirft die interne Meldung weg — außer bei
   `graphql`, wo DESIGN.md ausdrücklich die Server-Meldung sehen will) und
   `describeStaleReason(kind)` für den Hinweis neben der Statuszeile.
-  **Noch offen für Task 12:** das Tray zeigt bisher gar nichts an, wird aber
-  dieselben Fehler sehen. Es soll `describeActionError` mitbenutzen und keine
-  zweite Übersetzungstabelle aufmachen — sonst driften die Formulierungen
-  auseinander, und die englischen Originale (`another action is already in
-  flight`, `request timed out after 15000 ms`, `session rejected (HTTP 401)`)
-  stehen wieder in einer Benachrichtigung.
+  ~~**Noch offen für Task 12:** das Tray …~~ — erledigt in Task 12, allerdings
+  mit einem Umzug: die Tabelle liegt jetzt in **`src/shared/errors.ts`**, weil
+  der Main-Prozess nichts aus `src/renderer` importieren kann (weder der
+  tsconfig noch der electron-vite-Alias kennen `@renderer` dort).
+  `src/renderer/src/lib/errors.ts` ist nur noch ein Re-Export, der Importpfad
+  des Renderers bleibt also gleich. Das Tray benutzt
+  `describeActionFailure(kind, message)` — dieselbe Tabelle, nur ohne den
+  IPC-Codec davor, weil es den Store direkt aufruft und den Fehler als Objekt
+  bekommt. Klassifiziert wird mit `classifyActionError` aus
+  `src/main/ipc-handlers.ts`, also mit **derselben** Funktion wie im IPC-Pfad.
+  Belegt im Smoke-Lauf (Abschnitt 4): die englischen Originale erscheinen
+  nirgends.
 
 - **K11-Abweichungen: Nova ist Base UI, nicht Radix.** Die UI-Schnipsel in
   `docs/PLAN.md`, Task 11, sind gegen Radix-Props geschrieben. Alle folgenden
@@ -419,12 +533,28 @@ Ausführlich in `docs/DESIGN.md`, Abschnitt „Windows-Übergabe → 5". Kurzfas
 - **Einstellungen werden nur beim Start gelesen.** Zwei parallel laufende
   Instanzen würden sich gegenseitig überschreiben. Der Single-Instance-Lock
   verhindert das auf Windows — genau deshalb ist er dort nicht optional.
-- **Refresh bei Fensterfokus und nach Standby** (`powerMonitor`-Resume) fehlt
-  noch, ebenso der Start des Poll-Loops. Der Store bietet `refresh()` und
-  `startPolling()` dafür an; verdrahtet wird beides in Task 12, dessen Plan-Body
-  die vollständige `index.ts` dafür vorgibt. Ohne den Resume-Hook zeigt der Timer
-  nach dem Zuklappen des Deckels bis zu 60 s alte Zahlen — solange gar nicht
-  gepollt wird, sogar dauerhaft.
+- ~~**Refresh bei Fensterfokus und nach Standby** … fehlt noch~~ — erledigt in
+  Task 12: `src/main/index.ts` startet den Poll-Loop, lädt bei `resume` neu
+  (und stoppt das Polling bei `suspend`, damit ein in einen einschlafenden
+  Netzwerk-Stack abgesetzter Request den Snapshot nicht grundlos als „nicht
+  aktuell" markiert) und hängt einen `focus`-Handler ans Widget. Ausgelöst wurde
+  keiner der drei — siehe Abschnitt 4.
+- **„Tray-Öffnen" ist nur angenähert.** DESIGN.md verlangt einen Refresh, wenn
+  das Tray geöffnet wird; Electron meldet kein solches Ereignis. Ersatz sind
+  `mouse-enter`, `click` und `right-click`, gedrosselt auf einen Refresh pro
+  10 s (`OPEN_REFRESH_MIN_INTERVAL_MS`). Ein bereits geöffnetes Menü behält den
+  Snapshot, mit dem es gebaut wurde — die Antwort landet erst im nächsten
+  Render. Auf Windows ist zu prüfen, ob `mouse-enter` dort überhaupt feuert;
+  wenn nicht, bleibt der Klick, und der Effekt ist erst beim zweiten Öffnen
+  sichtbar.
+- **Die Zeit im Tray-Menü ist beim Öffnen bis zu 15 s alt** (Render-Takt), auf
+  Windows entsprechend auch der Tooltip. Das ist bewusst so: die Zahl wird bei
+  jedem Render neu aus `state.since` gerechnet und kann deshalb nicht driften,
+  aber sie wird eben nur alle 15 s neu gesetzt. Ein Sekundentakt im Main-Prozess
+  wäre für eine Minutenanzeige verschwendete Arbeit.
+- **Ein zweites Tray-Icon bei zwei Instanzen** wäre die sichtbarste Folge eines
+  fehlenden Single-Instance-Locks. Auf Windows ist der Lock deshalb nicht
+  optional — siehe Abschnitt 2.
 - **Display-Ids als Schlüssel der Positionsdatei.** `Electron.Display.id` ist
   nicht garantiert stabil über Neustarts oder das Wiederanstecken desselben
   Monitors. Ändert sich die Id, ist die Position für diesen Bildschirm vergessen
@@ -435,6 +565,21 @@ Ausführlich in `docs/DESIGN.md`, Abschnitt „Windows-Übergabe → 5". Kurzfas
   gemessen ist das nicht.
 - **Die Positionsdatei wird bei mehreren Instanzen nicht koordiniert** — dasselbe
   Thema wie bei den Einstellungen, und derselbe Schutz: der Single-Instance-Lock.
-- **`skipTaskbar: true` ohne Tray.** Zwischen Task 10 und Task 12 ist ein
-  ausgeblendetes Widget auf Windows durch nichts mehr erreichbar (keine
-  Taskleiste, kein Tray). Nicht in diesem Zwischenstand testen oder ausliefern.
+- ~~**`skipTaskbar: true` ohne Tray.**~~ — erledigt in Task 12: das Tray ist da,
+  das ausgeblendete Widget ist über Icon-Klick (Windows), Doppelklick oder den
+  Menüeintrag „Fenster zeigen" erreichbar, und „Beenden" gibt es in jedem
+  Zustand. Der Rest des Hinweises gilt weiter für den Fehlerpfad *ohne* Tray —
+  dort beendet `window-all-closed` die App absichtlich.
+- **Das Tray-Menü kennt keinen „läuft gerade"-Zustand.** Der Store lehnt eine
+  zweite gleichzeitige Aktion mit `busy` ab, aber das Menü graut währenddessen
+  nichts aus (anders als das Widget, das seine Buttons sperrt) — ein
+  Kontextmenü ist beim Klick ohnehin schon wieder zu. Wer zweimal schnell klickt
+  oder gleichzeitig im Widget klickt, bekommt beim nächsten Öffnen den Satz
+  „Es läuft bereits eine Aktion. Bitte einen Moment warten." als deaktivierten
+  Eintrag. Geschrieben wird dabei nichts Falsches; die zweite Aktion wird
+  verworfen, nicht nachgeholt.
+- **Der Arbeitsort beim Einstempeln aus dem Tray** kommt aus den gespeicherten
+  Einstellungen (`lastLocationType`/`lastWorkplaceId`), nicht aus einem zweiten
+  Default — bewusste Abweichung vom Plan-Schnipsel, der `office` hartkodierte.
+  Das Tray bietet **keine** Auswahl des Arbeitsorts an; wer einen anderen will,
+  stellt ihn im Widget ein, wo er ohnehin persistiert wird.
