@@ -1,16 +1,32 @@
 # Factorial Desktop — Windows-Übergabe
 
-**Status:** wächst mit der Implementierung. Stand: Ende Task 14 (Packaging).
-Task 15 trägt hier weiter ein.
+**Status:** abgeschlossen mit Task 15. Der Inhalt beschreibt den Stand nach
+Task 14 (Packaging); Task 15 hat die Zahlen nachgeprüft, den `README.md`
+angelegt und Abschnitt 7 ergänzt.
 
-> **Für Windows ist Task 12 der wichtigste Abschnitt dieses Dokuments.** Der
-> Live-Timer in der Menubar ist ein macOS-Feature; auf Windows tragen ihn
+> **Du sitzt an einer Windows-Maschine und willst anfangen?** → **Abschnitt 7**.
+> Der ist die Schritt-für-Schritt-Inbetriebnahme, in der Reihenfolge, in der die
+> Dinge kaputtgehen können. Abschnitt 2 ist das Nachschlagewerk dazu.
+
+> **Für Windows ist Task 12 der inhaltlich wichtigste Teil dieses Dokuments.**
+> Der Live-Timer in der Menubar ist ein macOS-Feature; auf Windows tragen ihn
 > Tooltip, farbcodiertes Icon und der erste, deaktivierte Menüeintrag. Und erst
 > seit diesem Task gibt es auf Windows überhaupt einen Weg, die App zu beenden.
 
 Dieses Dokument ist für einen Agenten geschrieben, der auf einer Windows-Maschine
 weiterarbeitet und **den Gesprächsverlauf dieser Implementierung nicht kennt**.
 Alles, was zum Weiterarbeiten nötig ist, steht im Repository.
+
+**Die drei Sätze, die alles andere einordnen:**
+
+1. Diese App wurde ausschließlich auf macOS gebaut und geprüft. Sämtlicher
+   Windows-Code ist **geschrieben, kompiliert, typgeprüft — und nie ausgeführt**.
+2. Die App schreibt in eine **echte Arbeitszeiterfassung**. Ein falscher
+   Zeitstempel ist der teure Fehlerfall. Deshalb rät der Code nie eine Zeit; ist
+   ein Snapshot veraltet, zeigt das Widget die letzte bekannte Zeit mit Hinweis.
+3. Wo dieses Dokument „verifiziert" sagt, ist etwas tatsächlich gelaufen und das
+   Ergebnis steht daneben. Wo es „ungetestet" sagt, ist es das auch. Abschnitt 4
+   trennt beides; die Trennung ist wichtiger als jede einzelne Zeile darin.
 
 ## 1. Einstieg ohne Vorwissen
 
@@ -72,6 +88,8 @@ Typecheck** — ein Typfehler bricht das Packaging ab, bevor electron-builder
 | `src/renderer/src/hooks/useAttendance.ts` | Snapshot-Abo über die Bridge + Sekundentakt für den Timer |
 | `src/renderer/src/lib/errors.ts` | nur noch ein Re-Export von `src/shared/errors.ts` (Task 12) |
 | `src/renderer/src/components/ui/` | von der shadcn-CLI generiert (Style `base-nova`). **Nicht** von Hand an einen Plan-Schnipsel anpassen — siehe K11 in Abschnitt 6 |
+| `README.md` | die Kurzfassung für jemanden, der das Repository zum ersten Mal öffnet: Befehle, was die App ist, wohin die Dokumente zeigen |
+| `src/shared/__tests__/handoff-docs.test.ts` | prüft **dieses Dokument** gegen den Code: jede `PLATFORM:`-Stelle hat eine Tabellenzeile, jede Tabellenzeile eine Stelle, jeder zitierte Dateipfad existiert. Siehe Abschnitt 2, letzter Absatz |
 
 **Zur Testeinrichtung des Renderers** (Carry-Forward C3, erledigt in Task 11):
 `vitest.config.ts` läuft mit `environment: 'jsdom'` für die **gesamte** Suite,
@@ -101,6 +119,14 @@ die erklärte Fassung davon und muss mit dem Grep-Ergebnis übereinstimmen.
 > Windows-Konfiguration steht in `electron-builder.yml`, also außerhalb von
 > `src/`. Vollständig ist erst `grep -rn "PLATFORM:" src/ electron-builder.yml`
 > — 16 Treffer in `src/`, einer in der YAML.
+>
+> **Seit Task 15 muss man das nicht mehr glauben.**
+> `src/shared/__tests__/handoff-docs.test.ts` läuft in `npm test` mit und
+> vergleicht beide Richtungen: kein Treffer ohne Tabellenzeile, keine
+> Tabellenzeile ohne Treffer, keine leere Spalte, und jeder in diesem Dokument
+> zitierte Dateipfad muss existieren. Verschiebt sich eine Zeilennummer, wird
+> der Test rot — die Nummern unten sind also so aktuell wie die letzte grüne
+> Suite und nicht so aktuell wie die letzte Erinnerung des Autors.
 
 | Datei:Zeile | Was | Warum | Auf Windows zu prüfen |
 |---|---|---|---|
@@ -120,7 +146,6 @@ die erklärte Fassung davon und muss mit dem Grep-Ergebnis übereinstimmen.
 | `src/main/windows.ts:104` | `transparent: true` + `backgroundColor: '#00000000'` | macOS zeichnet ein transparentes, frameless Fenster mit runden Ecken und weichem Schatten von selbst. Windows setzt hinter ein transparentes Fenster sonst ein weißes Rechteck und zeichnet einen eckigen Schatten drumherum. | Sichtprüfung: keine weißen Ecken hinter dem Widget, kein eckiger Schattenrahmen. Falls doch, sind `transparent`, `thickFrame: false` und ein Renderer-seitiger `border-radius` die Stellschrauben (DESIGN.md, „Frameless & Transparenz") |
 | `src/main/windows.ts:123` | `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })` nur auf `darwin` | Der Sinn eines schwebenden Zeit-Widgets ist, über Vollbild-Spaces sichtbar zu bleiben. `visibleOnFullScreen` ist eine macOS-Option; auf Windows gibt es kein Äquivalent, dort trägt allein `alwaysOnTop`. | Prüfen, ob das Widget über einer Vollbild-App sichtbar bleibt. Wenn nicht: `setAlwaysOnTop(true, 'screen-saver')` ist die Windows-taugliche Verschärfung, hat aber Nebenwirkungen auf Fokus und Taskleiste |
 | `src/renderer/src/styles.css:32` | `.drag-region { -webkit-app-region: drag }` plus `.no-drag` für alles Anklickbare darin | Das Fenster ist `frame: false` und hat keine Titelleiste zum Anfassen; die Drag-Region **ist** die einzige Möglichkeit, das Widget zu verschieben. Chromium kennt die Eigenschaft auf beiden Plattformen, verhält sich aber nicht gleich. | Widget an der Kopfzeile ziehen: es muss sich bewegen und die Position nach dem Debounce speichern. Dann drei Windows-Eigenheiten prüfen: (1) an den oberen Bildschirmrand ziehen darf **kein** Aero Snap auslösen — das Fenster ist `resizable: false`, ein Snap-Versuch führt dort erfahrungsgemäß zu einem verzerrten oder unverschiebbaren Fenster; (2) Buttons und das Arbeitsort-Select innerhalb der Region müssen klickbar bleiben (dafür ist `.no-drag` da; unter Windows greift die Vererbung teils anders); (3) `moved` feuert unter Windows beim Ziehen laufend statt einmal — der 250-ms-Debounce in `src/main/windows.ts` ist genau dafür da |
-
 | `electron-builder.yml:26` | der ganze `win:`-Block (`nsis`, `x64`) plus die `nsis:`-Optionen | Die einzige plattformabhängige Stelle außerhalb von `src/`: macOS bekommt DMG + ZIP, Windows einen NSIS-Installer. Kein Code, sondern Konfiguration — und die einzige im Repo, die **nie** ausgeführt wurde. | `npm run package:win` als Allererstes ausprobieren. Danach: enthält `build/icon.ico` genug Auflösungen (16–256 px sind drin), installiert der Installer in ein wählbares Verzeichnis (`allowToChangeInstallationDirectory: true`), und läuft er ohne Adminrechte durch (`perMachine: false`)? Siehe Abschnitt 4 für das, was auf macOS belegt ist |
 
 Task 7 (`src/main/attendance.ts`) hat **keine** neue plattformabhängige Stelle
@@ -131,11 +156,13 @@ Task 10 zwei weitere (Transparenz, Vollbild-Sichtbarkeit) und zwei bestehende
 umgeschrieben, Task 11 einen (die Drag-Region im CSS), Task 12 sieben (fünf im
 Tray, zwei erklärende Kommentare in `tray-menu.ts`) und den
 `window-all-closed`-Eintrag komplett umgeschrieben; Task 14 einen
-(`electron-builder.yml`). Die Tabelle hat damit **siebzehn** Einträge und deckt
-`grep -rn "PLATFORM:" src/ electron-builder.yml` vollständig ab (Stand Task 14:
-16 Treffer in sechs Dateien unter `src/`, plus einer in der YAML). Die Tasks 13
-(Soll-Zeit im Ring) und 14 haben in `src/` **keine** neue Verzweigung erzeugt:
-die Soll-Zeit ist reine Rechnung, und das Packaging ist Konfiguration.
+(`electron-builder.yml`). Die Tabelle hat **17** Zeilen und deckt
+`grep -rn "PLATFORM:" src/ electron-builder.yml` vollständig ab (16 Treffer in
+sechs Dateien unter `src/`, plus einer in der YAML). Die Tasks 13
+(Soll-Zeit im Ring), 14 (Packaging) und 15 (diese Übergabe) haben in `src/`
+**keine** neue Verzweigung erzeugt: die Soll-Zeit ist reine Rechnung, das
+Packaging ist Konfiguration, und Task 15 hat nur Dokumentation und einen Test
+hinzugefügt.
 
 Die nachgereichte **„Einstellungen"-Ebene im Tray-Menü** (Autostart, Immer im
 Vordergrund, Abmelden) hat **keinen** neuen Eintrag erzeugt: sie ist reine
@@ -154,7 +181,11 @@ falschen Modul.
 
 Die Tray-Tests (`src/main/__tests__/tray-menu.test.ts`) tragen **absichtlich
 keine** `PLATFORM:`-Marker, obwohl sie plattformabhängiges Verhalten festhalten:
-die Liste soll produktiven Code auflisten, nicht Testkommentare.
+die Liste soll produktiven Code auflisten, nicht Testkommentare. Der
+Vollständigkeitstest überspringt `__tests__`-Verzeichnisse deshalb ebenfalls,
+und er setzt sein Suchmuster zur Laufzeit zusammen, statt es wörtlich zu
+enthalten — sonst würde er sich selbst finden und die oben genannte 16 wäre
+falsch.
 
 Task 11 hat **keine** neue `process.platform`-Verzweigung in TypeScript
 hinzugefügt: der Renderer kennt `process` gar nicht (`contextIsolation: true`,
@@ -189,7 +220,8 @@ diesem Code.
 ## 3. Bekannte Windows-Themen
 
 Die vollständige Themenliste steht in `docs/DESIGN.md`, Abschnitt
-„Windows-Übergabe". Für die bisher gebauten Teile (Tasks 1–12) sind relevant:
+„Windows-Übergabe". Für die gebauten Teile (Tasks 1–14) sind relevant — die
+Reihenfolge, in der man sie abarbeitet, steht in Abschnitt 7:
 
 | Thema | Was auf Windows anders ist | Betrifft |
 |---|---|---|
@@ -212,15 +244,24 @@ Die vollständige Themenliste steht in `docs/DESIGN.md`, Abschnitt
 | Schriftart | `@fontsource-variable/geist` wird als WOFF2 mitgebaut und nicht vom System geholt — es gibt also keinen Fallback-Unterschied zwischen macOS und Windows. Was sich unterscheidet, ist das **Rendering**: Windows hinted anders, die Zeilen im Widget können dadurch 1–2 px höher ausfallen. Das Fenster ist `resizable: false` bei 340×224, ein Überlauf würde also abgeschnitten statt zu scrollen | `src/renderer/src/styles.css`, `src/main/windows.ts` (`WIDGET_SIZE`) |
 | Renderer-Fonts und Emoji | Die UI benutzt bewusst **keine** Emoji oder Unicode-Blockzeichen als Icons (der Plan-Schnipsel hatte `❙❙` für „Pause") — auf Windows rendern die als farbiges Emoji oder als Ersatzkästchen. Stattdessen Lucide-SVGs plus deutsches Wort | `src/renderer/src/components/BreakMenu.tsx` |
 | Toasts | `sonner` rendert in denselben transparenten, 340×224 großen Renderer. Position ist `bottom-center`, damit ein Toast nicht über die abgerundete Ecke hinausragt. Ob er auf Windows in ein transparentes, frameless Fenster genauso sauber zeichnet, ist ungeprüft | `src/renderer/src/App.tsx` |
-| Packaging | macOS ist gebaut (DMG + ZIP, arm64, unsigniert), Windows ist **nur konfiguriert**. Zwei Dinge, die auf Windows anders sind: das Artefakt (NSIS-Installer statt DMG) und das App-Icon (`build/icon.ico` statt `build/icon.icns`). `resources/` liegt nachweislich im Paket — `src/main/tray.ts` sucht die Icons unter `import.meta.dirname/../../resources`, also `app.asar/resources`, und genau diese zwölf Dateien sind im gebauten `app.asar` enthalten (nachgezählt, Abschnitt 4). Wird das Verzeichnis je ausgeschlossen oder nach `extraResources` verschoben, ist `ICON_DIR` nachzuziehen | `electron-builder.yml`, `build/`, `src/main/tray.ts` |
+| Packaging | macOS ist gebaut (DMG + ZIP, arm64, unsigniert), Windows ist **nur konfiguriert**. Zwei Dinge, die auf Windows anders sind: das Artefakt (NSIS-Installer statt DMG) und das App-Icon (`build/icon.ico` statt `build/icon.icns`). `resources/` liegt nachweislich im Paket — `src/main/tray.ts` sucht die Icons unter `import.meta.dirname/../../resources`, also `app.asar/resources`, und genau diese elf Dateien sind im gebauten `app.asar` enthalten (nachgezählt, Abschnitt 4). Wird das Verzeichnis je ausgeschlossen oder nach `extraResources` verschoben, ist `ICON_DIR` nachzuziehen | `electron-builder.yml`, `build/`, `src/main/tray.ts` |
 | App-Icon | `build/icon.icns` (macOS) und `build/icon.ico` (Windows, 16/24/32/48/64/128/256 px) erzeugt `build/make-app-icon.py` aus **einem** 1024-px-Master. Der `.icns`-Teil des Skripts ruft `iconutil` auf und läuft deshalb **nur auf macOS**; die fertige Datei ist eingecheckt, Windows braucht sie nicht. Der `.ico`-Teil ist reines Pillow und läuft überall | `build/` |
 
 ## 4. Was verifiziert wurde und was nicht
 
 **Verifiziert auf macOS (Darwin 25.5, Electron 43):**
 
-- `npm test` — 364 Tests grün, `npm run typecheck` sauber, `npm run build`
-  fehlerfrei (Stand Task 14).
+- `npm test` — **384 Tests in 20 Dateien** grün, `npm run typecheck` sauber,
+  `npm run build` fehlerfrei (Stand Task 15; in Task 14 waren es 364, die 20
+  neuen prüfen dieses Dokument und den `README.md`). Auf Windows ist dieselbe
+  Zahl zu erwarten: in der Suite läuft kein Electron und keine Verzweigung nach
+  `process.platform`, die nicht die Plattform als Argument bekäme.
+- **Die Icon-Dateien als Dateien** (Task 15): die ICO-Verzeichniseinträge wurden
+  aus den Dateiköpfen gelesen. `resources/tray-{idle,active,paused,alert}.ico`
+  enthalten je drei Einträge (16×16, 32×32, 48×48) als klassische BMP-Einträge;
+  `build/icon.ico` enthält sieben (16/24/32/48/64/128/256) als PNG-komprimierte
+  Einträge. Die Tabelle steht in Abschnitt 7, Schritt 3. **Das belegt die
+  Struktur, nicht die Lesbarkeit** — siehe direkt unten.
 - **Das macOS-Packaging** (Task 14). `npm run package:mac` ist gelaufen und hat
   `release/Factorial-0.1.0-arm64.dmg` (119,2 MB) und
   `release/Factorial-0.1.0-arm64-mac.zip` (119,1 MB) erzeugt. Am Ergebnis
@@ -237,10 +278,14 @@ Die vollständige Themenliste steht in `docs/DESIGN.md`, Abschnitt
     üblichen Symlink auf `/Applications`; dieselben Info.plist-Werte wie oben.
     Das ZIP enthält dasselbe Bundle (587 Einträge).
   - Inhalt von `Contents/Resources/app.asar`, ausgezählt: `out/main/index.js`,
-    `out/preload/index.mjs`, zehn Dateien unter `out/renderer/` und **alle zwölf
+    `out/preload/index.mjs`, zehn Dateien unter `out/renderer/` und **alle elf
     Dateien aus `resources/`**, inklusive `trayTemplate.png`, `trayTemplate@2x.png`
     und der vier `.ico`. Der Pfad, den `src/main/tray.ts` erwartet
     (`app.asar/resources`), existiert also im Paket.
+    (In Task 14 stand hier „zwölf" — das war ein Zählfehler: `npx asar list`
+    gibt den Verzeichniseintrag `/resources` als eigene Zeile aus. Es sind elf
+    Dateien; in Task 15 mit `npx asar list … | grep ^/resources` nachgezählt und
+    gegen `ls resources/` abgeglichen.)
   - **Carry-Forward C1 ist am Artefakt belegt, nicht nur an der `package.json`:**
     im `app.asar` liegt weder `shadcn` noch `@fontsource-variable/geist` noch
     `tw-animate-css`. Die Geist-Schrift ist stattdessen als fünf `.woff2` in
@@ -360,10 +405,13 @@ Die vollständige Themenliste steht in `docs/DESIGN.md`, Abschnitt
 - **Die `.ico`-Dateien.** Electron kann auf macOS überhaupt kein ICO lesen:
   `nativeImage.createFromPath('resources/tray-active.ico')` liefert ein leeres
   0×0-Bild — auch dann, wenn die Datei klassische BMP-Einträge statt
-  eingebetteter PNGs enthält (beides ausprobiert). Ob die Dateien *inhaltlich*
-  in Ordnung sind, kann hier also niemand feststellen. Deshalb der PNG-Fallback
+  eingebetteter PNGs enthält (beides ausprobiert). Nachgeprüft ist seit Task 15
+  nur die **Struktur** (Anzahl, Größen und Form der Verzeichniseinträge, direkt
+  aus den Dateiköpfen gelesen); ob die Bilddaten dahinter von Windows als Bild
+  akzeptiert werden, kann hier niemand feststellen. Deshalb der PNG-Fallback
   in `iconFor` und die Fehlerzeile `[tray] icon missing or unreadable` in der
-  Konsole. **Erster Prüfpunkt auf Windows.**
+  Konsole. **Erster inhaltlicher Prüfpunkt auf Windows** (Abschnitt 7,
+  Schritt 3).
 - **Der farbcodierte Icon-Wechsel, der Tooltip und der Linksklick auf das Tray**
   — alles Windows-Zweige, auf macOS unerreichbar.
 - **Der 15-Sekunden-Render-Takt über längere Zeit.** Im Smoke-Lauf wurde nur der
@@ -502,7 +550,11 @@ Die vollständige Themenliste steht in `docs/DESIGN.md`, Abschnitt
 sämtlicher Tray-Zweige; `npm run package:win`.
 
 **Checkliste für den ersten echten Start mit Anmeldung** (die Punkte aus Task 11
-plus Task 12, in dieser Reihenfolge abzuarbeiten):
+plus Task 12, in dieser Reihenfolge abzuarbeiten). Sie ist auf **macOS**
+gemünzt — sie ist die offene Restarbeit dieser Implementierung, kein
+Windows-Auftrag. **Auf Windows gilt stattdessen Abschnitt 7**, der dieselben
+Punkte in der dort sinnvollen Reihenfolge und um die Windows-Zweige ergänzt
+enthält.
 
 1. `typeof window.factorial === 'object'` in der Renderer-Konsole.
 2. `window.factorial.getSnapshot()` liefert ein Objekt mit `state.sinceMs` als
@@ -565,6 +617,13 @@ Kurzfassung:
   Verschlankung, deren Ergebnis niemand starten kann, ist kein guter Tausch. Wer
   sie angeht, muss die App danach wirklich starten. Größenordnung: das DMG wäre
   danach etwa 36 MB kleiner, von 119 MB — der Löwenanteil ist Electron selbst.
+- **`resources/make-tray-icons.py` liegt im Paket.** Der `resources/**/*`-Glob
+  nimmt alles mit, was in dem Verzeichnis liegt, also auch das Bauskript
+  (≈ 4 KB). Harmlos — es wird zur Laufzeit nie gelesen —, aber ein
+  `- '!resources/*.py'` in `files` wäre sauberer. Zusammen mit dem
+  `node_modules`-Punkt oben zu erledigen, und aus demselben Grund noch nicht
+  erledigt: die gepackte App wurde nie gestartet, und wer sie verschlankt, muss
+  sie danach starten.
 - **Im Dev-Modus erscheint weiterhin ein Dock-Icon.** `LSUIElement: 1` steht in
   `Info.plist` und wirkt deshalb nur für das gepackte Bundle. `npm run dev`
   startet die generische Electron-App und zeigt deren Dock-Icon. Der Code ruft
@@ -687,6 +746,12 @@ Kurzfassung:
   sie von Hand geändert hat — der gespeicherte Wert gewinnt. Falls das auf Windows
   unerwünscht ist, ist `app.getLoginItemSettings()` die Stelle, an der man
   vergleichen statt schreiben könnte.
+  **Die Folge, die man beim ersten Dev-Login trifft:** der Aufruf steht in
+  `bootstrap()` *nach* `ensureAuthenticated`, wird also ausgelöst, sobald sich
+  jemand zum ersten Mal erfolgreich anmeldet — im Dev-Modus registriert das
+  `electron.exe` bzw. das Electron-Binary, nicht die App. Beobachtet wurde es
+  nie (auf macOS gab es keine Anmeldung), aber es folgt direkt aus dem Code.
+  Siehe Abschnitt 7, Schritt 2.
 - **Einstellungen werden nur beim Start gelesen.** Zwei parallel laufende
   Instanzen würden sich gegenseitig überschreiben. Der Single-Instance-Lock
   verhindert das auf Windows — genau deshalb ist er dort nicht optional.
@@ -759,3 +824,255 @@ Kurzfassung:
   Default — bewusste Abweichung vom Plan-Schnipsel, der `office` hartkodierte.
   Das Tray bietet **keine** Auswahl des Arbeitsorts an; wer einen anderen will,
   stellt ihn im Widget ein, wo er ohnehin persistiert wird.
+
+## 7. Inbetriebnahme auf Windows, Schritt für Schritt
+
+Diese Reihenfolge ist nicht beliebig. Sie geht von „kostet nichts, wenn es
+schiefgeht" zu „schreibt in eine echte Arbeitszeiterfassung". **Schritt 8 als
+Letztes**, und bewusst.
+
+Nichts davon ist gelaufen. Jeder Schritt hat deshalb ein „erwartet" — und wenn
+die Wirklichkeit davon abweicht, ist die Wirklichkeit recht zu geben und dieses
+Dokument zu korrigieren.
+
+### Schritt 0 — Werkzeuge
+
+Auf macOS benutzt wurden **Node v22.23.1**, **npm 10.9.8**, **Electron 43.4.0**
+(letzteres aus `devDependencies`, kein globales Electron). `package.json` hat
+kein `engines`-Feld und **kein** `postinstall`-Skript; `npm install` lädt nur
+Pakete und die Electron-Binärdatei. Python mit Pillow braucht **nur**, wer die
+Icons neu erzeugen will (`resources/make-tray-icons.py`) — die fertigen Dateien
+sind eingecheckt.
+
+Zeilenenden sind **kein** Thema, obwohl `.gitattributes` nur `* text=auto`
+sagt: `git ls-files --eol` zeigt für alle `.ico`, `.png` und die `.icns`
+`i/-text w/-text`, Git hat sie also bereits als binär eingestuft und wandelt
+beim Auschecken nichts um. (Auf macOS nachgesehen. Sollte auf Windows dennoch
+ein Icon defekt ankommen, wäre `*.ico binary` in `.gitattributes` die
+Ein-Zeilen-Korrektur — aber erst messen, dann ändern.)
+
+### Schritt 1 — Die plattformunabhängige Basis
+
+    npm install
+    npm test
+    npm run typecheck
+
+Erwartet: 384 Tests grün und ein stiller Typecheck, so wie auf macOS
+(Abschnitt 4 nennt den Stand, unter dem diese Zahl gilt). Diese Suite
+enthält **keinen** Electron-Code und sollte auf Windows identisch durchlaufen;
+tut sie es nicht, ist das der erste echte Windows-Fund und er gehört behoben,
+bevor irgendetwas gestartet wird. Kandidaten, falls doch etwas rot ist:
+Pfadtrenner in `src/main/settings.ts` und `src/main/window-position.ts` (beide
+benutzen `node:path`, sollten also tragen) und die Zeitzone, die
+`vitest.config.ts` fest auf `Europe/Berlin` setzt.
+
+`npm run build` danach einmal: er ist in beiden `package:`-Skripten enthalten,
+und ein Fehler hier spart das Warten auf electron-builder.
+
+### Schritt 2 — Start, dann Anmeldung
+
+    npm run dev
+
+Erwartet: der Main-Prozess bootet, und weil keine Session existiert, öffnet sich
+Factorials Login-Fenster (ein normales Fenster mit Titelleiste, Titel
+`Bei Factorial anmelden`). Weder Widget noch Tray erscheinen hier —
+`bootstrap()` bricht in `ensureAuthenticated` ab und erreicht `createTray` und
+`createWidgetWindow` erst danach. Auf macOS ist genau dieser Pfad einmal echt
+gelaufen; alles ab hier ist es auf **keiner** Plattform.
+
+Danach anmelden. Das ist unbedenklich — die Anmeldung liest nur, sie stempelt
+nichts. Erwartet: `[auth] signed in as … / …` in der Konsole, das Login-Fenster
+schließt sich selbst, Widget und Tray-Icon erscheinen.
+
+> **Eine Nebenwirkung, die man vorher wissen muss.** Nach erfolgreicher
+> Anmeldung ruft `src/main/index.ts` einmal
+> `applyLoginItem(settings.get().openAtLogin)` auf, und der Vorgabewert ist
+> `true`. Auf Windows entsteht damit beim **ersten geglückten Dev-Login** ein
+> Run-Key-Eintrag, der auf `electron.exe` zeigt — ohne dass jemand einen Haken
+> gesetzt hätte. Er ist harmlos zu entfernen (Tray → „Einstellungen" →
+> „Autostart" abwählen, oder den Eintrag unter
+> `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` löschen), aber wer ihn
+> nicht kennt, startet fortan bei jeder Anmeldung eine nackte Electron-Instanz
+> mit. Auf macOS ist dasselbe zu erwarten; ausgelöst wurde es dort nie, weil es
+> nie eine echte Anmeldung gab. Der eigentliche Autostart-Test gehört in
+> Schritt 7, mit der installierten App.
+
+### Schritt 3 — Das Tray-Icon (der wichtigste Windows-Prüfpunkt)
+
+Ein unsichtbares Tray-Icon ist auf Windows keine Schönheitsfrage: mit
+`skipTaskbar: true` ist das Icon der einzige Weg, das Fenster wiederzubekommen
+oder die App zu beenden.
+
+Erwartet: ein farbiges Icon im Infobereich. Ist dort nichts oder ein leerer
+Platz, sofort die Konsole des Main-Prozesses lesen —
+`[tray] icon missing or unreadable: …` ist die Zeile, auf die es ankommt
+(`loadIcon` in `src/main/tray.ts`).
+
+Was über die Dateien **belegt** ist (am Dateikopf gemessen, auf macOS, mit einem
+Skript über die ICO-Verzeichniseinträge — nicht von Windows bestätigt):
+
+| Datei | Einträge | Größen | Form |
+|---|---|---|---|
+| `resources/tray-idle.ico`, `-active`, `-paused`, `-alert` | je 3 | 16×16, 32×32, 48×48 | klassische BMP-Einträge, **nicht** PNG-komprimiert |
+| `build/icon.ico` (App-Icon, NSIS) | 7 | 16, 24, 32, 48, 64, 128, 256 | PNG-komprimierte Einträge |
+| `resources/trayTemplate.png` / `@2x` | — | 16×16 / 32×32 | macOS-Template, monochrom |
+| `resources/tray-idle.png` usw. (Fallback) | — | 32×32 | farbig |
+
+Was **nicht** belegt ist: ob Windows sie akzeptiert. Electron hat auf macOS
+überhaupt keinen ICO-Decoder (jede `.ico` kommt als leeres 0×0-Bild zurück),
+deshalb der PNG-Fallback in `iconFor`. Greift der Fallback, ist das Icon zwar
+sichtbar, aber es ist ein 32×32-PNG ohne die kleineren Auflösungen — bei 100 %
+Skalierung wird es heruntergerechnet und kann matschig aussehen. Dann
+`resources/make-tray-icons.py` anpassen (z. B. `bitmap_format` entfernen, damit
+PNG-Einträge in die `.ico` geschrieben werden) und neu erzeugen.
+
+**Ohne Einstempeln sieht man hier nur einen der vier Töne.** Die Zuordnung
+steht in `TONE` in `src/main/tray-menu.ts`: `idle` (grau) für `unknown` und
+`out`, `active` (grün) für `in`, `paused` (amber) für `break`, `alert` (rot) für
+`unauthenticated`. Frisch angemeldet und ausgestempelt ist das Icon also grau,
+und die anderen drei Farben kommen erst mit Schritt 8. Was **jetzt** geht: die
+vier `.ico` einzeln im Explorer bzw. der Windows-Fotoanzeige öffnen. Zeigen sie
+dort ein sauberes Bild, ist zumindest die Datei in Ordnung und ein leeres
+Tray-Bild läge an Electron, nicht am Icon. Der Skalierungsvergleich (100 %,
+150 %, 200 %) geht mit dem grauen Icon genauso gut wie mit den anderen.
+
+### Schritt 4 — Die Windows-Zweige, die nichts kosten
+
+In dieser Reihenfolge, weil jeder einzeln beobachtbar ist:
+
+1. **Linksklick** auf das Icon blendet das Widget ein und wieder aus
+   (`src/main/tray.ts:267`). **Rechtsklick** öffnet das Menü. **Doppelklick**
+   zeigt es — und weil Windows vor jedem Doppelklick auch ein `click` schickt,
+   ist hier auf ein Flackern zu achten (erst toggeln, dann zeigen).
+2. **Tooltip und erster Menüeintrag** tragen denselben Text
+   (`trayStatusLine` in `src/main/tray-menu.ts`), im Tooltip mit `Factorial · `
+   davor. Ausgestempelt heißt das `Factorial · Ausgestempelt · heute 5:30`
+   (die Tagessumme, und ganz ohne gebuchte Zeit entfällt die Zahl);
+   eingestempelt `Factorial · Eingestempelt · 1:30` — dann ist es die
+   Tagessumme **plus** der laufenden Schicht, nicht die Schicht allein
+   (`primaryMs` in derselben Datei). Das ist der Windows-Ersatz für den
+   Menubar-Titel und der einzige Ort, an dem die Zeit ohne offenes Fenster
+   steht. Beide werden im 15-Sekunden-Takt neu gesetzt, sind beim Öffnen also
+   bis zu 15 s alt — das ist Absicht, nicht ein Fehler. Die *laufende* Variante
+   ist erst in Schritt 8 zu sehen.
+3. **Zweiter Start** (Verknüpfung doppelklicken, während die App läuft): es darf
+   **keine** zweite Instanz und kein zweites Icon erscheinen, stattdessen kommt
+   das Widget nach vorn (`src/main/index.ts:184` und `:187`).
+4. **Widget schließen** → App läuft weiter, Icon bleibt. **„Beenden"** im Menü →
+   der Prozess ist im Task-Manager wirklich weg (`src/main/index.ts:208`).
+
+### Schritt 5 — Das Fenster
+
+1. **Transparenz:** keine weißen Ecken hinter den runden Kanten, kein eckiger
+   Schattenrahmen (`src/main/windows.ts:104`). Falls doch, sind `transparent`,
+   `thickFrame: false` und der `border-radius` im Renderer die Stellschrauben.
+2. **Ziehen** an der Kopfzeile (`src/renderer/src/styles.css:32`): das Fenster
+   folgt, die Position wird nach 250 ms Debounce in
+   `%APPDATA%\factorial-desktop\window-position.json` geschrieben. Drei
+   Windows-Eigenheiten: Aero Snap am oberen Rand darf nicht auslösen (das
+   Fenster ist `resizable: false`), Buttons und das Arbeitsort-Select innerhalb
+   der Region müssen klickbar bleiben (`.no-drag`), und `moved` feuert beim
+   Ziehen laufend — genau dafür ist der Debounce da.
+3. **Layout:** passt der Inhalt in 340×224? Windows hinted Schriften anders, die
+   Zeilen können 1–2 px höher ausfallen, und das Fenster scrollt nicht, sondern
+   schneidet ab. Landen die Popups von Pausen-Menü und Arbeitsort-Select im
+   Fenster? Beide sind portaliert. **Das ist auf keiner Plattform je in einem
+   echten Chromium gesehen worden** — jsdom rechnet kein Layout.
+4. **Über Vollbild:** `visibleOnFullScreen` gibt es auf Windows nicht, dort
+   trägt allein `alwaysOnTop` (`src/main/windows.ts:123`). Bleibt das Widget
+   über einem maximierten Fenster? Wenn nicht, wäre
+   `setAlwaysOnTop(true, 'screen-saver')` die Verschärfung — mit Nebenwirkungen
+   auf Fokus und Taskleiste.
+5. **Zwei Monitore mit unterschiedlicher Skalierung:** Widget auf den zweiten
+   ziehen, App beenden, neu starten — es muss dort wieder auftauchen. Monitor
+   abziehen → es landet mittig auf dem verbleibenden, nicht im Nichts.
+   `src/main/window-position.ts` ist dafür getestet, aber nur gegen Zahlen; die
+   Frage ist, ob Windows dieselben DIP-Koordinaten liefert.
+
+### Schritt 6 — Der Windows-Build
+
+    npm run package:win
+
+Das ist der Punkt, an dem am ehesten etwas gar nicht erst durchläuft: die
+`win:`- und `nsis:`-Blöcke in `electron-builder.yml` sind **nie ausgeführt**
+worden. Belegt ist nur, dass electron-builder die Datei lädt (beim macOS-Lauf
+protokolliert) und dass `build/icon.ico` die geforderte 256-px-Auflösung
+enthält.
+
+Erwartet: ein NSIS-Installer in `release/`. Danach prüfen — Installation in ein
+wählbares Verzeichnis (`allowToChangeInstallationDirectory: true`), ohne
+Adminrechte (`perMachine: false`), mit sichtbarem App-Icon in Startmenü und
+Explorer.
+
+Ein Verdacht, ausdrücklich als Verdacht: `build/icon.ico` benutzt
+**PNG-komprimierte** Einträge (oben gemessen). Das ist seit Windows Vista
+zulässig, aber NSIS ist alt, und wenn der Installer über das Icon stolpert, ist
+das die erste Stelle zum Nachsehen — `build/make-app-icon.py` erzeugt die Datei
+neu, und der Pillow-Teil davon läuft auch auf Windows. Der `.icns`-Teil
+desselben Skripts braucht `iconutil` und läuft **nur** auf macOS; die fertige
+`build/icon.icns` ist eingecheckt und wird auf Windows nicht gebraucht.
+
+### Schritt 7 — Autostart, aber erst mit der installierten App
+
+Tray-Menü → „Einstellungen" → „Autostart". Eine andere Oberfläche dafür gibt es
+nicht. Danach:
+
+    reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Run"
+
+Erwartet: ein Eintrag, der auf die **installierte** `.exe` zeigt — nicht auf
+`electron.exe` und nicht auf einen Ordner unter `release\`. Ein falscher Pfad
+ist hier kein Schönheitsfehler: die App startet dann bei jedem Login aus einem
+Verzeichnis, das es vielleicht nicht mehr gibt. Haken entfernen → der Eintrag
+verschwindet. Ab- und wieder anmelden → die App kommt hoch.
+
+Zwei Dinge, die man dabei wissen muss: `src/main/index.ts` gleicht den
+gespeicherten Wert bei **jedem** Start einmal aktiv ab, der Wert aus
+`settings.json` gewinnt also gegen eine Änderung von Hand (Abschnitt 6). Und
+`openAsHidden` wird bewusst nicht gesetzt — das ist ohnehin macOS-only, das
+Widget soll beim Start sichtbar sein.
+
+### Schritt 8 — Zuletzt: die echte Zeiterfassung
+
+Erst wenn alles darüber steht. Angemeldet bist du seit Schritt 2; jetzt in
+dieser Reihenfolge:
+Einstempeln → Pause → Fortsetzen → Ausstempeln, einmal aus dem Widget und
+einmal aus dem Tray. Zusätzlich die drei `locationType`-Werte je einmal senden
+(`office` ist live bestätigt, `work_from_home` und `business_trip` sind es
+nicht — Abschnitt 6).
+
+**Das schreibt echte Einträge in eine echte Arbeitszeiterfassung.** Es ist eine
+Handlung für einen Menschen, der die Einträge hinterher auch wieder korrigieren
+kann, nicht für einen Agenten nebenbei. Aus genau diesem Grund ist sie auf macOS
+ebenfalls nie ausgeführt worden.
+
+Dabei mitprüfen — zuerst das, was die Schritte 3 und 4 nicht zeigen konnten:
+
+- **Der Farbwechsel des Icons.** Beim Einstempeln grün, beim Pausenstart amber,
+  beim Ausstempeln wieder grau. Erwartet: sofort (der Store benachrichtigt das
+  Tray) und spätestens nach 15 s (Render-Takt), und ohne Flackern.
+- **Die laufende Zeit** in Tooltip und erstem Menüeintrag: sie muss sich beim
+  erneuten Öffnen fortgeschrieben haben.
+- **Übernimmt das Widget eine Tray-Aktion** und umgekehrt? Beide hängen am
+  selben Store; wenn nicht, ist das ein echter Fehler und kein Timing.
+- Zeigt „Verbleibende Zeit" dasselbe wie der **Stundenzettel** im Factorial-Web?
+  Ausdrücklich nicht das Dashboard-Widget — das rechnet anders (K9).
+- Springt der Timer beim Klick auf „Pause"? Dann meldet der offene Shift einen
+  anderen `clockIn` als angenommen (Abschnitt 6).
+- Ist die Tagessumme zu hoch? Dann taucht der laufende Shift doch in
+  `attendanceShiftsConnection` auf und `summariseDay` filtert ihn nicht richtig
+  heraus (Abschnitt 6).
+
+### Wenn du eine Abweichung findest
+
+Drei Ablagen, und die Wahl zwischen ihnen ist die eigentliche Arbeit:
+
+| Art des Funds | Wohin |
+|---|---|
+| Eine `PLATFORM:`-Stelle verhält sich anders als in Spalte 4 beschrieben | Code ändern **und** die Zeile in Abschnitt 2 nachziehen. `npm test` fängt eine verschobene Zeilennummer, aber keinen falschen Satz |
+| Etwas ist auf Windows kaputt, was auf macOS geht | neue Zeile in Abschnitt 2 mit `PLATFORM:`-Kommentar im Code — auch dann, wenn die Lösung keine Verzweigung braucht. Die Tabelle ist die Landkarte, nicht die Verzweigungsliste |
+| Eine Annahme über die Factorial-API stimmt nicht | `docs/DESIGN.md`, denn das ist die maßgebliche API-Referenz. Abschnitt 6 hier bekommt einen Verweis, keine zweite Fassung |
+
+Und: **kein Häkchen setzen für etwas, das du nicht ausgeführt hast.** Der Wert
+von Abschnitt 4 liegt darin, dass „verifiziert" dort ausnahmslos bedeutet, dass
+jemand es hat laufen sehen. Ein einziger optimistischer Eintrag macht die ganze
+Liste wertlos.
