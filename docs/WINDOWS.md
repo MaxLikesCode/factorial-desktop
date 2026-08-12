@@ -1,7 +1,7 @@
 # Factorial Desktop — Windows-Übergabe
 
-**Status:** wächst mit der Implementierung. Stand: Ende Task 6 (Session und
-Authentifizierung). Tasks 7–15 tragen hier weiter ein.
+**Status:** wächst mit der Implementierung. Stand: Ende Task 7 (Attendance-Store).
+Tasks 8–15 tragen hier weiter ein.
 
 Dieses Dokument ist für einen Agenten geschrieben, der auf einer Windows-Maschine
 weiterarbeitet und **den Gesprächsverlauf dieser Implementierung nicht kennt**.
@@ -56,6 +56,10 @@ die erklärte Fassung davon und muss mit dem Grep-Ergebnis übereinstimmen.
 | `src/main/index.ts:59` | `second-instance`-Handler holt das vorhandene Fenster nach vorn | Gegenstück zum Lock: der zweite Start gibt hier ab, sonst passiert für den Nutzer sichtbar gar nichts. Auf macOS feuert das Event praktisch nie. | Zweiten Start auslösen; das laufende Fenster muss in den Vordergrund kommen und aus dem minimierten Zustand zurückkehren. Der Handler nimmt derzeit das **erste** Fenster aus `getAllWindows()` — sobald Task 10 das Widget-Fenster einführt, ist das auf das Widget umzustellen |
 | `src/main/index.ts:73` | `window-all-closed` beendet die App außer auf `darwin` | macOS hält Apps ohne Fenster am Leben, Windows erwartet das Ende. **Achtung:** Sobald es Tray + „Schließen blendet aus" gibt (Task 10/12), ist diese Regel neu zu bewerten — dann darf das Schließen des Widgets die App gerade *nicht* beenden. | Verhalten nach Einführung des Trays erneut prüfen |
 
+Task 7 (`src/main/attendance.ts`) hat **keine** neue plattformabhängige Stelle
+hinzugefügt: der Store kennt weder Fenster noch Tray und benutzt nur Promises und
+`setTimeout`. Die Tabelle ist damit weiterhin vollständig (drei Einträge).
+
 ## 3. Bekannte Windows-Themen
 
 Die vollständige Themenliste steht in `docs/DESIGN.md`, Abschnitt
@@ -72,7 +76,7 @@ Die vollständige Themenliste steht in `docs/DESIGN.md`, Abschnitt
 
 **Verifiziert auf macOS (Darwin 25.5, Electron 43):**
 
-- `npm test` — 120 Tests grün, `npm run typecheck` sauber (Stand Task 6).
+- `npm test` — 154 Tests grün, `npm run typecheck` sauber (Stand Task 7).
 - `npm run dev` startet, der Main-Prozess bootet ohne Fehler, und mit leerer
   Partition öffnet sich das Login-Fenster statt eines Absturzes. Belegt über den
   laufenden Renderer-Prozess und drei stehende TLS-Verbindungen. Damit ist der
@@ -93,6 +97,11 @@ Die vollständige Themenliste steht in `docs/DESIGN.md`, Abschnitt
   (per `curl` am 2026-08-12 nachgemessen). Die Redirect-Behandlung ist reine
   Vorsorge und ungetestet gegen echten Verkehr.
 - `clearSession()` (Logout) — geschrieben, nie ausgeführt.
+- **Der Attendance-Store** (`src/main/attendance.ts`, Task 7): 34 Unit-Tests
+  gegen gefälschte Operations, aber **kein einziger Lauf gegen die echte API**.
+  Er ist noch nirgends verdrahtet (das passiert in Task 8/10), also hat ihn auch
+  kein Start der App ausgeführt. Insbesondere ungeprüft: das 60-s-Polling gegen
+  den echten Endpunkt und jede Mutation über den Store.
 - Sämtlicher Windows-Code.
 
 **Nur kompiliert, nie ausgeführt:** die drei `// PLATFORM:`-Zweige aus Abschnitt 2
@@ -126,3 +135,24 @@ Ausführlich in `docs/DESIGN.md`, Abschnitt „Windows-Übergabe → 5". Kurzfas
   die dokumentierte Alternative — es leitet ohne Session auf `id` weiter.
 - **`second-instance`-Handler** greift auf das erste Fenster zu; das ist erst
   richtig, wenn das Widget-Fenster existiert (Task 10).
+- **Taucht der laufende Shift in `attendanceShiftsConnection` auf?** Unbekannt.
+  Der Store filtert ihn deshalb per Id aus der Tagessumme (`summariseDay` in
+  `src/main/attendance.ts`), weil er die laufende Zeit aus `state.since` selbst
+  dazurechnet — täte er es nicht, würde die laufende Schicht doppelt zählen.
+  Wenn die Tagessumme auf Windows (oder macOS) je zu hoch oder zu niedrig
+  aussieht: hier zuerst nachsehen.
+- **Welchen `clockIn` meldet der offene Shift während einer Pause?** Vermutlich
+  den Pausenbeginn (eine Pause legt einen eigenen Record an — DESIGN.md,
+  Fallstrick 4), verifiziert ist es nicht. Der Store zeigt beim Pausenstart
+  optimistisch `now` an; die Antwort des nächsten Refresh überschreibt das nach
+  spätestens einem Request. Sichtbar wäre ein Fehler als kurzes Springen des
+  Timers beim Klick auf „Pause".
+- **Fehlermeldungen sind noch englisch.** Der Store legt zu jedem Fehler ein
+  `lastErrorKind` (`network` / `graphql` / `malformed` / `unauthenticated` /
+  `unknown`) in den Snapshot, damit die UI daraus deutschen Text bilden kann.
+  Diese Zuordnung ist noch nicht gebaut (Task 11/12) — bis dahin würde eine
+  Anzeige die internen englischen Meldungen durchreichen.
+- **Refresh bei Fensterfokus und nach Standby** (`powerMonitor`-Resume) fehlt
+  noch. Der Store bietet `refresh()` dafür an, aufgerufen wird es erst in
+  Task 10/12. Ohne den Resume-Hook zeigt der Timer nach dem Zuklappen des
+  Deckels bis zu 60 s alte Zahlen.

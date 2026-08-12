@@ -41,8 +41,12 @@ export type AttendanceState =
     }
   | { kind: 'break'; shiftId: string; since: Date; breakId: string; breakName: string }
 
-/** Shown when the API gives a break configuration no usable label. */
-const FALLBACK_BREAK_NAME = 'Pause'
+/**
+ * Shown when the API gives a break configuration no usable label. Exported so
+ * the store's optimistic break state uses the very same word the derived one
+ * does — two spellings of the same fallback would flicker in the widget.
+ */
+export const FALLBACK_BREAK_NAME = 'Pause'
 
 /**
  * The single source of truth for "am I clocked in?". Everything is derived from

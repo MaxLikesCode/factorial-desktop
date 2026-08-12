@@ -1,0 +1,560 @@
+import { describe, it, expect, vi } from 'vitest'
+import type { OpenShift } from '@shared/attendance-state'
+import {
+  ACTION_IN_FLIGHT_MESSAGE,
+  createAttendanceStore,
+  type AttendanceStoreDeps,
+} from '../attendance'
+import { FactorialError } from '../factorial/client'
+import type { BreakConfigOption, LocationType, ShiftSummary } from '../factorial/types'
+
+const EMPLOYEE_ID = 1111111
+const TODAY = '2026-08-12'
+/** Fixed clock: 2026-08-12 09:00:00 local (vitest pins TZ to Europe/Berlin). */
+const NOW = new Date(2026, 7, 12, 9, 0, 0)
+
+const OPEN: OpenShift = {
+  id: '543343386',
+  date: TODAY,
+  clockIn: '2000-01-01T08:30:00Z',
+  clockInOffset: '+02:00',
+  locationType: 'office',
+  workplaceId: 3333333,
+  timeSettingsBreakConfiguration: null,
+}
+
+const ON_BREAK: OpenShift = {
+  ...OPEN,
+  id: '543343999',
+  clockIn: '2000-01-01T12:00:00Z',
+  timeSettingsBreakConfiguration: { id: '19613', name: 'Mittagspause' },
+}
+
+/**
+ * The operations the store consumes, all scripted. Behaviour is set per test via
+ * the mock helpers rather than through constructor overrides, so every mock keeps
+ * its precise type.
+ */
+function makeOps() {
+  return {
+    fetchOpenShift: vi.fn(async (_employeeId: number): Promise<OpenShift | null> => null),
+    fetchTodayShifts: vi.fn(
+      async (_employeeId: number, _date: string): Promise<ShiftSummary[]> => [
+        { id: '1', date: TODAY, minutes: 120 },
+      ],
+    ),
+    fetchBreakConfigurations: vi.fn(
+      async (): Promise<BreakConfigOption[]> => [{ id: '19613', name: 'Mittagspause' }],
+    ),
+    clockIn: vi.fn(
+      async (_input: {
+        now: Date
+        locationType: LocationType
+        workplaceId: number | null
+      }): Promise<void> => {},
+    ),
+    breakStart: vi.fn(async (_input: { now: Date; breakConfigurationId: string }): Promise<void> => {}),
+    breakEnd: vi.fn(async (_input: { now: Date }): Promise<void> => {}),
+    clockOut: vi.fn(async (_input: { now: Date }): Promise<void> => {}),
+  }
+}
+
+type Ops = ReturnType<typeof makeOps>
+
+function makeStore(ops: Ops, extra: Partial<AttendanceStoreDeps> = {}) {
+  return createAttendanceStore({ ops, employeeId: EMPLOYEE_ID, now: () => NOW, ...extra })
+}
+
+/** A promise plus its resolver, for holding a call open until the test says go. */
+function gate(): { wait: Promise<void>; release: () => void } {
+  let release: () => void = () => {}
+  const wait = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  return { wait, release }
+}
+
+/** Lets pending microtasks and already-resolved promises run to completion. */
+function settle(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+/** A hand-cranked clock for the poll loop: nothing sleeps until the test says so. */
+function makeSleeper() {
+  const sleepers: (() => void)[] = []
+  return {
+    pending: () => sleepers.length,
+    sleep: (_ms: number) =>
+      new Promise<void>((resolve) => {
+        sleepers.push(resolve)
+      }),
+    wake: () => {
+      const next = sleepers.shift()
+      if (!next) throw new Error('nothing is sleeping')
+      next()
+    },
+  }
+}
+
+describe('refresh', () => {
+  it('starts in the unknown state before anything is loaded', () => {
+    const snapshot = makeStore(makeOps()).getSnapshot()
+    expect(snapshot.state.kind).toBe('unknown')
+    expect(snapshot.stale).toBe(false)
+    expect(snapshot.lastError).toBeNull()
+  })
+
+  it('reports clocked out after refreshing with no open shift', async () => {
+    const store = makeStore(makeOps())
+    await store.refresh()
+    expect(store.getSnapshot().state.kind).toBe('out')
+  })
+
+  it('reports clocked in when a shift is open', async () => {
+    const ops = makeOps()
+    ops.fetchOpenShift.mockResolvedValue(OPEN)
+    const store = makeStore(ops)
+    await store.refresh()
+
+    const state = store.getSnapshot().state
+    expect(state.kind).toBe('in')
+    if (state.kind !== 'in') throw new Error('unreachable')
+    // 08:30 local at +02:00 == 06:30Z. A wrong instant here is the expensive bug.
+    expect(state.since.toISOString()).toBe('2026-08-12T06:30:00.000Z')
+  })
+
+  it('queries the day the injected clock reports, not the machine clock', async () => {
+    const ops = makeOps()
+    const store = makeStore(ops)
+    await store.refresh()
+    expect(ops.fetchTodayShifts).toHaveBeenCalledWith(EMPLOYEE_ID, TODAY)
+    expect(ops.fetchOpenShift).toHaveBeenCalledWith(EMPLOYEE_ID)
+  })
+
+  it('sums today’s minutes across the shifts a break split apart', async () => {
+    const ops = makeOps()
+    ops.fetchTodayShifts.mockResolvedValue([
+      { id: '1', date: TODAY, minutes: 90 },
+      { id: '2', date: TODAY, minutes: 45 },
+    ])
+    const store = makeStore(ops)
+    await store.refresh()
+    expect(store.getSnapshot().todayMinutes).toBe(135)
+    expect(store.getSnapshot().incompleteShifts).toBe(0)
+  })
+
+  it('leaves the running shift out of the day sum, so the live timer cannot double count', async () => {
+    const ops = makeOps()
+    ops.fetchOpenShift.mockResolvedValue(OPEN)
+    ops.fetchTodayShifts.mockResolvedValue([
+      { id: '1', date: TODAY, minutes: 90 },
+      { id: OPEN.id, date: TODAY, minutes: 25 },
+    ])
+    const store = makeStore(ops)
+    await store.refresh()
+    expect(store.getSnapshot().todayMinutes).toBe(90)
+  })
+
+  it('counts a record without minutes instead of silently adding it as zero', async () => {
+    const ops = makeOps()
+    ops.fetchTodayShifts.mockResolvedValue([
+      { id: '1', date: TODAY, minutes: 90 },
+      { id: '2', date: TODAY, minutes: null },
+    ])
+    const store = makeStore(ops)
+    await store.refresh()
+    expect(store.getSnapshot().todayMinutes).toBe(90)
+    expect(store.getSnapshot().incompleteShifts).toBe(1)
+  })
+
+  it('notifies subscribers when the snapshot changes', async () => {
+    const store = makeStore(makeOps())
+    const listener = vi.fn()
+    store.subscribe(listener)
+    await store.refresh()
+    expect(listener).toHaveBeenCalled()
+  })
+
+  it('stops notifying after unsubscribe', async () => {
+    const store = makeStore(makeOps())
+    const listener = vi.fn()
+    store.subscribe(listener)()
+    await store.refresh()
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('loads the break options once and keeps them across refreshes', async () => {
+    const ops = makeOps()
+    const store = makeStore(ops)
+    await store.refresh()
+    await store.refresh()
+    expect(ops.fetchBreakConfigurations).toHaveBeenCalledTimes(1)
+    expect(store.getSnapshot().breakOptions).toEqual([{ id: '19613', name: 'Mittagspause' }])
+  })
+
+  it('survives a failing break-option load without marking the snapshot stale', async () => {
+    const ops = makeOps()
+    ops.fetchBreakConfigurations.mockRejectedValue(new Error('offline'))
+    const store = makeStore(ops)
+    await store.refresh()
+    expect(store.getSnapshot().stale).toBe(false)
+    expect(store.getSnapshot().breakOptions).toEqual([])
+    expect(store.getSnapshot().state.kind).toBe('out')
+  })
+
+  it('marks the snapshot stale when a refresh fails, keeping the last known state', async () => {
+    const ops = makeOps()
+    ops.fetchOpenShift.mockResolvedValue(OPEN)
+    const store = makeStore(ops)
+    await store.refresh()
+
+    ops.fetchOpenShift.mockRejectedValueOnce(new Error('offline'))
+    await store.refresh()
+    expect(store.getSnapshot().state.kind).toBe('in')
+    expect(store.getSnapshot().stale).toBe(true)
+  })
+
+  it('carries the error kind so the UI can phrase it in German', async () => {
+    const ops = makeOps()
+    ops.fetchOpenShift.mockRejectedValue(new FactorialError('network', 'request timed out after 15000 ms'))
+    const store = makeStore(ops)
+    await store.refresh()
+    expect(store.getSnapshot().lastErrorKind).toBe('network')
+    expect(store.getSnapshot().lastError).toMatch(/timed out/)
+  })
+
+  it('reports an unparseable shift as stale rather than showing a guessed time', async () => {
+    const ops = makeOps()
+    ops.fetchOpenShift.mockResolvedValue({ ...OPEN, clockInOffset: 'nonsense' })
+    const store = makeStore(ops)
+    await store.refresh()
+    expect(store.getSnapshot().state.kind).toBe('unknown')
+    expect(store.getSnapshot().stale).toBe(true)
+    expect(store.getSnapshot().lastErrorKind).toBe('unknown')
+  })
+
+  it('reports an expired session as unauthenticated rather than merely stale', async () => {
+    const ops = makeOps()
+    ops.fetchOpenShift.mockRejectedValue(new FactorialError('unauthenticated', 'session rejected (HTTP 401)'))
+    const store = makeStore(ops)
+    await store.refresh()
+    expect(store.getSnapshot().state.kind).toBe('unauthenticated')
+    expect(store.getSnapshot().stale).toBe(false)
+  })
+
+  it('clears the stale flag once a refresh succeeds again', async () => {
+    const ops = makeOps()
+    ops.fetchOpenShift.mockRejectedValueOnce(new Error('offline'))
+    const store = makeStore(ops)
+    await store.refresh()
+    expect(store.getSnapshot().stale).toBe(true)
+    await store.refresh()
+    expect(store.getSnapshot().stale).toBe(false)
+  })
+
+  it('ignores a slow refresh that lands after a newer one', async () => {
+    const ops = makeOps()
+    const slow = gate()
+    ops.fetchOpenShift.mockImplementationOnce(async () => {
+      await slow.wait
+      return null
+    })
+    const store = makeStore(ops)
+
+    const first = store.refresh()
+    ops.fetchOpenShift.mockResolvedValue(OPEN)
+    await store.refresh()
+    expect(store.getSnapshot().state.kind).toBe('in')
+
+    slow.release()
+    await first
+    // The stale answer must not overwrite the newer one with "clocked out".
+    expect(store.getSnapshot().state.kind).toBe('in')
+  })
+})
+
+describe('optimistic updates', () => {
+  it('shows the clocked-in state immediately, before the server confirms', async () => {
+    const ops = makeOps()
+    const pending = gate()
+    ops.clockIn.mockImplementation(async () => {
+      await pending.wait
+    })
+    const store = makeStore(ops)
+    await store.refresh()
+
+    const running = store.clockIn({ locationType: 'office', workplaceId: 3333333 })
+    const optimistic = store.getSnapshot().state
+    expect(optimistic.kind).toBe('in')
+    if (optimistic.kind !== 'in') throw new Error('unreachable')
+    expect(optimistic.since).toEqual(NOW)
+    expect(optimistic.locationType).toBe('office')
+
+    ops.fetchOpenShift.mockResolvedValue(OPEN)
+    pending.release()
+    await running
+    expect(store.getSnapshot().state.kind).toBe('in')
+    // The confirmed state replaces the guess, down to the shift id.
+    const confirmed = store.getSnapshot().state
+    if (confirmed.kind !== 'in') throw new Error('unreachable')
+    expect(confirmed.shiftId).toBe(OPEN.id)
+  })
+
+  it('sends the mutation with the injected clock and the chosen location', async () => {
+    const ops = makeOps()
+    const store = makeStore(ops)
+    await store.refresh()
+    await store.clockIn({ locationType: 'work_from_home', workplaceId: null })
+    expect(ops.clockIn).toHaveBeenCalledWith({
+      now: NOW,
+      locationType: 'work_from_home',
+      workplaceId: null,
+    })
+  })
+
+  it('rolls back to the previous state when the mutation fails', async () => {
+    const ops = makeOps()
+    ops.clockIn.mockRejectedValue(new Error('Already clocked in'))
+    const store = makeStore(ops)
+    await store.refresh()
+    expect(store.getSnapshot().state.kind).toBe('out')
+
+    await expect(store.clockIn({ locationType: 'office', workplaceId: null })).rejects.toThrow()
+    expect(store.getSnapshot().state.kind).toBe('out')
+    expect(store.getSnapshot().lastError).toMatch(/Already clocked in/)
+  })
+
+  it('keeps the failed action as the reason even when the reload fails too', async () => {
+    const ops = makeOps()
+    ops.clockIn.mockRejectedValue(new Error('Already clocked in'))
+    ops.fetchOpenShift.mockRejectedValue(new Error('offline'))
+    const store = makeStore(ops)
+
+    await expect(store.clockIn({ locationType: 'office', workplaceId: null })).rejects.toThrow()
+    expect(store.getSnapshot().lastError).toMatch(/Already clocked in/)
+    expect(store.getSnapshot().stale).toBe(true)
+  })
+
+  it('reloads the real state after a failed mutation', async () => {
+    const ops = makeOps()
+    ops.clockIn.mockRejectedValue(new Error('boom'))
+    const store = makeStore(ops)
+    await store.refresh()
+    const before = ops.fetchOpenShift.mock.calls.length
+
+    await expect(store.clockIn({ locationType: 'office', workplaceId: null })).rejects.toThrow()
+    expect(ops.fetchOpenShift.mock.calls.length).toBe(before + 1)
+  })
+
+  it('never retries a failed mutation, because a late clock-in writes a wrong time', async () => {
+    const ops = makeOps()
+    ops.clockIn.mockRejectedValue(new Error('boom'))
+    const store = makeStore(ops)
+    await store.refresh()
+    await expect(store.clockIn({ locationType: 'office', workplaceId: null })).rejects.toThrow()
+    expect(ops.clockIn).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects a second action while one is still in flight', async () => {
+    const ops = makeOps()
+    const pending = gate()
+    ops.clockIn.mockImplementation(async () => {
+      await pending.wait
+    })
+    const store = makeStore(ops)
+    await store.refresh()
+
+    const first = store.clockIn({ locationType: 'office', workplaceId: null })
+    await expect(store.clockIn({ locationType: 'office', workplaceId: null })).rejects.toThrow(
+      new RegExp(ACTION_IN_FLIGHT_MESSAGE, 'i'),
+    )
+    // The refused second click must not disturb what the first one is showing.
+    expect(store.getSnapshot().state.kind).toBe('in')
+    expect(store.getSnapshot().lastError).toBeNull()
+    expect(ops.clockIn).toHaveBeenCalledTimes(1)
+
+    pending.release()
+    await first
+  })
+
+  it('accepts the next action once the previous one finished', async () => {
+    const ops = makeOps()
+    const store = makeStore(ops)
+    await store.refresh()
+    await store.clockIn({ locationType: 'office', workplaceId: null })
+    await store.clockOut()
+    expect(ops.clockOut).toHaveBeenCalledTimes(1)
+  })
+
+  it('starts a break optimistically with the chosen label', async () => {
+    const ops = makeOps()
+    ops.fetchOpenShift.mockResolvedValue(OPEN)
+    const pending = gate()
+    ops.breakStart.mockImplementation(async () => {
+      await pending.wait
+    })
+    const store = makeStore(ops)
+    await store.refresh()
+
+    const running = store.startBreak('19613')
+    const optimistic = store.getSnapshot().state
+    expect(optimistic.kind).toBe('break')
+    if (optimistic.kind !== 'break') throw new Error('unreachable')
+    expect(optimistic.breakName).toBe('Mittagspause')
+    expect(optimistic.breakId).toBe('19613')
+
+    ops.fetchOpenShift.mockResolvedValue(ON_BREAK)
+    pending.release()
+    await running
+    expect(ops.breakStart).toHaveBeenCalledWith({ now: NOW, breakConfigurationId: '19613' })
+    expect(store.getSnapshot().state.kind).toBe('break')
+  })
+
+  it('falls back to a generic break label when the id is not in the loaded options', async () => {
+    const ops = makeOps()
+    ops.fetchOpenShift.mockResolvedValue(OPEN)
+    const pending = gate()
+    ops.breakStart.mockImplementation(async () => {
+      await pending.wait
+    })
+    const store = makeStore(ops)
+    await store.refresh()
+
+    const running = store.startBreak('99999')
+    const optimistic = store.getSnapshot().state
+    if (optimistic.kind !== 'break') throw new Error('unreachable')
+    expect(optimistic.breakName).toBe('Pause')
+
+    pending.release()
+    await running
+  })
+
+  it('shows the clocked-in state while a break is being ended', async () => {
+    const ops = makeOps()
+    ops.fetchOpenShift.mockResolvedValue(ON_BREAK)
+    const pending = gate()
+    ops.breakEnd.mockImplementation(async () => {
+      await pending.wait
+    })
+    const store = makeStore(ops)
+    await store.refresh()
+    expect(store.getSnapshot().state.kind).toBe('break')
+
+    const running = store.endBreak()
+    expect(store.getSnapshot().state.kind).toBe('in')
+
+    ops.fetchOpenShift.mockResolvedValue(OPEN)
+    pending.release()
+    await running
+    expect(ops.breakEnd).toHaveBeenCalledWith({ now: NOW })
+  })
+
+  it('shows the clocked-out state while clocking out', async () => {
+    const ops = makeOps()
+    ops.fetchOpenShift.mockResolvedValue(OPEN)
+    const pending = gate()
+    ops.clockOut.mockImplementation(async () => {
+      await pending.wait
+    })
+    const store = makeStore(ops)
+    await store.refresh()
+
+    const running = store.clockOut()
+    expect(store.getSnapshot().state.kind).toBe('out')
+
+    ops.fetchOpenShift.mockResolvedValue(null)
+    pending.release()
+    await running
+    expect(ops.clockOut).toHaveBeenCalledWith({ now: NOW })
+    expect(store.getSnapshot().state.kind).toBe('out')
+  })
+})
+
+describe('polling', () => {
+  it('refreshes once immediately and then on every wake-up', async () => {
+    const ops = makeOps()
+    const sleeper = makeSleeper()
+    const store = makeStore(ops, { sleep: sleeper.sleep, pollIntervalMs: 60_000 })
+
+    store.startPolling()
+    await settle()
+    expect(ops.fetchOpenShift).toHaveBeenCalledTimes(1)
+
+    sleeper.wake()
+    await settle()
+    expect(ops.fetchOpenShift).toHaveBeenCalledTimes(2)
+
+    store.stopPolling()
+  })
+
+  it('waits for the previous request before sleeping, so requests never stack up', async () => {
+    const ops = makeOps()
+    const sleeper = makeSleeper()
+    const slow = gate()
+    ops.fetchOpenShift.mockImplementation(async () => {
+      await slow.wait
+      return null
+    })
+    const store = makeStore(ops, { sleep: sleeper.sleep, pollIntervalMs: 60_000 })
+
+    store.startPolling()
+    await settle()
+    // The request is still open: nothing is sleeping and nothing was re-issued.
+    expect(ops.fetchOpenShift).toHaveBeenCalledTimes(1)
+    expect(sleeper.pending()).toBe(0)
+
+    slow.release()
+    await settle()
+    expect(sleeper.pending()).toBe(1)
+
+    store.stopPolling()
+  })
+
+  it('stops polling when told to, even while asleep', async () => {
+    const ops = makeOps()
+    const sleeper = makeSleeper()
+    const store = makeStore(ops, { sleep: sleeper.sleep, pollIntervalMs: 60_000 })
+
+    store.startPolling()
+    await settle()
+    store.stopPolling()
+    await settle()
+
+    expect(ops.fetchOpenShift).toHaveBeenCalledTimes(1)
+    // A sleeper that wakes after the stop must not start another round.
+    if (sleeper.pending() > 0) sleeper.wake()
+    await settle()
+    expect(ops.fetchOpenShift).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not start a second loop when startPolling is called twice', async () => {
+    const ops = makeOps()
+    const sleeper = makeSleeper()
+    const store = makeStore(ops, { sleep: sleeper.sleep, pollIntervalMs: 60_000 })
+
+    store.startPolling()
+    store.startPolling()
+    await settle()
+    expect(ops.fetchOpenShift).toHaveBeenCalledTimes(1)
+    expect(sleeper.pending()).toBe(1)
+
+    store.stopPolling()
+  })
+
+  it('keeps polling after a failed poll', async () => {
+    const ops = makeOps()
+    const sleeper = makeSleeper()
+    ops.fetchOpenShift.mockRejectedValue(new Error('offline'))
+    const store = makeStore(ops, { sleep: sleeper.sleep, pollIntervalMs: 60_000 })
+
+    store.startPolling()
+    await settle()
+    expect(store.getSnapshot().stale).toBe(true)
+
+    sleeper.wake()
+    await settle()
+    expect(ops.fetchOpenShift).toHaveBeenCalledTimes(2)
+
+    store.stopPolling()
+  })
+})
