@@ -11,6 +11,7 @@
 
 import { app, dialog, powerMonitor } from 'electron'
 import { join } from 'node:path'
+import { resolveUserDataPath } from './app-identity'
 import { createAttendanceStore, type ClockInInput } from './attendance'
 import { ensureAuthenticated, openLoginWindow } from './auth'
 import { installNetDebug } from './debug-net'
@@ -188,6 +189,12 @@ async function bootstrap(): Promise<void> {
     void store.refresh()
   })
 }
+
+// Before ANY of the three lines below: `requestSingleInstanceLock` is keyed by
+// the userData directory, and a sibling Factorial client resolves to the same
+// one by default. Claiming the lock first would mean claiming *its* lock. See
+// `app-identity.ts`.
+app.setPath('userData', resolveUserDataPath(app.getPath('appData')))
 
 // PLATFORM: Windows starts a whole second app on every launch without this lock;
 // macOS reuses the running instance by itself. Harmless on macOS, required there.

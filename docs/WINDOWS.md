@@ -132,10 +132,10 @@ die erklärte Fassung davon und muss mit dem Grep-Ergebnis übereinstimmen.
 |---|---|---|---|
 | `src/main/settings.ts:143` | `platform === 'win32'` → `{ openAtLogin, path, args: [] }` | Windows-Autostart ist ein Eintrag im Registry-Run-Key und braucht einen Pfad auf eine `.exe`. Ohne explizites `path` trägt Electron das ein, was gerade läuft — im Dev-Modus `electron.exe`, im gepackten Zustand potenziell der falsche Launcher (DESIGN.md, Zeile „Autostart"). | Haken „Autostart" setzen, abmelden/anmelden: die App muss starten. Danach `reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Run"` — der Eintrag muss auf die installierte `.exe` zeigen, nicht auf `electron.exe`. Haken entfernen → Eintrag verschwindet. **Im Dev-Modus bewusst nicht ausprobieren**, sonst startet dauerhaft eine Electron-Instanz mit |
 | `src/main/settings.ts:150` | alles außer `win32` → `{ openAtLogin }` ohne Pfad | macOS registriert das `.app`-Bundle selbst über die Service-Management-API; ein `path` würde auf das Helper-Binary im Bundle zeigen. Linux fällt in denselben Zweig, wo `setLoginItemSettings` ein No-op ist — das ist das harmlose Ergebnis. | Nichts; der Zweig ist auf Windows unerreichbar |
-| `src/main/index.ts:54` | `applyLoginItem` liest `process.platform`/`process.execPath` und gibt sie an `buildLoginItemSettings` weiter | Die einzige Stelle, die `app.setLoginItemSettings` aufruft. Die Verzweigung selbst ist absichtlich ausgelagert und rein, damit der Windows-Zweig auf macOS getestet werden kann. | Nur zusammen mit den beiden Zeilen oben |
-| `src/main/index.ts:192` | `app.requestSingleInstanceLock()`, sonst `app.quit()` | Ohne Lock startet auf Windows bei jedem Aufruf eine zweite komplette Instanz, inklusive zweitem Tray-Icon und zweitem Poll-Loop. Auf macOS übernimmt das die Plattform. | Zweiten Start auslösen (Verknüpfung, Autostart, Doppelklick): es darf keine zweite Instanz erscheinen |
-| `src/main/index.ts:195` | `second-instance`-Handler ruft `showWidget()` | Gegenstück zum Lock: der zweite Start gibt hier ab, sonst passiert für den Nutzer sichtbar gar nichts. Auf macOS feuert das Event praktisch nie. Seit Task 10 zielt der Handler ausdrücklich auf das Widget statt auf `getAllWindows()[0]` — letzteres hätte das Login-Fenster nach vorn geholt, wenn gerade eines offen war. | Zweiten Start auslösen (Verknüpfung, Autostart, Doppelklick); das Widget muss sichtbar und fokussiert nach vorn kommen, auch wenn es vorher ausgeblendet oder minimiert war |
-| `src/main/index.ts:216` | `window-all-closed` beendet die App **nur, wenn es kein Tray gibt** | Seit Task 12 entscheidet nicht mehr die Plattform, sondern das Tray. Mit Tray ist das hier eine Tray-App: Schließen des Widgets blendet nur aus (Task 10), und die App hinter dem Rücken des Benutzers zu beenden, während ihr Icon im Infobereich „Beenden" anbietet, wäre falsch — auf Windows genauso wie auf macOS. Ohne Tray (Bootstrap gescheitert, Login-Fenster geschlossen) gibt es keine sichtbare Oberfläche und wegen `skipTaskbar: true` auch keinen Weg zurück: dann ist das letzte geschlossene Fenster das Ende. Der Handler muss registriert bleiben, weil Electron sonst von sich aus beendet, sobald das letzte Fenster **zerstört** wird. | Widget schließen → App läuft weiter, Tray-Icon bleibt. „Beenden" im Tray → Prozess ist wirklich weg (Task-Manager). Login-Fenster bei fehlgeschlagenem Bootstrap schließen → App beendet sich, es bleibt kein unsichtbarer Prozess übrig |
+| `src/main/index.ts:55` | `applyLoginItem` liest `process.platform`/`process.execPath` und gibt sie an `buildLoginItemSettings` weiter | Die einzige Stelle, die `app.setLoginItemSettings` aufruft. Die Verzweigung selbst ist absichtlich ausgelagert und rein, damit der Windows-Zweig auf macOS getestet werden kann. | Nur zusammen mit den beiden Zeilen oben |
+| `src/main/index.ts:199` | `app.requestSingleInstanceLock()`, sonst `app.quit()` | Ohne Lock startet auf Windows bei jedem Aufruf eine zweite komplette Instanz, inklusive zweitem Tray-Icon und zweitem Poll-Loop. Auf macOS übernimmt das die Plattform. | Zweiten Start auslösen (Verknüpfung, Autostart, Doppelklick): es darf keine zweite Instanz erscheinen |
+| `src/main/index.ts:202` | `second-instance`-Handler ruft `showWidget()` | Gegenstück zum Lock: der zweite Start gibt hier ab, sonst passiert für den Nutzer sichtbar gar nichts. Auf macOS feuert das Event praktisch nie. Seit Task 10 zielt der Handler ausdrücklich auf das Widget statt auf `getAllWindows()[0]` — letzteres hätte das Login-Fenster nach vorn geholt, wenn gerade eines offen war. | Zweiten Start auslösen (Verknüpfung, Autostart, Doppelklick); das Widget muss sichtbar und fokussiert nach vorn kommen, auch wenn es vorher ausgeblendet oder minimiert war |
+| `src/main/index.ts:223` | `window-all-closed` beendet die App **nur, wenn es kein Tray gibt** | Seit Task 12 entscheidet nicht mehr die Plattform, sondern das Tray. Mit Tray ist das hier eine Tray-App: Schließen des Widgets blendet nur aus (Task 10), und die App hinter dem Rücken des Benutzers zu beenden, während ihr Icon im Infobereich „Beenden" anbietet, wäre falsch — auf Windows genauso wie auf macOS. Ohne Tray (Bootstrap gescheitert, Login-Fenster geschlossen) gibt es keine sichtbare Oberfläche und wegen `skipTaskbar: true` auch keinen Weg zurück: dann ist das letzte geschlossene Fenster das Ende. Der Handler muss registriert bleiben, weil Electron sonst von sich aus beendet, sobald das letzte Fenster **zerstört** wird. | Widget schließen → App läuft weiter, Tray-Icon bleibt. „Beenden" im Tray → Prozess ist wirklich weg (Task-Manager). Login-Fenster bei fehlgeschlagenem Bootstrap schließen → App beendet sich, es bleibt kein unsichtbarer Prozess übrig |
 | `src/main/tray.ts:105` | `iconFor`: `darwin` → `trayTemplate.png` + `setTemplateImage(true)`, sonst → `tray-<tone>.ico` | macOS erwartet ein monochromes Template-Bild und färbt es selbst für Hell-/Dunkelmodus und die hervorgehobene Menubar; ein farbiges Icon würde gegen das System arbeiten. Weil macOS den Zustand daneben als Text zeigt, reicht dort **ein** Icon. Windows hat diesen Text nicht — dort **ist** die Farbe der Zustand, deshalb vier `.ico` (grau/grün/amber/rot, dieselben Farben wie der Statuspunkt im Widget) mit je 16/32/48 px. | Icon in allen vier Zuständen ansehen: ausgestempelt grau, eingestempelt grün, Pause amber, Sitzung abgelaufen rot. Bei 100 %, 150 % und 200 % Skalierung prüfen, ob die 16/32/48-Auflösungen sauber greifen und das Glyph nicht matschig ist |
 | `src/main/tray.ts:117` | Fallback auf `tray-<tone>.png`, wenn das `.ico` leer dekodiert | Ob die `.ico`-Dateien auf Windows dekodieren, war auf macOS **nicht** prüfbar: Electron hat dort überhaupt keinen ICO-Decoder (gemessen: jede `.ico` kommt als leeres 0×0-Bild zurück, auch eine mit klassischen BMP-Einträgen). Ein leeres Tray-Bild ist auf Windows ein unsichtbares Icon — und damit eine App, die man weder zeigen noch beenden kann. PNG dekodiert überall. | Wenn das Icon sichtbar ist, hat das `.ico` funktioniert. Erscheint stattdessen `[tray] icon missing or unreadable` in der Konsole, greift der Fallback: dann `resources/make-tray-icons.py` anpassen (z. B. `bitmap_format` entfernen, um PNG-Einträge zu schreiben) und erneut probieren |
 | `src/main/tray.ts:154` | `setTitle` nur auf `darwin` | Der Live-Timer in der Menubar ist ein macOS-Feature (DESIGN.md, „Tray"): `tray.setTitle` existiert auf Windows nicht. | Nichts; auf Windows unerreichbar. Die Zeit muss stattdessen im Tooltip und im ersten Menüeintrag stehen — genau das ist unten zu prüfen |
@@ -201,8 +201,8 @@ Electron dort dieselben Koordinaten liefert — siehe Abschnitt 3, Zeile
 
 Die Persistenz der Einstellungen selbst ist **nicht** plattformabhängig: das
 Format ist JSON, der Ort kommt aus `app.getPath('userData')`
-(`%APPDATA%\factorial-desktop\settings.json` bzw.
-`~/Library/Application Support/factorial-desktop/settings.json`), und der Pfad
+(`%APPDATA%\factorial-desktop-2\settings.json` bzw.
+`~/Library/Application Support/factorial-desktop-2/settings.json`), und der Pfad
 wird mit `node:path` zusammengesetzt. `src/main/settings.ts` importiert absichtlich
 kein Electron — der Dateipfad und der Login-Item-Effekt kommen als Argumente
 herein, deshalb ist der Store gegen ein echtes Temp-Verzeichnis testbar.
@@ -228,9 +228,9 @@ Reihenfolge, in der man sie abarbeitet, steht in Abschnitt 7:
 | Single-Instance | zwingend, siehe oben | `src/main/index.ts` (erledigt, ungetestet) |
 | IPC und Preload | kein Unterschied. Der Pfad zum Preload wird aus `import.meta.dirname` zusammengesetzt, nicht als String gebaut — auf Windows kommen dabei Backslashes heraus, was `BrowserWindow` erwartet | `src/main/index.ts`, `src/preload/index.ts` |
 | Login-Fenster | Frameless/Transparenz spielt hier keine Rolle — das Fenster ist bewusst ein normales Fenster mit Titelleiste. Titel `Bei Factorial anmelden` erscheint auf Windows in der Titelleiste, auf macOS nur im Fenstermenü | `src/main/auth.ts` |
-| Session-Partition | `persist:factorial` liegt unter `%APPDATA%\factorial-desktop`; auf macOS unter `~/Library/Application Support/factorial-desktop`. Kein Codeunterschied, aber der relevante Ort zum Zurücksetzen | `src/main/session.ts` |
+| Session-Partition | `persist:factorial` liegt unter `%APPDATA%\factorial-desktop-2`; auf macOS unter `~/Library/Application Support/factorial-desktop-2`. Kein Codeunterschied, aber der relevante Ort zum Zurücksetzen | `src/main/session.ts` |
 | Autostart | `app.setLoginItemSettings` schreibt auf Windows in den Registry-Run-Key, auf macOS in die Service-Management-Datenbank. Auf Windows **müssen** `path` und `args` gesetzt sein (siehe Tabelle in Abschnitt 2), auf macOS dürfen sie es nicht. `openAsHidden` ist macOS-only und wird bewusst nicht gesetzt — das Widget soll beim Start sichtbar sein. **Auslösbar ist der Schalter nur über das Tray:** Tray-Menü → „Einstellungen" → „Autostart" (Checkbox). Eine andere Oberfläche dafür gibt es in der App nicht | `src/main/settings.ts` (`buildLoginItemSettings`), `src/main/index.ts` (`applyLoginItem`), `src/main/tray-menu.ts` (`settingsSubmenu`) — geschrieben, auf Windows ungetestet |
-| Einstellungsdatei | gleicher Code, anderer Ort: `%APPDATA%\factorial-desktop\settings.json`. Geschrieben wird über eine `.tmp`-Datei plus `renameSync`; das ist auf NTFS ebenso atomar wie auf APFS, **aber** ein Virenscanner kann das `rename` kurzzeitig mit `EBUSY` blockieren. Wenn Einstellungen auf Windows sporadisch nicht speichern: hier zuerst nachsehen | `src/main/settings.ts` |
+| Einstellungsdatei | gleicher Code, anderer Ort: `%APPDATA%\factorial-desktop-2\settings.json`. Geschrieben wird über eine `.tmp`-Datei plus `renameSync`; das ist auf NTFS ebenso atomar wie auf APFS, **aber** ein Virenscanner kann das `rename` kurzzeitig mit `EBUSY` blockieren. Wenn Einstellungen auf Windows sporadisch nicht speichern: hier zuerst nachsehen | `src/main/settings.ts` |
 | Frameless & Transparenz | Keine macOS-Vibrancy, kein automatischer runder Schatten. Ecken und Schatten kommen auf Windows aus dem Renderer bzw. gar nicht. Das Fenster ist `resizable: false`, damit entfällt das abweichende Resize-Verhalten transparenter Fenster | `src/main/windows.ts` (geschrieben, auf Windows ungetestet) |
 | Always-on-Top | `alwaysOnTop` wird beim Erzeugen gesetzt **und** zur Laufzeit über `setWidgetAlwaysOnTop` nachgezogen. Die Level-Namen (`'floating'`, `'screen-saver'`, …) sind plattformspezifisch; hier wird bewusst kein Level angegeben, es gilt der Standard. Umgeschaltet wird über Tray-Menü → „Einstellungen" → „Immer im Vordergrund"; Tray und IPC benutzen **dieselbe** `withWindowEffects`-Instanz, damit der Schalter auf beiden Wegen sofort am lebenden Fenster wirkt | `src/main/windows.ts`, `src/main/index.ts` (`withWindowEffects`), `src/main/tray.ts` |
 | Fensterposition | Multi-Monitor mit gemischten DPI-Skalierungen verhält sich anders. Gespeicherte Positionen werden vor Gebrauch gegen die aktuell angeschlossenen Displays validiert — beim Start **und** bei jedem `display-added`/`display-removed`/`display-metrics-changed`. Gerechnet wird mit `workArea` (ohne Taskleiste), Koordinaten sind in DIP, nicht in physischen Pixeln | `src/main/window-position.ts` (getestet), `src/main/windows.ts` (Verdrahtung) |
@@ -239,7 +239,7 @@ Reihenfolge, in der man sie abarbeitet, steht in Abschnitt 7:
 | Tray-Icon | macOS: `trayTemplate.png` @1x/@2x, monochrom, System färbt. Windows: `tray-{idle,active,paused,alert}.ico`, farbig, je 16/32/48 px. Erzeugt von `resources/make-tray-icons.py` (Pillow), die Dateien sind eingecheckt. **Auf macOS nicht prüfbar**: Electron hat dort keinen ICO-Decoder, deshalb der PNG-Fallback in `iconFor` | `resources/`, `src/main/tray.ts` (ungetestet) |
 | Tray-Menü | Gleiche Einträge auf beiden Plattformen, aber auf Windows ist es der Hauptzugang: Zustand + Zeit (deaktiviert), letzte Fehlermeldung (deaktiviert, deutsch), Ein-/Ausstempeln bzw. Pause-Untermenü/Fortsetzen, Fenster zeigen/ausblenden, Aktualisieren, **Einstellungen** (Untermenü: „Autostart" und „Immer im Vordergrund" als Checkboxen, dazu „Abmelden", solange eine Sitzung besteht), Beenden. Das Untermenü ist die **einzige** Oberfläche für DESIGN.md, Abschnitt „Einstellungen" — das Widget hat keine. Untermenüs mit dynamischen Einträgen (die Pausentypen) sind auf Windows unauffällig, aber das Menü wird bei **jedem** Render neu gebaut — falls es dort beim Öffnen flackert, ist der 15-s-Takt in `RENDER_INTERVAL_MS` die Stellschraube | `src/main/tray.ts`, `src/main/tray-menu.ts` |
 | Standby und Bildschirmsperre | `powerMonitor.on('suspend'/'resume')` ist auf beiden Plattformen vorhanden, feuert auf Windows aber auch bei „Moderner Standby" (S0) anders als beim klassischen S3. Die App stoppt beim Suspend das Polling und lädt beim Resume einmal neu. Bleibt die Uhr nach dem Zuklappen stehen, ist zuerst zu prüfen, ob `resume` überhaupt kam | `src/main/index.ts` (geschrieben, ungetestet) |
-| Positionsdatei | `%APPDATA%\factorial-desktop\window-position.json`, gleiche Schreibweise wie bei den Einstellungen (`.tmp` + `rename`). Schreibfehler werden hier bewusst **verschluckt**, weil der Schreibvorgang aus einem `moved`-Handler kommt | `src/main/window-position.ts` |
+| Positionsdatei | `%APPDATA%\factorial-desktop-2\window-position.json`, gleiche Schreibweise wie bei den Einstellungen (`.tmp` + `rename`). Schreibfehler werden hier bewusst **verschluckt**, weil der Schreibvorgang aus einem `moved`-Handler kommt | `src/main/window-position.ts` |
 | Drag-Region | siehe Abschnitt 2, letzte Zeile. Kurz: Aero Snap, `.no-drag`-Vererbung, `moved`-Frequenz | `src/renderer/src/styles.css` (geschrieben, auf Windows ungetestet) |
 | Schriftart | `@fontsource-variable/geist` wird als WOFF2 mitgebaut und nicht vom System geholt — es gibt also keinen Fallback-Unterschied zwischen macOS und Windows. Was sich unterscheidet, ist das **Rendering**: Windows hinted anders, die Zeilen im Widget können dadurch 1–2 px höher ausfallen. Das Fenster ist `resizable: false` bei 340×224, ein Überlauf würde also abgeschnitten statt zu scrollen | `src/renderer/src/styles.css`, `src/main/windows.ts` (`WIDGET_SIZE`) |
 | Renderer-Fonts und Emoji | Die UI benutzt bewusst **keine** Emoji oder Unicode-Blockzeichen als Icons (der Plan-Schnipsel hatte `❙❙` für „Pause") — auf Windows rendern die als farbiges Emoji oder als Ersatzkästchen. Stattdessen Lucide-SVGs plus deutsches Wort | `src/renderer/src/components/BreakMenu.tsx` |
@@ -266,6 +266,16 @@ Reihenfolge, in der man sie abarbeitet, steht in Abschnitt 7:
   `release/Factorial-0.1.0-arm64.dmg` (119,2 MB) und
   `release/Factorial-0.1.0-arm64-mac.zip` (119,1 MB) erzeugt. Am Ergebnis
   nachgeprüft, nicht am Log:
+  > **Achtung, dieser Abschnitt ist nach der Identitäts-Trennung veraltet.** Der
+  > Lauf unten fand unter `appId: com.maxgiess.factorial-desktop` /
+  > `productName: Factorial` statt. Beide wurden danach auf
+  > `com.maxgiess.factorial-desktop-2` / `Factorial 2` geändert, um eine zweite
+  > Factorial-App desselben Benutzers nicht zu überschreiben (siehe
+  > `src/main/app-identity.ts`). Die Artefaktnamen und die Info.plist-Werte unten
+  > stimmen deshalb nicht mehr; **`npm run package:mac` muss neu laufen**, bevor
+  > dieser Abschnitt wieder als Beleg taugt. Die Aussagen über Signatur,
+  > `LSUIElement` und Icon sind von der Umbenennung nicht betroffen.
+
   - `Contents/Info.plist` des gebauten Bundles: `CFBundleIdentifier =
     com.maxgiess.factorial-desktop`, `CFBundleName = Factorial`,
     `CFBundleIconFile = icon.icns`, `CFBundleShortVersionString = 0.1.0` und
@@ -535,7 +545,7 @@ Reihenfolge, in der man sie abarbeitet, steht in Abschnitt 7:
   dem Bundle heraus überhaupt hochkommt, ob das Tray-Icon aus `app.asar/resources`
   wirklich geladen wird (der Pfad existiert nachweislich, das Laden nicht),
   ob `LSUIElement` das Dock-Icon tatsächlich unterdrückt, ob die Session aus
-  `~/Library/Application Support/factorial-desktop` auch für das Bundle gilt,
+  `~/Library/Application Support/factorial-desktop-2` auch für das Bundle gilt,
   und ob der Anmeldeobjekt-Eintrag den richtigen Pfad bekommt.
 - **`npm run package:win`.** Nie ausgeführt — es gab keine Windows-Maschine.
   Belegt ist nur, dass electron-builder die Konfiguration **lädt** (es
@@ -957,9 +967,9 @@ In dieser Reihenfolge, weil jeder einzeln beobachtbar ist:
    ist erst in Schritt 8 zu sehen.
 3. **Zweiter Start** (Verknüpfung doppelklicken, während die App läuft): es darf
    **keine** zweite Instanz und kein zweites Icon erscheinen, stattdessen kommt
-   das Widget nach vorn (`src/main/index.ts:192` und `:195`).
+   das Widget nach vorn (`src/main/index.ts:199` und `:202`).
 4. **Widget schließen** → App läuft weiter, Icon bleibt. **„Beenden"** im Menü →
-   der Prozess ist im Task-Manager wirklich weg (`src/main/index.ts:216`).
+   der Prozess ist im Task-Manager wirklich weg (`src/main/index.ts:223`).
 
 ### Schritt 5 — Das Fenster
 
@@ -968,7 +978,7 @@ In dieser Reihenfolge, weil jeder einzeln beobachtbar ist:
    `thickFrame: false` und der `border-radius` im Renderer die Stellschrauben.
 2. **Ziehen** an der Kopfzeile (`src/renderer/src/styles.css:32`): das Fenster
    folgt, die Position wird nach 250 ms Debounce in
-   `%APPDATA%\factorial-desktop\window-position.json` geschrieben. Drei
+   `%APPDATA%\factorial-desktop-2\window-position.json` geschrieben. Drei
    Windows-Eigenheiten: Aero Snap am oberen Rand darf nicht auslösen (das
    Fenster ist `resizable: false`), Buttons und das Arbeitsort-Select innerhalb
    der Region müssen klickbar bleiben (`.no-drag`), und `moved` feuert beim

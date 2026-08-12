@@ -1,5 +1,5 @@
-appId: com.maxgiess.factorial-desktop
-productName: Factorial
+appId: com.maxgiess.factorial-desktop-2
+productName: Factorial 2
 directories:
   output: release
   buildResources: build
