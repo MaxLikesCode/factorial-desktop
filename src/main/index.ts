@@ -13,6 +13,7 @@ import { app, dialog, powerMonitor } from 'electron'
 import { join } from 'node:path'
 import { createAttendanceStore, type ClockInInput } from './attendance'
 import { ensureAuthenticated, openLoginWindow } from './auth'
+import { installNetDebug } from './debug-net'
 import { createClient } from './factorial/client'
 import { createOperations } from './factorial/operations'
 import { isLocationType } from './factorial/types'
@@ -62,7 +63,11 @@ function applyLoginItem(openAtLogin: boolean): void {
 }
 
 async function bootstrap(): Promise<void> {
-  const ops = createOperations(createClient(createNetFetch(getFactorialSession())))
+  const factorialSession = getFactorialSession()
+  // Off unless FACTORIAL_DEBUG_NET=1; see debug-net.ts for what it does and does
+  // not record.
+  installNetDebug(factorialSession)
+  const ops = createOperations(createClient(createNetFetch(factorialSession)))
 
   let employeeId: number
   try {
