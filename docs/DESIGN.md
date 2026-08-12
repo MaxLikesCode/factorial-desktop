@@ -313,6 +313,47 @@ löschen.
 Das Login-Fenster läuft mit `contextIsolation: true`, `nodeIntegration: false`
 und **ohne Preload** — es lädt eine fremde Website.
 
+### Cloudflare und der User-Agent
+
+**Vor `api.factorialhr.com` steht Cloudflare.** Nachgewiesen am 2026-08-12 an
+einem Cookie-Jar eines erfolgreichen Logins: dort liegt ein `cf_clearance`-Cookie
+auf `.api.factorialhr.com`. In einer Partition, in der die Anmeldung scheiterte,
+lag stattdessen nur `_factorial_id_auth_error`.
+
+Das ist der Grund für ein Symptom, das sonst unerklärlich ist: die Anmeldung
+lehnt **jeden** Code ab — den per E-Mail geschickten OTP genauso wie den
+MFA-Code aus der Authenticator-App — mit „Ungültiger Code". Wenn beide Arten
+gleichzeitig falsch sind, war nie der Code das Problem, sondern die
+Verifikationsanfrage wird abgewiesen, bevor der Code überhaupt geprüft wird.
+
+Electrons Standard-User-Agent trägt den Build offen im String:
+
+```
+Mozilla/5.0 (Macintosh; ...) ... Chrome/150.0.7871.224 Electron/43.4.0 Safari/537.36
+```
+
+Deshalb entfernt `applyBrowserUserAgent()` in `session.ts` das
+`Electron/<version>`-Token — siehe `@shared/user-agent`. Übrig bleibt der String,
+den Chromium für seine eigene Engine gebaut hat; die Chrome-Version und die
+Plattform darin sind echt, nur die Build-Variante fällt weg.
+
+Gesetzt wird das auf der **ganzen Partition**, nicht nur auf dem Login-Fenster.
+Fenster und spätere API-Calls teilen sich diese Session, und einem Server für
+eine Session zwei verschiedene User-Agents zu schicken ist genau die Art von
+Widerspruch, die eine Session ungültig macht.
+
+> **Beim Debuggen einer kaputten Anmeldung immer zuerst die Partition leeren.**
+> Ein `_factorial_id_auth_error` aus einem gescheiterten Versuch überlebt den
+> Neustart und kann den nächsten Versuch mit verunreinigen.
+>
+> ```
+> rm -rf ~/Library/Application\ Support/factorial-desktop/Partitions/factorial
+> ```
+>
+> Für einen Blick in den Jar reicht `sqlite3 <partition>/Cookies "select
+> host_key, name from cookies"` — **ohne** die Wertespalte, die enthält die
+> Session.
+
 ## Zustandsmodell
 
 Drei Zustände, vollständig aus `openShift` abgeleitet — kein parallel gepflegtes Flag:

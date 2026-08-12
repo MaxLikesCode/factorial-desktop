@@ -9,6 +9,7 @@
  */
 
 import { session as electronSession, type Session } from 'electron'
+import { stripElectronToken } from '@shared/user-agent'
 import type { GraphQLFetch } from './factorial/client'
 import { createTimeoutFetch, type SessionFetch } from './session-fetch'
 
@@ -23,6 +24,23 @@ export const REQUEST_TIMEOUT_MS = 15_000
 
 export function getFactorialSession(): Session {
   return electronSession.fromPartition(PARTITION)
+}
+
+/**
+ * Drops the `Electron/<version>` token from the partition's User-Agent.
+ *
+ * Applied to the whole partition rather than just the login window on purpose:
+ * the login window and every later API call share this session, and handing the
+ * server two different User-Agents for one session is exactly the kind of
+ * mismatch that gets a session invalidated.
+ *
+ * See `@shared/user-agent` for what is removed and why. Returns the string it
+ * set, so the caller can log it.
+ */
+export function applyBrowserUserAgent(session: Session): string {
+  const userAgent = stripElectronToken(session.getUserAgent())
+  session.setUserAgent(userAgent)
+  return userAgent
 }
 
 /**

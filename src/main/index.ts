@@ -18,7 +18,7 @@ import { createClient } from './factorial/client'
 import { createOperations } from './factorial/operations'
 import { isLocationType } from './factorial/types'
 import { registerIpc } from './ipc'
-import { clearSession, createNetFetch, getFactorialSession } from './session'
+import { applyBrowserUserAgent, clearSession, createNetFetch, getFactorialSession } from './session'
 import { buildLoginItemSettings, createSettings, type Settings } from './settings'
 import { createTray, hasTray } from './tray'
 import { createWidgetWindow, getWidget, setWidgetAlwaysOnTop, showWidget } from './windows'
@@ -64,6 +64,9 @@ function applyLoginItem(openAtLogin: boolean): void {
 
 async function bootstrap(): Promise<void> {
   const factorialSession = getFactorialSession()
+  // Before anything touches the network: Factorial's sign-in refuses to verify
+  // OTP and MFA codes from a User-Agent carrying the Electron token.
+  applyBrowserUserAgent(factorialSession)
   // Off unless FACTORIAL_DEBUG_NET=1; see debug-net.ts for what it does and does
   // not record.
   installNetDebug(factorialSession)
