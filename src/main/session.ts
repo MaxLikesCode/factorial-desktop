@@ -12,6 +12,7 @@ import { session as electronSession, type Session } from 'electron'
 import { toBrowserUserAgent } from '@shared/user-agent'
 import type { GraphQLFetch } from './factorial/client'
 import { createTimeoutFetch, type SessionFetch } from './session-fetch'
+import { createRefreshingFetch, createSessionRefresh } from './session-refresh'
 
 /** Persistent by prefix: `persist:` is what makes Chromium write it to disk. */
 export const PARTITION = 'persist:factorial'
@@ -53,7 +54,17 @@ export function createNetFetch(session: Session, timeoutMs: number = REQUEST_TIM
   // `ses.fetch` is `net.fetch` already bound to this session, which is the typed
   // way to get the partition's cookies onto the request.
   const fetchImpl: SessionFetch = (url, init) => session.fetch(url, init)
-  return createTimeoutFetch(fetchImpl, timeoutMs)
+
+  // The access cookie lives two hours; the refresh cookie lives seven months.
+  // Without this layer the app fell out of its session every two hours and asked
+  // for a full sign-in with 2FA. See `session-refresh.ts`.
+  //
+  // The refresh runs on the bare `fetchImpl`, outside the retrying wrapper, so a
+  // refresh that is itself refused cannot try to refresh itself.
+  return createRefreshingFetch(
+    createTimeoutFetch(fetchImpl, timeoutMs),
+    createSessionRefresh(fetchImpl),
+  )
 }
 
 /**

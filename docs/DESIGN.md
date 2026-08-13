@@ -360,6 +360,61 @@ Die App **liest das Cookie nie aus und speichert keinen Token**. Chromium hält 
 in der Partition, `net.request` schickt es mit. Logout = Cookies der Partition
 löschen.
 
+### Sitzung am Leben halten
+
+Die Anmeldung hinterlässt drei Cookies. Aus einem echten Jar gelesen:
+
+| Cookie | HttpOnly | Laufzeit |
+|---|---|---|
+| `_factorial_id` | ja | **2 Stunden** |
+| `_factorial_id_refresh` | ja | 7 Monate |
+| `_factorial_id_data` | nein | 7 Monate |
+
+Das Cookie, auf dem die App reitet, ist also **absichtlich kurzlebig**. Angemeldet
+zu bleiben heißt, den langlebigen Refresh-Cookie gegen einen frischen
+Access-Cookie zu tauschen — genau das macht ein Browser-Tab im Hintergrund, und
+genau deshalb bleibt Chrome den ganzen Tag eingeloggt.
+
+Ohne diesen Tausch fiel die App etwa alle zwei Stunden aus der Sitzung und
+verlangte eine vollständige Neuanmeldung samt 2FA, als wäre die Sitzung
+widerrufen worden.
+
+Der Tausch ist **ein nackter POST** — kein Body, keine Header, kein CSRF-Token,
+nur der Cookie, den die Partition ohnehin hält:
+
+```
+POST https://id.factorialhr.com/api/auth/refresh
+→ 401 { "success": false,
+        "error": { "code": "invalid_refresh_token",
+                   "message": "Ihre Sitzung ist abgelaufen. …" } }
+```
+
+**Reaktiv statt auf Timer.** Eine 401 ist das einzige verlässliche Signal, dass
+der Token verbraucht ist. Eine Uhr müsste den Ablauf raten, würde über Standby
+driften — und müsste die 401 für die Fälle trotzdem behandeln, in denen sie
+falsch geraten hat.
+
+Ablauf: 401 → einmal erneuern → **einmal** wiederholen. Ist auch die Wiederholung
+nicht autorisiert, wird diese Antwort unverändert durchgereicht und die App tut,
+was sie vorher tat — Sitzung als abgelaufen melden und Anmeldung anbieten. Eine
+abgelaufene Sitzung darf niemals zu einer Schleife gegen ein HR-System werden.
+
+Gleichzeitige 401 teilen sich **eine** Erneuerung: der Store feuert seine zwei
+Queries zusammen, und zwei konkurrierende Tauschvorgänge sind der Weg, einen
+rotierenden Refresh-Token selbst ungültig zu machen.
+
+> **Widerspricht das „Mutations werden nie automatisch wiederholt"?** Nein, und
+> der Unterschied ist wichtig. Die Regel zielt auf *fachliche* Fehlschläge — der
+> Server hat die Anfrage geprüft und abgelehnt, oder die Antwort kam nie an. Ein
+> Wiederholen erfindet dort Zeit.
+>
+> Eine 401 kommt nie bis zum Resolver: die Auth-Schicht weist sie vorher ab, es
+> wurde nichts geschrieben, es gibt nichts zu duplizieren. Und die Wiederholung
+> ist **byte-identisch** — jede Mutation trägt ihr eigenes `now`, der zweite
+> Versuch schreibt also den Zeitstempel des *ursprünglichen Klicks*. Nicht zu
+> wiederholen wäre die ungenauere Variante: der Nutzer klickt ein paar Sekunden
+> später erneut und erfasst dann diesen späteren Moment.
+
 Das Login-Fenster läuft mit `contextIsolation: true`, `nodeIntegration: false`
 und **ohne Preload** — es lädt eine fremde Website.
 
