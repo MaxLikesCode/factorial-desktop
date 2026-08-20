@@ -102,43 +102,32 @@ export function isExpandDirection(value: string): value is ExpandDirection {
 }
 
 /**
- * The peak of the opening spring, as a fraction of the distance travelled.
+ * A little more room than the expanded card strictly needs.
  *
- * Hard-coded rather than derived, because the easing it has to match is a
- * sampled-and-rescaled curve in `styles.css` rather than a closed form. The two
- * are pinned against each other in `widget-size.test.ts`, which reads the
- * stylesheet: if the spring is ever retuned to peak higher than this, the window
- * clips the peak and the spring is silently gone, with nothing to see but a
- * slightly abrupt stop.
- */
-export const OVERSHOOT = 0.126
-
-/**
- * A little more room than the spring's peak strictly needs.
- *
- * Reserving exactly the peak leaves the card's last row of pixels flush against
- * the window's edge at the top of the bounce — 0.13 px of margin, in one case —
- * and sub-pixel rounding is enough to take it. What gets taken is the day's bar,
- * because that lives at the very bottom edge of the card: it vanished at the
- * fullest point of the rubber band and came back as the card settled.
+ * Sizing the window to the card exactly leaves its last row of pixels flush
+ * against the window's edge, and sub-pixel rounding mid-animation is enough to
+ * take it. What gets taken is the day's bar, because that lives at the very
+ * bottom edge of the card — it has vanished that way once already, back when the
+ * card still overshot and the window reserved the peak to the pixel.
  *
  * Two pixels is not a fudge factor. It is the difference between "fits" and
  * "fits with nothing to spare", on a window whose whole job is to be bigger than
  * what it contains.
  */
-const SPRING_HEADROOM_PX = 2
+const HEADROOM_PX = 2
 
 /**
- * The window the card lives in: the expanded card, plus the room its opening
- * spring overshoots into, plus a margin. Rounded up — rounding down would give
- * back exactly what the margin is there to provide.
+ * The window the card lives in: the expanded card plus a margin.
+ *
+ * It used to be the expanded card plus the room an overshoot needed, which is
+ * why it was 311 x 172 for a card that settles at 300 x 162. Without the bounce
+ * the reservation goes with it and the invisible rectangle shrinks to what the
+ * card actually occupies.
  */
 export function windowSize(): Size {
-  const { collapsed, expanded } = CARD
-  const peak = (from: number, to: number): number => from + (to - from) * (1 + OVERSHOOT)
   return {
-    width: Math.ceil(peak(collapsed.width, expanded.width)) + SPRING_HEADROOM_PX,
-    height: Math.ceil(peak(collapsed.height, expanded.height)) + SPRING_HEADROOM_PX,
+    width: CARD.expanded.width + HEADROOM_PX,
+    height: CARD.expanded.height + HEADROOM_PX,
   }
 }
 

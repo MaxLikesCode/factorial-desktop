@@ -62,54 +62,34 @@ body {
     --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
 
     /*
-     * The two springs the Minimal card grows and shrinks on: a damped
-     * oscillator sampled into `linear()` at 41 points, then divided by its own
-     * final value so the curve ENDS at exactly 1.
+     * There is no spring here any more, and that is the point.
      *
-     * That last step is not tidiness, it is the whole bug it was added for. A
-     * damped spring has not fully settled when its duration runs out — at these
-     * dampings the honest value at t = T is about 0.988. The first version
-     * sampled that and then wrote `1` as the final stop anyway, so the closing
-     * frame covered the missing 1.4 % of the distance in one go: two pixels of
-     * width and one of height, snapping into place after the motion had visibly
-     * finished. Dividing through by the final value spreads that difference
-     * across the whole curve instead, where it is 0.1 px per step.
+     * The card used to grow on a sampled damped oscillator — 41 stops of
+     * `linear()` per direction — so it would overshoot its target and settle
+     * back. It was tuned twice and got louder both times without anyone touching
+     * it, because an overshoot is a FRACTION of the distance travelled and the
+     * card kept growing: the same 12.6 % that threw it 10 px past its mark at one
+     * size threw it 15 px at the next.
      *
-     * The rescale also multiplies the overshoot, so the dampings below are the
-     * ones whose RESCALED curves peak where they are meant to (12.6 % out,
-     * 12.0 % back) — not round numbers, and not to be nudged without
-     * recomputing. `widget-size.test.ts` pins both peaks against `OVERSHOOT`,
-     * which is what sizes the window that has to contain them.
+     * Without the bounce there is nothing left that `--ease-out` above does not
+     * already do, and it is the curve the rest of the app moves on. What went
+     * with the springs: 400 characters of generated easing, the headroom the
+     * window had to reserve for a peak, the arithmetic keeping the return's
+     * undershoot clear of the collapsed timer, and the standing coupling between
+     * how big the card is and how loud it moves.
      *
-     * The two are deliberately NOT the same, and that asymmetry is the whole
-     * lesson. A spring overshoots its target in both directions. Outward that
-     * means bigger than the open size — the bounce. On the way back it means
-     * smaller than the RESTING size, which the eye already knows, so the same
-     * effect reads there as a twitch rather than as life. So: out peaks 12.6 %
-     * past the target over 520 ms, back only 8.0 % over a shorter 420 ms.
-     *
-     * That 8 % is not a taste: the card travels 118 px between its two states,
-     * and the collapsed timer's line box leaves 11.1 px below it before
-     * `overflow: hidden` starts cutting into the number — 9.4 % of the trip. The
-     * return was at 12 % while the card grew only 82 px, where the same fraction
-     * reached 9.8 px and fit. Every time the expanded card has grown since, it
-     * has taken room away from this number, and the return has had to give some
-     * bounce back for it. The ceiling is arithmetic, not preference.
-     *
-     * The window has to be large enough for the outward overshoot or the peak
-     * is clipped and the spring is silently gone. `windowSizeFor` reserves it.
+     * Opening is slower than closing on purpose (520 ms against 420): arriving
+     * should feel deliberate, leaving should not keep anyone waiting.
      */
-    --spring-out: linear(0.0000,0.0190,0.0700,0.1446,0.2352,0.3353,0.4393,0.5426,0.6417,0.7338,0.8171,0.8903,0.9528,1.0046,1.0461,1.0778,1.1006,1.1155,1.1236,1.1260,1.1238,1.1180,1.1095,1.0993,1.0880,1.0763,1.0646,1.0535,1.0431,1.0337,1.0255,1.0185,1.0127,1.0080,1.0045,1.0019,1.0002,0.9993,0.9991,0.9993,1);
-    --spring-back: linear(0.0000,0.0153,0.0566,0.1173,0.1915,0.2744,0.3618,0.4500,0.5364,0.6188,0.6956,0.7657,0.8283,0.8833,0.9304,0.9700,1.0025,1.0283,1.0480,1.0624,1.0721,1.0777,1.0800,1.0796,1.0769,1.0727,1.0673,1.0611,1.0544,1.0476,1.0409,1.0345,1.0284,1.0229,1.0179,1.0135,1.0097,1.0065,1.0038,1.0017,1);
 }
 
 /*
  * The Minimal card's morph.
  *
- * Written here rather than as inline utilities because the springs are
- * `linear()` easings 200 characters long, and because the two directions need
- * different transitions on the same properties — which one utility class cannot
- * express.
+ * Written here rather than as inline utilities because the two directions need
+ * different transitions on the same properties, which one utility class cannot
+ * express: opening and closing differ in duration and in when the content moves
+ * relative to the box.
  *
  * Everything inside that card is absolutely positioned. That keeps the collapsed
  * layout exact without pulling hidden rows out of flow, and it lets the progress
@@ -120,31 +100,31 @@ body {
     /* Closing. Starts a beat after the content has begun leaving, so the card
        never looks like it is shoving its own contents out of the way. */
     transition:
-        width 420ms var(--spring-back) 60ms,
-        height 420ms var(--spring-back) 60ms;
+        width 420ms var(--ease-out) 60ms,
+        height 420ms var(--ease-out) 60ms;
 }
 
 .morph-card[data-open='true'] {
     /* Opening. The card leads and the content follows. */
     transition:
-        width 520ms var(--spring-out),
-        height 520ms var(--spring-out);
+        width 520ms var(--ease-out),
+        height 520ms var(--ease-out);
 }
 
 .morph-move {
     transition:
-        top 420ms var(--spring-back) 60ms,
-        font-size 420ms var(--spring-back) 60ms;
+        top 420ms var(--ease-out) 60ms,
+        font-size 420ms var(--ease-out) 60ms;
 }
 
 .morph-card[data-open='true'] .morph-move {
     transition:
-        top 520ms var(--spring-out),
-        font-size 520ms var(--spring-out);
+        top 520ms var(--ease-out),
+        font-size 520ms var(--ease-out);
 }
 
-/* Opacity never springs: an overshoot past 0 or 1 only clamps, and the clamp
-   reads as a stall. It leaves fast and arrives late, staggered by row. */
+/* Content leaves fast and arrives late, staggered by row, so the box is already
+   most of the way there before anything appears inside it. */
 .morph-late {
     opacity: 0;
     transform: translateY(5px);
@@ -160,13 +140,13 @@ body {
     pointer-events: auto;
     transition:
         opacity 170ms var(--ease-out) 130ms,
-        transform 320ms var(--spring-out) 130ms;
+        transform 320ms var(--ease-out) 130ms;
 }
 
 .morph-card[data-open='true'] .morph-late[data-row='2'] {
     transition:
         opacity 170ms var(--ease-out) 180ms,
-        transform 320ms var(--spring-out) 180ms;
+        transform 320ms var(--ease-out) 180ms;
 }
 
 /*

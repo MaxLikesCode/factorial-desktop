@@ -842,6 +842,202 @@ macht der Main-Prozess das Fenster durchlässig (`setIgnoreMouseEvents(true,
 { forward: true })`), und der Renderer fordert die Klicks zurück, sobald der
 Zeiger über der Karte ist.
 
+#### Keine Feder
+
+Die Karte wächst und schrumpft auf `--ease-out`, derselben Kurve wie alles andere
+in der App. Auf, 520 ms; zu, 420 ms — ankommen darf sich Zeit nehmen, gehen soll
+niemanden warten lassen.
+
+Vorher war es eine abgetastete gedämpfte Schwingung, 41 `linear()`-Stützstellen
+je Richtung, die über das Ziel hinausschoss und zurückpendelte. Sie wurde zweimal
+nachjustiert und wurde beide Male lauter, **ohne dass jemand daran drehte**: der
+Überschwinger ist ein Anteil der zurückgelegten Strecke, und die Karte wuchs.
+Dieselben 12,6 %, die sie 10 px über das Ziel warfen, als sie auf 126 px
+aufklappte, warfen sie 15 px darüber, als sie auf 162 px aufklappte.
+
+Ohne den Ausschlag bleibt nichts übrig, was `--ease-out` nicht schon täte. Mit
+den Federn gingen: 400 Zeichen erzeugte Easing, der Spielraum, den das Fenster
+für eine Spitze vorhalten musste, die Rechnung, die den Unterschuss des Rückwegs
+von der eingeklappten Zahl freihielt — und die stehende Kopplung zwischen
+*wie groß die Karte ist* und *wie laut sie sich bewegt*.
+
+### Während einer Pause zeigt der Timer die Pause
+
+Die große Zahl ist in der Pause die **Dauer der Pause**, nicht die Tagessumme.
+Der Punkt und der Balken sind amber, die Statuszeile nennt die Pause beim Namen
+(„Pause · Mittagspause"), und die Tagessumme rückt nach oben neben den Status
+(„Gearbeitet 07:23").
+
+Vorher stand dort die Tagessumme — die während einer Pause stillsteht. Eine
+große Zahl, die sich nicht mehr bewegt, liest sich als hängengebliebene App,
+nicht als unterbrochene Schicht; die Pausendauer war in eine Fußzeile verbannt,
+die so leise war, dass niemand die beiden verband.
+
+**Der Tray macht das seit jeher so** (`primaryMs` in `tray-menu.ts`, mit dem
+Kommentar „showing it counting up would be a lie"). Das Widget war die einzige
+Oberfläche, die widersprach.
+
+Das Wort „Pause" steht vor dem Namen und nicht nur der Name da: der amber Punkt
+sagt bereits „pausiert", aber eine Pause namens „Arztbesuch" ließe damit die
+Farbe als einzigen Träger dieser Information zurück, und Farbe darf nie der
+einzige Träger sein.
+
+Auf „Fortsetzen" übernimmt die Tagessumme die Zahl wieder und läuft weiter.
+
+**Farbcodierung:** grün = eingestempelt, amber = Pause, neutral = ausgestempelt.
+
+**Stack:** React + TypeScript, Tailwind v4, shadcn/ui im **Nova**-Stil. Genutzte
+Komponenten: Button, Tooltip, Badge, Sonner.
+
+> **Pausentyp und Arbeitsort öffnen ein NATIVES Menü, kein Dropdown im DOM.**
+> In einem Fenster von 321 × 179 wird ein im Dokument gezeichnetes Menü
+> abgeschnitten — die Pausenliste brach nach zwei Einträgen ab, der Rest lag
+> hinter einer Scrollleiste. Keine Fenstergröße repariert das: die Liste ist so
+> lang, wie ein Arbeitgeber sie konfiguriert hat, und die Fenstergröße liegt
+> durch die Animation fest. Ein natives Menü ist ein Fenster der Plattform: es
+> wird vom Bildschirm begrenzt statt von unserem Fenster und klappt in
+> Randnähe von selbst um. Der Renderer schickt Zeilen und einen Ankerpunkt in
+> Fensterkoordinaten, der Main-Prozess öffnet das Menü und antwortet mit der
+> Wahl — oder mit `null`, wenn weggeklickt wurde.
+
+Der Arbeitsort merkt sich die letzte Wahl und wird beim Einstempeln als
+`locationType` + `workplaceId` mitgeschickt.
+
+### Soll-Zeit und Fortschrittsbalken — geklärt
+
+Die Tages-Soll-Zeit kommt aus `attendanceEstimatedTimes`:
+
+```graphql
+query EstimatedTime($id: Int!, $d: ISO8601Date!) {
+  attendance { employee(id: $id) {
+    attendanceEstimatedTimesConnection(startOn: $d, endOn: $d) { nodes {
+      date expectedMinutes minutes regularMinutes
+      overtimeMinutes absencesMinutes contractMinutes source
+    } }
+  } }
+}
+```
+
+Reale Antwort für den 2026-08-12:
+
+```jsonc
+{ "date": "2026-08-12", "expectedMinutes": 480, "minutes": 480,
+  "regularMinutes": 480, "overtimeMinutes": 0, "absencesMinutes": 0,
+  "contractMinutes": 720, "timeUnit": "minute", "source": "contract_hours" }
+```
+
+`expectedMinutes: 480` ist die „Verbleibende Zeit 08:00" des Web-Widgets,
+gegengeprüft mit dem Stundenzettel („0h 00m / 8h 00m" für den 12.8.).
+
+**Nicht `contractMinutes` verwenden** — das sind 720 und meint etwas anderes.
+**Nicht `minutes` aus dieser Query als Ist-Zeit verwenden** — der Wert stand bei
+0 gearbeiteten Minuten ebenfalls auf 480. Die Ist-Zeit wird weiterhin aus der
+Summe über `shift.minutes` des Tages plus laufender Zeit gebildet.
+
+An freien Tagen bzw. bei Abwesenheit ist mit `expectedMinutes: 0` oder einem
+leeren `nodes`-Array zu rechnen; dann entfällt der Soll-Vergleich und die Karte
+zeigt reine Ist-Zeit.
+
+**Der Balken entfällt dann ganz, er wird nicht leer gezeichnet.** Ein leerer
+Balken ist nicht neutral — er behauptet „0 % von etwas", und dieses Etwas gibt
+es an einem Tag ohne Soll nicht. Dieselbe Regel, aus der auch der Timer vor der
+ersten Antwort ein Strich ist und keine 0:00:00. Das gilt genauso vor dem ersten
+Snapshot: ohne bekannte Ist-Zeit gibt es nichts, wovon der Balken ein Bruchteil
+wäre.
+
+**Über dem Soll wechselt die Zeile von „Verbleibende Zeit 00:00" zu
+„Soll erfüllt · +H:MM".** Die alte Angabe stimmte, nannte aber das
+Uninteressante: nicht, dass nichts mehr übrig ist, sondern wie viel schon
+darüber. Der Wechsel hängt an den *gerundeten* Überminuten, damit die Zeile nie
+im Widerspruch zu dem steht, was sie druckt — eine Zehntelminute über dem Soll
+zeigt weiterhin „Verbleibende Zeit 00:00" statt ein „+0:00", das wie ein Fehler
+aussieht.
+
+## Tray
+
+**macOS:** Template-Icon (passt sich Light/Dark an) plus `tray.setTitle()` mit dem
+laufenden Timer im Menubar.
+
+**Windows:** `setTitle` existiert dort nicht. Stattdessen farbcodiertes Icon +
+Tooltip mit der Zeit; im Kontextmenü steht die Zeit als erster, deaktivierter
+Eintrag. **Der Live-Timer im Menubar bleibt ein macOS-Feature.**
+
+**Kontextmenü:** Ein-/Ausstempeln, Pause (Untermenü mit den Typen) bzw.
+Fortsetzen, Fenster zeigen/verstecken, Einstellungen, Beenden. Die Aktionen
+funktionieren, ohne das Fenster zu öffnen.
+
+Fenster schließen blendet aus statt zu beenden; beendet wird nur über das Tray.
+
+## Einstellungen
+
+- Autostart beim Login (Standard: an, `app.setLoginItemSettings`)
+- Always-on-Top an/aus
+- Aufklappen: Nach rechts (Vorgabe) / Nach links
+- Erscheinungsbild: Systemvorgabe (Standard) / Hell / Dunkel
+- Abmelden (Partition-Cookies löschen)
+
+Persistiert als JSON in `app.getPath('userData')`.
+
+### Zwei Zustände, keine Größen
+
+Eine Karte, zwei Zustände:
+
+| | | |
+|---|---|---|
+| eingeklappt | 156 × 44 | Punkt · Zahl · Tagesbalken |
+| aufgeklappt | 300 × 162 | + Status · Restzeit · Buttons · Arbeitsort · Pausensumme |
+
+**Der aufgeklappte Zustand ist kein Anblick, sondern ein Handlungsmoment.** Man
+klappt auf, um Pause zu drücken oder auszustempeln, und es schließt sich wieder.
+Deshalb zeigt er alles auf einmal, statt jemanden zweimal aufklappen zu lassen —
+und deshalb wird er auch nicht gemerkt: der eingeklappte Zustand ist der, in dem
+der Tag verbracht wird.
+
+Vorher waren es drei feste Größen mit einer Einstellung im Tray. Die mittlere
+(„Kompakt“) zeigte nachweislich nichts, was die aufgeklappte Karte nicht auch
+zeigt — sie konnte die Pausensumme nicht einmal tragen, ohne überzulaufen. Und
+die größte verteilte 37 px Luft, die sie nicht brauchte. Übrig bleibt eine Karte
+ganz ohne Einstellung: 300 × 162 gegen die früheren 340 × 224, also **36 %
+weniger Fläche bei gleichem Inhalt**.
+
+Die Zeilenpositionen stehen in `widget-size.ts`, nicht als Zahlen in der
+Komponente — Geometrie, die nichts prüft, driftet. Die Fußzeile saß eine Weile
+3 px über dem Tagesbalken und wirkte, als läge sie darauf: der
+Arbeitsort-Selector ist 24 px hoch, nicht die 16 einer Textzeile, also endet die
+Zeile 8 px tiefer, als sie im Quelltext aussieht. `widget-size.test.ts` rechnet
+das jetzt nach.
+
+Aufgeklappt wird über den Pfeil neben der Zahl oder per Doppelklick auf die
+Karte. Die Hinweiszeile („Keine Verbindung“) sitzt in der Lücke, die die
+Komposition ohnehin zwischen Zahl und Buttons lässt, und kostet damit keine
+Höhe.
+
+#### Fenster ≠ Karte
+
+Das Fenster ist **größer als die sichtbare Karte** und drumherum durchsichtig.
+Der Grund ist die Animation: eine `BrowserWindow`-Größe ändert nur der
+Main-Prozess mit `setSize()`, Frame für Frame über die IPC-Grenze, und dort
+interpoliert nichts. Eine Feder wäre da ohnehin unmöglich — ihr Überschwinger
+bräuchte Fenstergrößen jenseits des Ziels.
+
+Also bleibt das Fenster stehen und nur das `div` darin wächst, als
+CSS-Transition auf dem Compositor. Es hält den Platz vor, in den der
+Überschwinger geht: 13 % über die Zielgröße, also **321 × 179** für eine Karte,
+die bei 300 × 162 zur Ruhe kommt — die Federspitze plus zwei Pixel.
+
+> **Die zwei Pixel sind kein Sicherheitsaufschlag ins Blaue.** Genau die Spitze
+> zu reservieren ließ 0,13 px Luft, und Subpixel-Rundung nimmt sich die. Was sie
+> sich nahm, war der Tagesbalken: der sitzt an der untersten Kante der Karte,
+> verschwand auf dem vollsten Punkt des Gummiband-Effekts und kam beim
+> Einschwingen zurück. Ohne diesen Spielraum wird die Spitze
+abgeschnitten und die Feder ist lautlos weg.
+
+Der Preis ist der unsichtbare Rand. Er würde Klicks schlucken, die dem Desktop
+dahinter galten — bei einem Fenster, das immer im Vordergrund liegt. Deshalb
+macht der Main-Prozess das Fenster durchlässig (`setIgnoreMouseEvents(true,
+{ forward: true })`), und der Renderer fordert die Klicks zurück, sobald der
+Zeiger über der Karte ist.
+
 #### Die Feder
 
 Zwei Kurven, absichtlich verschieden (`--spring-out`, `--spring-back` in
