@@ -1,0 +1,145 @@
+# Builds the app for macOS and Windows, and turns a tag into a release.
+#
+# Split into two jobs on purpose:
+#
+# - `check` runs on every push and pull request. It is the whole suite plus the
+#   typecheck, on Linux, because none of it needs Electron or a desktop — see
+#   docs/WINDOWS.md §1 on why the tests are written that way. Cheap enough to
+#   run on everything.
+# - `build` produces the actual artefacts and runs only on a tag or when
+#   somebody asks for it. macOS runners bill at ten times the Linux rate, so
+#   building both platforms on every push to main would spend a free account's
+#   monthly minutes in a couple of days. If you want that anyway, add
+#   `push: branches: [main]` to the trigger below and accept the bill.
+#
+# Neither platform is code-signed: `identity: null` in electron-builder.yml for
+# macOS, and no certificate for Windows. The artefacts therefore carry the usual
+# warnings — Gatekeeper wants right-click → Open on the first launch, SmartScreen
+# wants "More info" → "Run anyway". Signing is a paid certificate and a secret,
+# and neither exists yet.
+
+name: build
+
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+# One run per ref. A second push to the same branch cancels the first rather
+# than queueing behind it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # The version macOS development used. Windows ran fine on 24 as well, but CI
+  # pins one so a green run means the same thing every time.
+  NODE_VERSION: '22'
+
+jobs:
+  check:
+    name: tests and typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      # Not part of `npm test`: it is what `npm run build` does first, and a type
+      # error should fail here rather than three minutes into a packaging run.
+      - run: npm run typecheck
+
+      # Includes handoff-docs.test.ts, which fails when docs/WINDOWS.md and the
+      # platform markers in the source have drifted apart.
+      - run: npm test
+
+  build:
+    name: ${{ matrix.name }}
+    needs: check
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One platform failing should not hide whether the other one worked.
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            name: macOS (arm64)
+            script: package:mac
+            artifact: factorial-desktop-macos
+          - os: windows-latest
+            name: Windows (x64)
+            script: package:win
+            artifact: factorial-desktop-windows
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: Package
+        run: npm run ${{ matrix.script }} -- --publish never
+        env:
+          # Without this electron-builder hunts the keychain for a signing
+          # identity and fails the build when it finds none. `identity: null`
+          # already says not to sign; this stops the search itself.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Collect artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          # The installers, the portable exe and the mac archives — but not
+          # win-unpacked/ or mac/, which are the same app again as loose files
+          # and would multiply the upload for nothing.
+          path: |
+            release/*.exe
+            release/*.dmg
+            release/*.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: release
+    # Only for tags, and only if both platforms produced something.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          draft: true
+          generate_release_notes: true
+          # Neither build is signed; saying so where people download it is
+          # cheaper than answering the question every time.
+          body: |
+            Unsignierte Builds.
+
+            - **Windows:** `Factorial Desktop Setup <version>.exe` installiert
+              (Startmenü, Deinstaller, Autostart über das Tray-Menü);
+              `Factorial Desktop.exe` läuft ohne Installation. SmartScreen beim
+              ersten Start: „Weitere Informationen" → „Trotzdem ausführen".
+            - **macOS:** `.dmg` oder `.zip`, Apple Silicon. Beim ersten Start
+              Rechtsklick → „Öffnen", sonst weist Gatekeeper die App ab.
