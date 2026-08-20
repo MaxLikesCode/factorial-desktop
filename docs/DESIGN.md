@@ -760,6 +760,7 @@ window.
 - Always on top
 - Expand direction: right (default) or left
 - Appearance: system (default), light, dark
+- Language: system (default) or one of seven
 - Check for updates
 - Sign out (clears the partition's cookies)
 
@@ -790,6 +791,48 @@ has to be among the release assets, because that file *is* the feed.
 download's signature against the running app's, and these builds are unsigned, so
 the check can only fail. It should be turned back on the day there is a
 certificate.
+
+## Language
+
+The app speaks seven languages and picks one from the OS, falling back to English.
+The catalogues live in `src/shared/locales/`, the machinery in
+`src/shared/i18n.ts`.
+
+**In `shared` because both halves need it.** The tray menu, the update dialogs
+and the error table run in the main process, the widget in the renderer, and
+several strings appear in both — the five state labels used to exist twice, once
+per process, which is exactly the arrangement that lets two surfaces disagree
+about what is on screen.
+
+**No i18n library.** The whole surface is a lookup in a record plus
+`{placeholder}` substitution. A library would bring a loader, a plural engine and
+a React context to do that; the plural engine is the only part with real value
+here, and this app counts hours and prints them as digits.
+
+**English is the source, and the type system enforces the rest.** The other
+catalogues are typed against it, so a missing or invented key fails the build
+rather than rendering blank in a language nobody on the team reads. Three things
+the tests add on top, all of them silent failures otherwise: no empty values, the
+same placeholders as English in every language, and an unknown locale resolving
+to English rather than to nothing.
+
+**Region is ignored.** `pt-BR` gets the Portuguese catalogue rather than falling
+through to English, which is the better of the two answers available.
+
+**Where the wording is not just a translation.** The work-location labels are
+meant to be Factorial's own words, so that somebody comparing the widget with the
+web interface does not have to work out that two terms mean the same thing.
+German is confirmed against a real account — `work_from_home` is "Mobiles
+Arbeiten" there, not "Homeoffice". The other languages are honest translations
+that nobody has checked against a Factorial account in that language; the note
+sits in `src/shared/locales/es.ts` for whoever can check one.
+
+**How the renderer knows.** The language is an ordinary setting, so it travels
+with the others over the existing settings push — no channel of its own, and no
+second place where the current language is remembered. Before the first settings
+answer arrives, `useTranslate` falls back to the system language, which is what
+`system` would have resolved to anyway; the first paint is therefore not in the
+wrong language and then corrected.
 
 ## Platform differences
 

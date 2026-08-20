@@ -1,25 +1,28 @@
 import { ChevronDownIcon } from 'lucide-react'
+import type { MessageKey } from '@shared/i18n'
+import { useTranslate } from '@renderer/hooks/useTranslate'
 
 /**
  * `AttendanceShiftLocationTypeEnum`, in the same order as `LOCATION_TYPES` in
  * `src/main/factorial/types.ts`. That list is the one the main process validates
- * against (K4) — this one only supplies the German words.
+ * against (K4) — this one only maps each value to the key that names it.
  *
- * The words are Factorial's own, not a fresh translation: someone comparing this
- * widget with the web app should not have to work out that two different terms
- * mean the same thing. Factorial's German UI calls `work_from_home` **"Mobiles
- * Arbeiten"** — confirmed on the real account, where the dashboard widget showed
- * exactly that for a running shift.
+ * Where the wording is known, it is Factorial's own rather than a fresh
+ * translation: somebody comparing this widget with the web app should not have
+ * to work out that two different terms mean the same thing. Factorial's German
+ * UI calls `work_from_home` "Mobiles Arbeiten", confirmed on a real account —
+ * see the note in `src/shared/locales/es.ts` about the languages where that
+ * check has not been done.
  *
  * `office` and `work_from_home` are both confirmed against the live API;
  * `business_trip` comes from the schema enum and is still unverified
  * (`docs/DESIGN.md`).
  */
 export const LOCATIONS = [
-  { value: 'office', label: 'Büro' },
-  { value: 'work_from_home', label: 'Mobiles Arbeiten' },
-  { value: 'business_trip', label: 'Dienstreise' },
-] as const
+  { value: 'office', key: 'location.office' },
+  { value: 'work_from_home', key: 'location.work_from_home' },
+  { value: 'business_trip', key: 'location.business_trip' },
+] as const satisfies ReadonlyArray<{ value: string; key: MessageKey }>
 
 interface Props {
   value: string
@@ -48,6 +51,7 @@ interface Props {
  * group and the menu answers "which one is set" without being read.
  */
 export function LocationSelect({ value, disabled, onChange }: Props): React.JSX.Element {
+  const t = useTranslate()
   const current = LOCATIONS.find((location) => location.value === value)
 
   async function open(event: React.MouseEvent<HTMLButtonElement>): Promise<void> {
@@ -56,7 +60,7 @@ export function LocationSelect({ value, disabled, onChange }: Props): React.JSX.
       .popupMenu(
         LOCATIONS.map((location) => ({
           id: location.value,
-          label: location.label,
+          label: t(location.key),
           checked: location.value === value,
         })),
         { x: box.left, y: box.bottom },
@@ -68,12 +72,12 @@ export function LocationSelect({ value, disabled, onChange }: Props): React.JSX.
   return (
     <button
       type="button"
-      aria-label="Arbeitsort"
+      aria-label={t('widget.workLocation')}
       disabled={disabled}
       onClick={(event) => void open(event)}
       className="flex h-6 items-center gap-1 rounded-md px-1 text-xs text-muted-foreground transition-colors duration-150 ease-(--ease-out) hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
     >
-      {current?.label ?? value}
+      {current ? t(current.key) : value}
       <ChevronDownIcon className="size-4 shrink-0" />
     </button>
   )

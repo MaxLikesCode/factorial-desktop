@@ -23,6 +23,7 @@ const SETTINGS: AppSettings = {
   lastWorkplaceId: null,
   theme: 'system',
   expandDirection: 'right',
+  language: 'en',
 }
 
 function fakeStore(overrides: Partial<IpcStore> = {}): IpcStore & { listeners: (() => void)[] } {

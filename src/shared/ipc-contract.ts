@@ -26,6 +26,7 @@
  */
 
 import type { AttendanceState } from './attendance-state'
+import type { LanguageSetting } from './i18n'
 
 export const IPC = {
   getSnapshot: 'attendance:getSnapshot',
@@ -229,6 +230,14 @@ export interface AppSettings {
    */
   /** Which way the card grows when it opens. */
   expandDirection: ExpandDirection
+  /**
+   * Which language the app speaks. `system` follows the OS and is the default.
+   *
+   * The renderer needs it as well as the main process — the widget and the tray
+   * say some of the same words — so it travels with the rest of the settings
+   * rather than on a channel of its own.
+   */
+  language: LanguageSetting
 }
 
 /**

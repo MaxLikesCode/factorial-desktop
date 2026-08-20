@@ -94,6 +94,7 @@ describe('createSettings', () => {
       lastWorkplaceId: 3333333,
       theme: DEFAULT_SETTINGS.theme,
       expandDirection: DEFAULT_SETTINGS.expandDirection,
+      language: DEFAULT_SETTINGS.language,
     })
   })
 

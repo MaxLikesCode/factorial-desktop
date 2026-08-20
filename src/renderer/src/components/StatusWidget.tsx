@@ -5,6 +5,7 @@ import { formatDuration, formatHoursMinutes, formatOvertime } from '@shared/time
 import { describeActionError, describeStaleReason } from '@renderer/lib/errors'
 import { useAttendance, useTicker } from '@renderer/hooks/useAttendance'
 import { useSettings } from '@renderer/hooks/useSettings'
+import { useTranslate } from '@renderer/hooks/useTranslate'
 import { ActionBar } from './ActionBar'
 import { LocationSelect } from './LocationSelect'
 import { WidgetCard } from './WidgetCard'
@@ -18,12 +19,12 @@ import type { WidgetView } from './WidgetView'
  */
 export const UNKNOWN_TIME = '–:––:––'
 
-const LABEL = {
-  unknown: 'Lädt …',
-  unauthenticated: 'Nicht angemeldet',
-  out: 'Ausgestempelt',
-  in: 'Eingestempelt',
-  break: 'In einer Pause',
+const LABEL_KEY = {
+  unknown: 'state.unknown',
+  unauthenticated: 'state.unauthenticated',
+  out: 'state.out',
+  in: 'state.in',
+  break: 'state.break',
 } as const
 
 const DOT = {
@@ -47,6 +48,7 @@ export function StatusWidget(): React.JSX.Element {
   const state = snapshot.state
   const [busy, setBusy] = useState(false)
   const settings = useSettings()
+  const t = useTranslate()
   /**
    * Whether the card is currently showing its actions.
    *
@@ -134,7 +136,8 @@ export function StatusWidget(): React.JSX.Element {
    * here would be a reminder nobody asked for on every day before lunch.
    */
   const pausedMinutes = breakMinutes(daySegments)
-  const breakLine = pausedMinutes < 1 ? null : `Pause ${formatHoursMinutes(pausedMinutes)}`
+  const breakLine =
+    pausedMinutes < 1 ? null : t('widget.breakTotal', { time: formatHoursMinutes(pausedMinutes) })
 
   /** Minutes past the goal; negative while there is still time owed. */
   const overtimeMinutes = workedMs === null || target === null ? null : workedMs / 60_000 - target
@@ -159,12 +162,12 @@ export function StatusWidget(): React.JSX.Element {
     state.kind === 'break'
       ? workedMs === null
         ? null
-        : `Gearbeitet ${formatHoursMinutes(workedMs / 60_000)}`
+        : t('widget.worked', { time: formatHoursMinutes(workedMs / 60_000) })
       : overtimeMinutes === null
         ? null
         : Math.round(overtimeMinutes) > 0
-          ? `Soll erfüllt · ${formatOvertime(overtimeMinutes)}`
-          : `Verbleibende Zeit ${formatHoursMinutes(-overtimeMinutes)}`
+          ? t('widget.targetMet', { overtime: formatOvertime(overtimeMinutes) })
+          : t('widget.remaining', { time: formatHoursMinutes(-overtimeMinutes) })
 
   async function run(action: () => Promise<void>): Promise<void> {
     setBusy(true)
@@ -172,7 +175,7 @@ export function StatusWidget(): React.JSX.Element {
       await action()
     } catch (error) {
       // Never the raw message: it is the main process's internal English.
-      toast.error(describeActionError(error))
+      toast.error(describeActionError(t, error))
     } finally {
       setBusy(false)
     }
@@ -213,8 +216,8 @@ export function StatusWidget(): React.JSX.Element {
    * C4: a record without `minutes` counts as 0 — visibly, not silently.
    */
   const hints = [
-    snapshot.stale ? describeStaleReason(snapshot.lastErrorKind) : null,
-    snapshot.incompleteShifts > 0 ? 'Tagessumme unvollständig' : null,
+    snapshot.stale ? describeStaleReason(t, snapshot.lastErrorKind) : null,
+    snapshot.incompleteShifts > 0 ? t('widget.incomplete') : null,
   ].filter((hint): hint is string => hint !== null)
 
   /** Everything the cards need, already decided. */
@@ -226,7 +229,7 @@ export function StatusWidget(): React.JSX.Element {
      * dot already says "paused", but a break called "Arztbesuch" would leave
      * colour as the only carrier of that, and colour cannot be the only carrier.
      */
-    label: state.kind === 'break' ? `Pause · ${state.breakName}` : LABEL[state.kind],
+    label: state.kind === 'break' ? `Pause · ${state.breakName}` : t(LABEL_KEY[state.kind]),
     dotClass: DOT[state.kind],
     tone: TONE[state.kind],
     /**

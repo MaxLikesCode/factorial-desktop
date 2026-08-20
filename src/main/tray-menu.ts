@@ -24,6 +24,13 @@
 import type { MenuItemConstructorOptions } from 'electron'
 import { breakMinutes } from '@shared/day-timeline'
 import { describeActionError, describeActionFailure, describeStaleReason } from '@shared/errors'
+import {
+  LANGUAGE_NAMES,
+  LOCALES,
+  type LanguageSetting,
+  type MessageKey,
+  type Translate,
+} from '@shared/i18n'
 import type { AppSettings, AppSnapshot, ThemeSetting } from '@shared/ipc-contract'
 import type { ExpandDirection } from '@shared/widget-size'
 import { classifyActionError } from './ipc-handlers'
@@ -47,6 +54,8 @@ export interface TrayActions {
   setAlwaysOnTop: (value: boolean) => void
   setTheme: (value: ThemeSetting) => void
   setExpandDirection: (value: ExpandDirection) => void
+  /** Switches the language; `system` follows the OS. */
+  setLanguage: (value: LanguageSetting) => void
   /**
    * Asks the release feed now and reports either way.
    *
@@ -62,19 +71,21 @@ export interface TrayMenuInput {
   snapshot: AppSnapshot
   now: Date
   windowVisible: boolean
-  /** The last tray action that failed, already in German, or `null`. */
+  /** The last tray action that failed, already translated, or `null`. */
   lastActionError: string | null
-  /** What the checkboxes under "Einstellungen" show, read fresh on every render. */
+  /** What the checkboxes under settings show, read fresh on every render. */
   settings: AppSettings
   actions: TrayActions
+  /** Read per render, so a language change shows on the next one. */
+  t: Translate
 }
 
-const STATE_LABEL = {
-  unknown: 'Lädt …',
-  unauthenticated: 'Nicht angemeldet',
-  out: 'Ausgestempelt',
-  in: 'Eingestempelt',
-  break: 'In einer Pause',
+const STATE_KEY = {
+  unknown: 'state.unknown',
+  unauthenticated: 'state.unauthenticated',
+  out: 'state.out',
+  in: 'state.in',
+  break: 'state.break',
 } as const
 
 const TONE: Record<AppSnapshot['state']['kind'], TrayTone> = {
@@ -139,10 +150,11 @@ function primaryMs(snapshot: AppSnapshot, now: Date): number | null {
  *   or a replacement box — the reason Task 11 already dropped that glyph from
  *   the widget (`docs/DESIGN.md`).
  */
-export function trayLabel(snapshot: AppSnapshot, now: Date): string {
+export function trayLabel(t: Translate, snapshot: AppSnapshot, now: Date): string {
   const { state } = snapshot
   if (state.kind === 'in') return formatTrayTime(primaryMs(snapshot, now) ?? 0)
-  if (state.kind === 'break') return `Pause ${formatTrayTime(elapsedMs(state.since, now))}`
+  if (state.kind === 'break')
+    return t('tray.breakWithTime', { time: formatTrayTime(elapsedMs(state.since, now)) })
   // Clocked out, still loading, or signed out: an empty title keeps the menubar
   // clean and, more importantly, states nothing that could be wrong.
   return ''
@@ -155,24 +167,27 @@ export function trayLabel(snapshot: AppSnapshot, now: Date): string {
  * PLATFORM: on Windows this is the only place the running time appears, as the
  * first (disabled) menu entry and inside the tooltip.
  */
-export function trayStatusLine(snapshot: AppSnapshot, now: Date): string {
+export function trayStatusLine(t: Translate, snapshot: AppSnapshot, now: Date): string {
   const { state } = snapshot
-  const parts: string[] = [STATE_LABEL[state.kind]]
+  const parts: string[] = [t(STATE_KEY[state.kind])]
 
   if (state.kind === 'break') parts.push(state.breakName)
 
   const ms = primaryMs(snapshot, now)
-  if (ms !== null) parts.push(state.kind === 'out' ? `heute ${formatTrayTime(ms)}` : formatTrayTime(ms))
+  if (ms !== null) {
+    const time = formatTrayTime(ms)
+    parts.push(state.kind === 'out' ? t('tray.today', { time }) : time)
+  }
 
   // C4: a record Factorial has not totalled yet counts as zero minutes, which
   // makes the day sum a lower bound. Say so rather than let it read as a fact.
-  if (snapshot.incompleteShifts > 0) parts.push('unvollständig')
+  if (snapshot.incompleteShifts > 0) parts.push(t('tray.incomplete'))
 
   // Keyed off `stale`, never off `lastError !== null`: a successful refresh
   // clears `stale` but keeps `lastError` for the rest of the session (see the
   // note on `AppSnapshot.lastError`), so the other test would glue this on
   // permanently.
-  if (snapshot.stale) parts.push(describeStaleReason(snapshot.lastErrorKind))
+  if (snapshot.stale) parts.push(describeStaleReason(t, snapshot.lastErrorKind))
 
   return parts.join(' · ')
 }
@@ -191,17 +206,17 @@ export function trayStatusLine(snapshot: AppSnapshot, now: Date): string {
  * `null` rather than "0:00" on a day without one: a zero here would be a
  * reminder nobody asked for, every morning.
  */
-export function trayBreakLine(snapshot: AppSnapshot, now: Date): string | null {
+export function trayBreakLine(t: Translate, snapshot: AppSnapshot, now: Date): string | null {
   const { state } = snapshot
   const running = state.kind === 'break' ? elapsedMs(state.since, now) / 60_000 : 0
   const total = breakMinutes(snapshot.daySegments) + running
   if (total < 1) return null
-  return `Pause heute ${formatTrayTime(total * 60_000)}`
+  return t('tray.breakToday', { time: formatTrayTime(total * 60_000) })
 }
 
 /** A tray icon has no caption; the tooltip is it. */
-export function trayTooltip(snapshot: AppSnapshot, now: Date): string {
-  return `Factorial · ${trayStatusLine(snapshot, now)}`
+export function trayTooltip(t: Translate, snapshot: AppSnapshot, now: Date): string {
+  return t('tray.tooltip', { status: trayStatusLine(t, snapshot, now) })
 }
 
 export function trayTone(snapshot: AppSnapshot): TrayTone {
@@ -218,13 +233,13 @@ export function trayTone(snapshot: AppSnapshot): TrayTone {
  * table the widget's toast uses; an error that already crossed IPC (encoded in
  * its message) is understood as well.
  */
-export function trayActionErrorText(error: unknown): string {
+export function trayActionErrorText(t: Translate, error: unknown): string {
   const kind = classifyActionError(error)
   if (kind !== 'unknown') {
-    return describeActionFailure(kind, error instanceof Error ? error.message : String(error))
+    return describeActionFailure(t, kind, error instanceof Error ? error.message : String(error))
   }
   // Not one of ours by identity — it may still carry an encoded kind.
-  return describeActionError(error)
+  return describeActionError(t, error)
 }
 
 /**
@@ -260,15 +275,19 @@ export function trayActionErrorText(error: unknown): string {
  * toggles below — the handler passes the value it wants rather than reading
  * that flag back.
  */
-const THEME_LABEL: ReadonlyArray<{ value: ThemeSetting; label: string }> = [
-  { value: 'system', label: 'Systemvorgabe' },
-  { value: 'light', label: 'Hell' },
-  { value: 'dark', label: 'Dunkel' },
-]
+const THEME_KEY = [
+  { value: 'system', key: 'settings.appearanceSystem' },
+  { value: 'light', key: 'settings.appearanceLight' },
+  { value: 'dark', key: 'settings.appearanceDark' },
+] as const satisfies ReadonlyArray<{ value: ThemeSetting; key: MessageKey }>
 
-function themeSubmenu(settings: AppSettings, actions: TrayActions): MenuItemConstructorOptions[] {
-  return THEME_LABEL.map(({ value, label }) => ({
-    label,
+function themeSubmenu(
+  t: Translate,
+  settings: AppSettings,
+  actions: TrayActions,
+): MenuItemConstructorOptions[] {
+  return THEME_KEY.map(({ value, key }) => ({
+    label: t(key),
     type: 'radio',
     checked: settings.theme === value,
     click: () => actions.setTheme(value),
@@ -284,55 +303,84 @@ function themeSubmenu(settings: AppSettings, actions: TrayActions): MenuItemCons
  * the direction also decides which screen edge the widget can be pushed all the
  * way into.
  */
-const DIRECTION_LABEL: ReadonlyArray<{ value: ExpandDirection; label: string }> = [
-  { value: 'right', label: 'Nach rechts' },
-  { value: 'left', label: 'Nach links' },
-]
+const DIRECTION_KEY = [
+  { value: 'right', key: 'settings.expandRight' },
+  { value: 'left', key: 'settings.expandLeft' },
+] as const satisfies ReadonlyArray<{ value: ExpandDirection; key: MessageKey }>
 
 function directionSubmenu(
+  t: Translate,
   settings: AppSettings,
   actions: TrayActions,
 ): MenuItemConstructorOptions[] {
-  return DIRECTION_LABEL.map(({ value, label }) => ({
-    label,
+  return DIRECTION_KEY.map(({ value, key }) => ({
+    label: t(key),
     type: 'radio',
     checked: settings.expandDirection === value,
     click: () => actions.setExpandDirection(value),
   }))
 }
 
+/**
+ * The language picker.
+ *
+ * Each language is listed under its own name — "Deutsch", not "German" — because
+ * whoever opens this menu is looking for a language they read, and quite
+ * possibly cannot read the one currently active. "System" is the exception and
+ * is translated, since it names a behaviour rather than a language.
+ */
+function languageSubmenu(
+  t: Translate,
+  settings: AppSettings,
+  actions: TrayActions,
+): MenuItemConstructorOptions[] {
+  const pick = (value: LanguageSetting, label: string): MenuItemConstructorOptions => ({
+    label,
+    type: 'radio',
+    checked: settings.language === value,
+    click: () => actions.setLanguage(value),
+  })
+  return [
+    pick('system', t('settings.languageSystem')),
+    { type: 'separator' },
+    ...LOCALES.map((locale) => pick(locale, LANGUAGE_NAMES[locale])),
+  ]
+}
+
 function settingsSubmenu(
+  t: Translate,
   snapshot: AppSnapshot,
   settings: AppSettings,
   actions: TrayActions,
 ): MenuItemConstructorOptions[] {
   const items: MenuItemConstructorOptions[] = [
     {
-      label: 'Autostart',
+      label: t('settings.startAtLogin'),
       type: 'checkbox',
       checked: settings.openAtLogin,
       click: () => actions.setOpenAtLogin(!settings.openAtLogin),
     },
     {
-      label: 'Immer im Vordergrund',
+      label: t('settings.alwaysOnTop'),
       type: 'checkbox',
       checked: settings.alwaysOnTop,
       click: () => actions.setAlwaysOnTop(!settings.alwaysOnTop),
     },
-    { label: 'Aufklappen', submenu: directionSubmenu(settings, actions) },
-    { label: 'Erscheinungsbild', submenu: themeSubmenu(settings, actions) },
+    { label: t('settings.expand'), submenu: directionSubmenu(t, settings, actions) },
+    { label: t('settings.appearance'), submenu: themeSubmenu(t, settings, actions) },
+    { label: t('settings.language'), submenu: languageSubmenu(t, settings, actions) },
     { type: 'separator' },
-    // Not next to "Aktualisieren" one level up on purpose: that one reloads the
-    // times, this one looks for a new program. Two very different things that
-    // would read as the same one if they sat together.
-    { label: 'Nach Updates suchen …', click: () => actions.checkForUpdates() },
+    // Not next to "Refresh" one level up on purpose: that one reloads the times,
+    // this one looks for a new program. Two very different things that would
+    // read as the same one if they sat together.
+    { label: t('settings.checkForUpdates'), click: () => actions.checkForUpdates() },
   ]
 
   // With no session there is nothing to drop, and the top-level entry already
-  // says "Anmelden" for the very same call — naming one action twice, with
+  // says "Sign in" for the very same call — naming one action twice, with
   // opposite words, in one menu would be worse than leaving this out.
   if (snapshot.state.kind !== 'unauthenticated') {
-    items.push({ type: 'separator' }, { label: 'Abmelden', click: () => actions.signOut() })
+    items.push({ type: 'separator' }, { label: t('tray.signOut'), click: () => actions.signOut() })
   }
 
   return items
@@ -345,16 +393,17 @@ export function buildTrayMenu({
   lastActionError,
   settings,
   actions,
+  t,
 }: TrayMenuInput): MenuItemConstructorOptions[] {
   const { state } = snapshot
 
   const items: MenuItemConstructorOptions[] = [
-    { label: trayStatusLine(snapshot, now), enabled: false },
+    { label: trayStatusLine(t, snapshot, now), enabled: false },
   ]
 
   // Right under the status, which is where somebody who opened this menu to
   // check their break is already looking.
-  const breakLine = trayBreakLine(snapshot, now)
+  const breakLine = trayBreakLine(t, snapshot, now)
   if (breakLine !== null) items.push({ label: breakLine, enabled: false })
 
   // The tray can act while the widget is hidden, so a failure needs somewhere to
@@ -364,7 +413,7 @@ export function buildTrayMenu({
   items.push({ type: 'separator' })
 
   if (state.kind === 'out') {
-    items.push({ label: 'Einstempeln', click: () => actions.clockIn() })
+    items.push({ label: t('tray.clockIn'), click: () => actions.clockIn() })
   }
 
   if (state.kind === 'in') {
@@ -373,9 +422,9 @@ export function buildTrayMenu({
     // an empty submenu would look like the second thing.
     items.push(
       snapshot.breakOptions.length === 0
-        ? { label: 'Pause', enabled: false }
+        ? { label: t('tray.break'), enabled: false }
         : {
-            label: 'Pause',
+            label: t('tray.break'),
             submenu: snapshot.breakOptions.map((option) => ({
               label: option.name,
               click: () => actions.startBreak(option.id),
@@ -385,17 +434,17 @@ export function buildTrayMenu({
   }
 
   if (state.kind === 'break') {
-    items.push({ label: 'Fortsetzen', click: () => actions.endBreak() })
+    items.push({ label: t('tray.resume'), click: () => actions.endBreak() })
   }
 
   if (state.kind === 'in' || state.kind === 'break') {
-    items.push({ label: 'Ausstempeln', click: () => actions.clockOut() })
+    items.push({ label: t('tray.clockOut'), click: () => actions.clockOut() })
   }
 
   if (state.kind === 'unauthenticated') {
     // Same call as the widget's button: it drops the rejected cookie and opens
     // Factorial's login page (`onSignOut` in `index.ts`).
-    items.push({ label: 'Anmelden', click: () => actions.signIn() })
+    items.push({ label: t('tray.signIn'), click: () => actions.signIn() })
   }
 
   // `unknown` deliberately offers no clock action: before the first answer the
@@ -405,16 +454,16 @@ export function buildTrayMenu({
   items.push(
     { type: 'separator' },
     {
-      label: windowVisible ? 'Fenster ausblenden' : 'Fenster zeigen',
+      label: windowVisible ? t('tray.hideWindow') : t('tray.showWindow'),
       click: () => actions.toggleWindow(),
     },
-    { label: 'Aktualisieren', click: () => actions.refresh() },
-    { label: 'Einstellungen', submenu: settingsSubmenu(snapshot, settings, actions) },
+    { label: t('tray.refresh'), click: () => actions.refresh() },
+    { label: t('tray.settings'), submenu: settingsSubmenu(t, snapshot, settings, actions) },
     { type: 'separator' },
     // Always present, in every state: closing the widget only hides it and the
     // window is kept out of the taskbar, so this is the only way out of the app
     // on Windows.
-    { label: 'Beenden', click: () => actions.quit() },
+    { label: t('tray.quit'), click: () => actions.quit() },
   )
 
   return items

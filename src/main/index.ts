@@ -25,6 +25,8 @@ import { applyBrowserUserAgent, clearSession, createNetFetch, getFactorialSessio
 import { buildLoginItemSettings, createSettings, type Settings } from './settings'
 import { createTray, hasTray } from './tray'
 import { createUpdater } from './updater'
+import { resolveLocale } from '@shared/i18n'
+import { translatorFor } from '@shared/locales'
 import {
   createWidgetWindow,
   getWidget,
@@ -224,6 +226,7 @@ async function bootstrap(): Promise<void> {
   // what was true when the app started.
   const updater = createUpdater({
     getStateKind: () => store.getSnapshot().state.kind,
+    getTranslate: () => translatorFor(resolveLocale(settings.get().language, app.getLocale())),
   })
 
   createTray({

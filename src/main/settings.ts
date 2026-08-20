@@ -27,6 +27,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { isThemeSetting, type AppSettings, type ThemeSetting } from '@shared/ipc-contract'
+import { isLanguageSetting } from '@shared/i18n'
 import { isExpandDirection, type ExpandDirection } from '@shared/widget-size'
 import { isLocationType } from './factorial/types'
 
@@ -42,6 +43,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   // The direction that shipped first; the alternative is opt-in.
   expandDirection: 'right',
+  language: 'system',
 }
 
 export interface SettingsDeps {
@@ -95,6 +97,10 @@ function sanitise(raw: unknown, base: AppSettings): AppSettings {
       typeof r.expandDirection === 'string' && isExpandDirection(r.expandDirection)
         ? r.expandDirection
         : base.expandDirection,
+    language:
+      typeof r.language === 'string' && isLanguageSetting(r.language)
+        ? r.language
+        : base.language,
   }
 }
 

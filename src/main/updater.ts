@@ -24,6 +24,7 @@
 
 import { app, dialog, shell } from 'electron'
 import type { AppUpdater, UpdateInfo } from 'electron-updater'
+import type { Translate } from '@shared/i18n'
 import {
   CHECK_INTERVAL_MS,
   FIRST_CHECK_DELAY_MS,
@@ -39,6 +40,11 @@ const RELEASES_URL = 'https://github.com/MaxLikesCode/factorial-desktop/releases
 export interface UpdaterDeps {
   /** The attendance state's `kind`, read per prompt — never captured once. */
   getStateKind: () => string
+  /**
+   * The translator, resolved per prompt for the same reason as the state: a
+   * dialog opened after the language changed must speak the new one.
+   */
+  getTranslate: () => Translate
   /** Injected for tests; the real one is electron-updater's singleton. */
   updater?: AppUpdater
 }
@@ -85,14 +91,15 @@ export function createUpdater(deps: UpdaterDeps): Updater {
   }
 
   async function offerDownload(updater: AppUpdater, info: UpdateInfo): Promise<void> {
+    const t = deps.getTranslate()
     const { response } = await dialog.showMessageBox({
       type: 'info',
-      buttons: ['Herunterladen', 'Später'],
+      buttons: [t('update.download'), t('update.later')],
       defaultId: 0,
       cancelId: 1,
-      title: 'Update verfügbar',
-      message: `Version ${info.version} ist verfügbar.`,
-      detail: `Installiert ist ${app.getVersion()}. Das Update wird jetzt geladen; installiert wird es erst, wenn du zustimmst.`,
+      title: t('update.availableTitle'),
+      message: t('update.available', { version: info.version }),
+      detail: t('update.availableDetail', { current: app.getVersion() }),
     })
     if (response !== 0) {
       declined = info.version
@@ -102,18 +109,17 @@ export function createUpdater(deps: UpdaterDeps): Updater {
   }
 
   async function offerLink(info: UpdateInfo): Promise<void> {
+    const t = deps.getTranslate()
     const { response } = await dialog.showMessageBox({
       type: 'info',
-      buttons: ['Download-Seite öffnen', 'Später'],
+      buttons: [t('update.openDownloads'), t('update.later')],
       defaultId: 0,
       cancelId: 1,
-      title: 'Update verfügbar',
-      message: `Version ${info.version} ist verfügbar.`,
+      title: t('update.availableTitle'),
+      message: t('update.available', { version: info.version }),
       // Saying why, because "download it yourself" looks like a missing feature
       // rather than a consequence of how this copy was started.
-      detail:
-        `Installiert ist ${app.getVersion()}. Diese Fassung läuft ohne Installation und ` +
-        `kann sich nicht selbst ersetzen — lade die neue Datei herunter und tausche sie aus.`,
+      detail: t('update.availablePortableDetail', { current: app.getVersion() }),
     })
     if (response === 0) await shell.openExternal(RELEASES_URL)
     else declined = info.version
@@ -121,29 +127,28 @@ export function createUpdater(deps: UpdaterDeps): Updater {
 
   async function offerRestart(version: string): Promise<void> {
     staged = version
+    const t = deps.getTranslate()
     if (!mayRestart(deps.getStateKind())) {
       // Clocked in: the update is on disk and will apply on the next quit. Said
       // once, not asked repeatedly.
       await dialog.showMessageBox({
         type: 'info',
-        buttons: ['Verstanden'],
-        title: 'Update bereit',
-        message: `Version ${version} ist heruntergeladen.`,
-        detail:
-          'Weil gerade eine Schicht läuft, wird jetzt nicht neu gestartet. ' +
-          'Das Update wird automatisch installiert, sobald du die App das nächste Mal beendest.',
+        buttons: [t('update.understood')],
+        title: t('update.readyTitle'),
+        message: t('update.ready', { version }),
+        detail: t('update.duringShiftDetail'),
       })
       return
     }
 
     const { response } = await dialog.showMessageBox({
       type: 'info',
-      buttons: ['Jetzt neu starten', 'Beim nächsten Beenden'],
+      buttons: [t('update.restartNow'), t('update.onNextQuit')],
       defaultId: 0,
       cancelId: 1,
-      title: 'Update bereit',
-      message: `Version ${version} ist heruntergeladen.`,
-      detail: 'Der Neustart dauert einen Moment. Deine Anmeldung bleibt erhalten.',
+      title: t('update.readyTitle'),
+      message: t('update.ready', { version }),
+      detail: t('update.readyDetail'),
     })
     if (response === 0) {
       const updater = resolveUpdater()
@@ -154,12 +159,13 @@ export function createUpdater(deps: UpdaterDeps): Updater {
   async function checkNow(manual: boolean): Promise<void> {
     if (!can.check) {
       if (manual) {
+        const t = deps.getTranslate()
         await dialog.showMessageBox({
           type: 'info',
           buttons: ['OK'],
-          title: 'Kein Update möglich',
-          message: 'Diese Fassung sucht nicht nach Updates.',
-          detail: 'Im Entwicklungsmodus ist die Update-Prüfung abgeschaltet.',
+          title: t('update.disabledTitle'),
+          message: t('update.disabled'),
+          detail: t('update.disabledDetail'),
         })
       }
       return
@@ -177,7 +183,7 @@ export function createUpdater(deps: UpdaterDeps): Updater {
 
       const updater = resolveUpdater()
       if (updater === null) {
-        if (manual) await reportFailure('Die Update-Funktion steht nicht zur Verfügung.')
+        if (manual) await reportFailure(deps.getTranslate()('update.disabled'))
         return
       }
 
@@ -188,12 +194,13 @@ export function createUpdater(deps: UpdaterDeps): Updater {
       const info = result?.updateInfo
       if (!info || info.version === app.getVersion()) {
         if (manual) {
+          const t = deps.getTranslate()
           await dialog.showMessageBox({
             type: 'info',
             buttons: ['OK'],
-            title: 'Kein Update',
-            message: 'Du verwendest die neueste Version.',
-            detail: `Installiert ist ${app.getVersion()}.`,
+            title: t('update.noneTitle'),
+            message: t('update.none'),
+            detail: t('update.noneDetail', { current: app.getVersion() }),
           })
         }
         return
@@ -217,11 +224,12 @@ export function createUpdater(deps: UpdaterDeps): Updater {
   }
 
   async function reportFailure(detail: string): Promise<void> {
+    const t = deps.getTranslate()
     await dialog.showMessageBox({
       type: 'warning',
       buttons: ['OK'],
-      title: 'Update-Prüfung fehlgeschlagen',
-      message: 'Es konnte nicht nach Updates gesucht werden.',
+      title: t('update.failedTitle'),
+      message: t('update.failed'),
       detail,
     })
   }

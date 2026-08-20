@@ -35,7 +35,7 @@ describe('BreakMenu', () => {
     const onSelect = vi.fn()
     render(<BreakMenu options={options} disabled={false} onSelect={onSelect} />)
 
-    await act(async () => void screen.getByRole('button', { name: 'Pause' }).click())
+    await act(async () => void screen.getByRole('button', { name: 'Break' }).click())
 
     expect(bridge.popupMenu).toHaveBeenCalledWith(
       [
@@ -53,26 +53,51 @@ describe('BreakMenu', () => {
     const onSelect = vi.fn()
     render(<BreakMenu options={options} disabled={false} onSelect={onSelect} />)
 
-    await act(async () => void screen.getByRole('button', { name: 'Pause' }).click())
+    await act(async () => void screen.getByRole('button', { name: 'Break' }).click())
     expect(onSelect).not.toHaveBeenCalled()
   })
 
   it('is disabled when the store has no break types to offer', () => {
     render(<BreakMenu options={[]} disabled={false} onSelect={vi.fn()} />)
-    expect(screen.getByRole('button', { name: 'Pause' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.getByRole('button', { name: 'Break' }).hasAttribute('disabled')).toBe(true)
   })
 
   it('is disabled while another action runs', () => {
     render(<BreakMenu options={options} disabled onSelect={vi.fn()} />)
-    expect(screen.getByRole('button', { name: 'Pause' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.getByRole('button', { name: 'Break' }).hasAttribute('disabled')).toBe(true)
   })
 })
 
 describe('LocationSelect', () => {
-  it('shows the German label of the current value, not the enum member', () => {
+  /**
+   * Rendered on its own, before any settings have arrived, so this is the
+   * fallback language — which is the system's, and English under jsdom. The
+   * point of the assertion is unchanged: a label, never the enum member. Showing
+   * `work_from_home` in the footer was a real bug once.
+   */
+  it('shows a label for the current value, not the enum member', () => {
     render(<LocationSelect value="work_from_home" disabled={false} onChange={vi.fn()} />)
-    expect(screen.getByText('Mobiles Arbeiten')).toBeTruthy()
+    expect(screen.getByText('Remote work')).toBeTruthy()
     expect(screen.queryByText('work_from_home')).toBeNull()
+  })
+
+  /**
+   * And the same control once the stored language has arrived. This is the path
+   * that broke when the labels were hard-coded German: the words have to follow
+   * the setting, not the build.
+   */
+  it('follows the stored language once the settings arrive', async () => {
+    const bridge = installBridge()
+    render(<LocationSelect value="work_from_home" disabled={false} onChange={vi.fn()} />)
+    await act(async () => {
+      bridge.pushSettings({ language: 'de' })
+    })
+    expect(screen.getByText('Mobiles Arbeiten')).toBeTruthy()
+
+    await act(async () => {
+      bridge.pushSettings({ language: 'es' })
+    })
+    expect(screen.getByText('Teletrabajo')).toBeTruthy()
   })
 
   /**
@@ -85,13 +110,13 @@ describe('LocationSelect', () => {
     const onChange = vi.fn()
     render(<LocationSelect value="work_from_home" disabled={false} onChange={onChange} />)
 
-    await act(async () => void screen.getByRole('button', { name: 'Arbeitsort' }).click())
+    await act(async () => void screen.getByRole('button', { name: 'Work location' }).click())
 
     expect(bridge.popupMenu).toHaveBeenCalledWith(
       [
-        { id: 'office', label: 'Büro', checked: false },
-        { id: 'work_from_home', label: 'Mobiles Arbeiten', checked: true },
-        { id: 'business_trip', label: 'Dienstreise', checked: false },
+        { id: 'office', label: 'Office', checked: false },
+        { id: 'work_from_home', label: 'Remote work', checked: true },
+        { id: 'business_trip', label: 'Business trip', checked: false },
       ],
       expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }),
     )

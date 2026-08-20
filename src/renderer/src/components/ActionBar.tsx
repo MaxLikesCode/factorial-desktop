@@ -1,4 +1,5 @@
 import { Button } from '@renderer/components/ui/button'
+import { useTranslate } from '@renderer/hooks/useTranslate'
 import { BreakMenu } from './BreakMenu'
 import type { AppSnapshot } from '@shared/ipc-contract'
 
@@ -27,6 +28,7 @@ export function ActionBar({
   onEndBreak,
   onSignIn,
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const { state, breakOptions } = snapshot
 
   // An expired session must offer a way out, not a dead disabled button.
@@ -35,7 +37,7 @@ export function ActionBar({
   if (state.kind === 'unauthenticated') {
     return (
       <Button size="sm" disabled={busy} onClick={onSignIn}>
-        Anmelden
+        {t('tray.signIn')}
       </Button>
     )
   }
@@ -43,7 +45,7 @@ export function ActionBar({
   if (state.kind === 'out') {
     return (
       <Button size="sm" disabled={busy} onClick={onClockIn}>
-        Einstempeln
+        {t('tray.clockIn')}
       </Button>
     )
   }
@@ -53,7 +55,7 @@ export function ActionBar({
       <div className="flex items-center gap-2">
         <BreakMenu options={breakOptions} disabled={busy} onSelect={onStartBreak} />
         <Button size="sm" variant="outline" disabled={busy} onClick={onClockOut}>
-          Ausstempeln
+          {t('tray.clockOut')}
         </Button>
       </div>
     )
@@ -63,10 +65,10 @@ export function ActionBar({
     return (
       <div className="flex items-center gap-2">
         <Button size="sm" disabled={busy} onClick={onEndBreak}>
-          Fortsetzen
+          {t('tray.resume')}
         </Button>
         <Button size="sm" variant="outline" disabled={busy} onClick={onClockOut}>
-          Ausstempeln
+          {t('tray.clockOut')}
         </Button>
       </div>
     )
@@ -76,7 +78,7 @@ export function ActionBar({
   // that reads like the state is known would be a claim we cannot back.
   return (
     <Button size="sm" variant="outline" disabled>
-      Bitte warten
+      {t('widget.pleaseWait')}
     </Button>
   )
 }

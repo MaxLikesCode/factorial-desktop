@@ -53,7 +53,10 @@ download page instead.
 guesses a time — when it loses contact with Factorial it shows the last known
 state and says so, rather than inventing something that looks plausible.
 
-The interface is in German, matching Factorial's own.
+**Language.** The app follows your system language and falls back to English for
+anything it does not speak. Seven are included: English, Deutsch, Español,
+Français, Italiano, Português and Nederlands. To pin one, use the tray menu →
+*Settings* → *Language*.
 
 ## Development
 
@@ -76,6 +79,12 @@ npm run dev
 
 Both `package:` scripts run `npm run build` first, so a type error stops them
 before electron-builder starts. Artefacts land in `release/`, which is ignored.
+
+**Adding a language.** Copy `src/shared/locales/en.ts`, translate the values,
+and add the code to `LOCALES` in `src/shared/i18n.ts`. TypeScript then names any
+key you missed, and the test suite checks that the placeholders (`{time}`,
+`{version}`) match English — a translated placeholder is the mistake that
+silently prints braces at a user.
 
 **Architecture in one paragraph.** The main process owns the truth: it talks to
 Factorial's GraphQL API, keeps one attendance store, and pushes snapshots to the

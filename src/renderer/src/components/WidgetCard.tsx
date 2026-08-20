@@ -1,6 +1,7 @@
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { ChevronDownIcon } from 'lucide-react'
 import { CARD, EXPANDED_ROWS, type ExpandDirection } from '@shared/widget-size'
+import { useTranslate } from '@renderer/hooks/useTranslate'
 import { ProgressBar } from './ProgressBar'
 import type { WidgetView } from './WidgetView'
 
@@ -84,6 +85,7 @@ export function WidgetCard({
   location,
   direction,
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
 
   /**
@@ -317,7 +319,7 @@ export function WidgetCard({
       <button
         type="button"
         onClick={onToggle}
-        aria-label={open ? 'Widget verkleinern' : 'Aktionen zeigen'}
+        aria-label={open ? t('widget.collapse') : t('widget.expand')}
         aria-expanded={open}
         // Always 10 px from the card's right edge. Growing left that edge does
         // not move, so this stays exactly where it was clicked — the whole point

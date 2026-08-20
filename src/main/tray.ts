@@ -20,7 +20,9 @@
 
 import { Menu, Tray, app, nativeImage, type NativeImage } from 'electron'
 import { join } from 'node:path'
-import { SETTINGS_WRITE_FAILED } from '@shared/errors'
+import { describeSettingsWriteFailure } from '@shared/errors'
+import { resolveLocale } from '@shared/i18n'
+import { translatorFor } from '@shared/locales'
 import type { AppSettings } from '@shared/ipc-contract'
 import type { AttendanceStore, ClockInInput } from './attendance'
 import type { Settings } from './settings'
@@ -152,11 +154,15 @@ export function createTray(deps: TrayDeps): Tray {
 
     const snapshot = deps.store.getSnapshot()
     const now = new Date()
+    // Resolved per render rather than captured: switching the language rebuilds
+    // the menu through this same path, and a captured translator would keep
+    // producing the old language until something else forced a render.
+    const t = translatorFor(resolveLocale(deps.settings.get().language, app.getLocale()))
 
     // PLATFORM: `setTitle` is macOS-only — it is the live timer in the menubar
     // (DESIGN.md, "Tray"). The leading space separates the text from the icon.
     if (process.platform === 'darwin') {
-      const label = trayLabel(snapshot, now)
+      const label = trayLabel(t, snapshot, now)
       created.setTitle(label === '' ? '' : ` ${label}`)
     } else {
       // PLATFORM: Windows shows no text next to the icon, so the state is the
@@ -165,11 +171,12 @@ export function createTray(deps: TrayDeps): Tray {
       created.setImage(iconFor(trayTone(snapshot)))
     }
 
-    created.setToolTip(trayTooltip(snapshot, now))
+    created.setToolTip(trayTooltip(t, snapshot, now))
 
     created.setContextMenu(
       Menu.buildFromTemplate(
         buildTrayMenu({
+          t,
           snapshot,
           now,
           windowVisible: getWidget()?.isVisible() ?? false,
@@ -196,6 +203,7 @@ export function createTray(deps: TrayDeps): Tray {
             setAlwaysOnTop: (value) => applySetting({ alwaysOnTop: value }),
             setTheme: (value) => applySetting({ theme: value }),
             setExpandDirection: (value) => applySetting({ expandDirection: value }),
+            setLanguage: (value) => applySetting({ language: value }),
             toggleWindow: () => {
               toggleWidget()
               // `isVisible()` decides the menu's wording, so the menu has to be
@@ -228,7 +236,10 @@ export function createTray(deps: TrayDeps): Tray {
     void action().then(render, (error: unknown) => {
       // Covers the race this task called out: a tray click and a widget click
       // reaching the store together, where the second one is refused as `busy`.
-      lastActionError = trayActionErrorText(error)
+      lastActionError = trayActionErrorText(
+        translatorFor(resolveLocale(deps.settings.get().language, app.getLocale())),
+        error,
+      )
       render()
     })
   }
@@ -241,7 +252,7 @@ export function createTray(deps: TrayDeps): Tray {
    * changed. `Settings.set` persists before it commits, and the write can fail
    * for real — a virus scanner can block the
    * `rename` with `EBUSY`. The re-render then restores the old tick and the
-   * German sentence says why.
+   * sentence next to it says why.
    */
   function applySetting(patch: Partial<AppSettings>): void {
     lastActionError = null
@@ -249,7 +260,9 @@ export function createTray(deps: TrayDeps): Tray {
       deps.settings.set(patch)
     } catch (error) {
       console.error('[tray] settings write failed:', error)
-      lastActionError = SETTINGS_WRITE_FAILED
+      lastActionError = describeSettingsWriteFailure(
+        translatorFor(resolveLocale(deps.settings.get().language, app.getLocale())),
+      )
     }
     render()
   }

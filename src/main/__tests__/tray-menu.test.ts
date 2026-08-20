@@ -16,6 +16,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { MenuItemConstructorOptions } from 'electron'
 import { encodeActionError, type AppSettings, type AppSnapshot } from '@shared/ipc-contract'
+import { translatorFor } from '@shared/locales'
 import { FactorialError } from '../factorial/client'
 import { ACTION_IN_FLIGHT_MESSAGE } from '../attendance'
 import {
@@ -40,6 +41,9 @@ const base: AppSnapshot = {
   stale: false,
 }
 
+/** The assertions below are the German wording, so the tests speak German. */
+const t = translatorFor('de')
+
 const NOW = new Date(2026, 7, 12, 11, 0, 0)
 
 const settings: AppSettings = {
@@ -49,6 +53,7 @@ const settings: AppSettings = {
   lastWorkplaceId: null,
   theme: 'system',
   expandDirection: 'right',
+  language: 'en',
 }
 
 function clockedIn(since: Date): AppSnapshot['state'] {
@@ -74,6 +79,7 @@ function noopActions(): TrayActions {
     setTheme: vi.fn(),
     setExpandDirection: vi.fn(),
     checkForUpdates: vi.fn(),
+    setLanguage: vi.fn(),
     quit: vi.fn(),
   }
 }
@@ -106,11 +112,11 @@ function fire(item: MenuItemConstructorOptions | undefined): void {
 
 describe('trayLabel', () => {
   it('is empty when clocked out, so the menubar stays uncluttered', () => {
-    expect(trayLabel(base, NOW)).toBe('')
+    expect(trayLabel(t, base, NOW)).toBe('')
   })
 
   it('shows hours and minutes while clocked in', () => {
-    expect(trayLabel({ ...base, state: clockedIn(new Date(2026, 7, 12, 9, 30, 0)) }, NOW)).toBe(
+    expect(trayLabel(t, { ...base, state: clockedIn(new Date(2026, 7, 12, 9, 30, 0)) }, NOW)).toBe(
       '1:30',
     )
   })
@@ -125,7 +131,7 @@ describe('trayLabel', () => {
       todayMinutes: 240,
       state: clockedIn(new Date(2026, 7, 12, 10, 30, 0)),
     }
-    expect(trayLabel(snapshot, NOW)).toBe('4:30')
+    expect(trayLabel(t, snapshot, NOW)).toBe('4:30')
   })
 
   it('marks a break with the German word, not a glyph', () => {
@@ -133,7 +139,7 @@ describe('trayLabel', () => {
     // replacement box in tooltips and menus — the same reason Task 11 dropped
     // it from the widget: on Windows they render as emoji or as tofu.
     const snapshot: AppSnapshot = { ...base, state: onBreak(new Date(2026, 7, 12, 10, 45, 0)) }
-    expect(trayLabel(snapshot, NOW)).toBe('Pause 0:15')
+    expect(trayLabel(t, snapshot, NOW)).toBe('Pause 0:15')
   })
 
   it('counts the break itself, not the day, while paused', () => {
@@ -142,49 +148,49 @@ describe('trayLabel', () => {
       todayMinutes: 240,
       state: onBreak(new Date(2026, 7, 12, 10, 45, 0)),
     }
-    expect(trayLabel(snapshot, NOW)).toBe('Pause 0:15')
+    expect(trayLabel(t, snapshot, NOW)).toBe('Pause 0:15')
   })
 
   it('is empty while the state is still unknown', () => {
-    expect(trayLabel({ ...base, state: { kind: 'unknown' } }, NOW)).toBe('')
+    expect(trayLabel(t, { ...base, state: { kind: 'unknown' } }, NOW)).toBe('')
   })
 
   it('is empty when the session is gone rather than showing a frozen time', () => {
-    expect(trayLabel({ ...base, state: { kind: 'unauthenticated' } }, NOW)).toBe('')
+    expect(trayLabel(t, { ...base, state: { kind: 'unauthenticated' } }, NOW)).toBe('')
   })
 
   it('does not render a negative time when the clock is skewed', () => {
     const snapshot: AppSnapshot = { ...base, state: clockedIn(new Date(2026, 7, 12, 11, 5, 0)) }
-    expect(trayLabel(snapshot, NOW)).toBe('0:00')
+    expect(trayLabel(t, snapshot, NOW)).toBe('0:00')
   })
 
   it('does not cap the hours at a day', () => {
     const snapshot: AppSnapshot = { ...base, state: clockedIn(new Date(2026, 7, 11, 8, 0, 0)) }
-    expect(trayLabel(snapshot, NOW)).toBe('27:00')
+    expect(trayLabel(t, snapshot, NOW)).toBe('27:00')
   })
 })
 
 describe('trayStatusLine', () => {
   it('names the state in German when there is no time to show', () => {
-    expect(trayStatusLine(base, NOW)).toBe('Ausgestempelt')
-    expect(trayStatusLine({ ...base, state: { kind: 'unknown' } }, NOW)).toBe('Lädt …')
-    expect(trayStatusLine({ ...base, state: { kind: 'unauthenticated' } }, NOW)).toBe(
+    expect(trayStatusLine(t, base, NOW)).toBe('Ausgestempelt')
+    expect(trayStatusLine(t, { ...base, state: { kind: 'unknown' } }, NOW)).toBe('Lädt …')
+    expect(trayStatusLine(t, { ...base, state: { kind: 'unauthenticated' } }, NOW)).toBe(
       'Nicht angemeldet',
     )
   })
 
   it('reports the day’s time after clocking out', () => {
-    expect(trayStatusLine({ ...base, todayMinutes: 480 }, NOW)).toBe('Ausgestempelt · heute 8:00')
+    expect(trayStatusLine(t, { ...base, todayMinutes: 480 }, NOW)).toBe('Ausgestempelt · heute 8:00')
   })
 
   it('carries the running time, which is all Windows has to show it', () => {
     const snapshot: AppSnapshot = { ...base, state: clockedIn(new Date(2026, 7, 12, 9, 30, 0)) }
-    expect(trayStatusLine(snapshot, NOW)).toBe('Eingestempelt · 1:30')
+    expect(trayStatusLine(t, snapshot, NOW)).toBe('Eingestempelt · 1:30')
   })
 
   it('names the break and how long it has run', () => {
     const snapshot: AppSnapshot = { ...base, state: onBreak(new Date(2026, 7, 12, 10, 45, 0)) }
-    expect(trayStatusLine(snapshot, NOW)).toBe('In einer Pause · Mittagspause · 0:15')
+    expect(trayStatusLine(t, snapshot, NOW)).toBe('In einer Pause · Mittagspause · 0:15')
   })
 
   it('says the numbers are old instead of passing them off as current', () => {
@@ -196,13 +202,13 @@ describe('trayStatusLine', () => {
       lastErrorKind: 'network',
     }
     // German from the shared table, not the internal English sentence.
-    expect(trayStatusLine(snapshot, NOW)).toBe('Eingestempelt · 1:30 · keine Verbindung')
-    expect(trayStatusLine(snapshot, NOW)).not.toContain('timed out')
+    expect(trayStatusLine(t, snapshot, NOW)).toBe('Eingestempelt · 1:30 · keine Verbindung')
+    expect(trayStatusLine(t, snapshot, NOW)).not.toContain('timed out')
   })
 
   it('flags an incomplete day sum (C4) rather than understating it silently', () => {
     const snapshot: AppSnapshot = { ...base, todayMinutes: 60, incompleteShifts: 1 }
-    expect(trayStatusLine(snapshot, NOW)).toBe('Ausgestempelt · heute 1:00 · unvollständig')
+    expect(trayStatusLine(t, snapshot, NOW)).toBe('Ausgestempelt · heute 1:00 · unvollständig')
   })
 })
 
@@ -211,7 +217,7 @@ describe('trayTooltip', () => {
     const snapshot: AppSnapshot = { ...base, state: clockedIn(new Date(2026, 7, 12, 9, 30, 0)) }
     // On Windows this tooltip is the only place the running time appears
     // outside the menu, since `setTitle` does not exist there.
-    expect(trayTooltip(snapshot, NOW)).toBe('Factorial · Eingestempelt · 1:30')
+    expect(trayTooltip(t, snapshot, NOW)).toBe('Factorial · Eingestempelt · 1:30')
   })
 })
 
@@ -228,6 +234,7 @@ describe('trayTone', () => {
 describe('buildTrayMenu', () => {
   function menu(snapshot: AppSnapshot, overrides: Partial<Parameters<typeof buildTrayMenu>[0]> = {}) {
     return buildTrayMenu({
+    t,
       snapshot,
       now: NOW,
       windowVisible: true,
@@ -502,13 +509,13 @@ describe('trayActionErrorText', () => {
   it('turns the store’s in-flight refusal into German', () => {
     // The race this exists for: a click in the tray menu and a click in the
     // widget land in the store at the same time; the second one is refused.
-    const text = trayActionErrorText(new Error(ACTION_IN_FLIGHT_MESSAGE))
+    const text = trayActionErrorText(t, new Error(ACTION_IN_FLIGHT_MESSAGE))
     expect(text).toBe('Es läuft bereits eine Aktion. Bitte einen Moment warten.')
     expect(text).not.toContain('in flight')
   })
 
   it('turns a hung request into "keine Verbindung"', () => {
-    const text = trayActionErrorText(
+    const text = trayActionErrorText(t, 
       new FactorialError('network', 'request timed out after 15000 ms'),
     )
     expect(text).toBe('Keine Verbindung zu Factorial. Es wurde nichts gespeichert.')
@@ -516,14 +523,14 @@ describe('trayActionErrorText', () => {
   })
 
   it('keeps Factorial’s own wording for a rejected mutation', () => {
-    const text = trayActionErrorText(
+    const text = trayActionErrorText(t, 
       new FactorialError('graphql', 'Shift overlaps an existing one'),
     )
     expect(text).toBe('Factorial hat die Aktion abgelehnt: Shift overlaps an existing one')
   })
 
   it('says the session expired instead of showing the HTTP status', () => {
-    const text = trayActionErrorText(new FactorialError('unauthenticated', 'session rejected (HTTP 401)'))
+    const text = trayActionErrorText(t, new FactorialError('unauthenticated', 'session rejected (HTTP 401)'))
     expect(text).toBe('Die Sitzung ist abgelaufen. Bitte neu anmelden.')
     expect(text).not.toContain('401')
   })
@@ -531,11 +538,11 @@ describe('trayActionErrorText', () => {
   it('also understands an error that already crossed IPC', () => {
     // Not the tray's own path today, but the codec is the shared one and a
     // double-encoded message must not reach a menu.
-    const text = trayActionErrorText(new Error(encodeActionError('busy', 'whatever')))
+    const text = trayActionErrorText(t, new Error(encodeActionError('busy', 'whatever')))
     expect(text).toBe('Es läuft bereits eine Aktion. Bitte einen Moment warten.')
   })
 
   it('survives a thrown non-Error', () => {
-    expect(trayActionErrorText('nope')).toBe('Die Aktion ist fehlgeschlagen.')
+    expect(trayActionErrorText(t, 'nope')).toBe('Die Aktion ist fehlgeschlagen.')
   })
 })

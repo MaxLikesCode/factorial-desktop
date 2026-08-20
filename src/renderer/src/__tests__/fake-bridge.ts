@@ -35,6 +35,10 @@ export const TEST_SETTINGS: AppSettings = {
   lastWorkplaceId: null,
   theme: 'system',
   expandDirection: 'right',
+  // German, because the widget assertions were written in it and now double
+  // as a check that the German catalogue still says those words. The
+  // switching itself is covered in i18n.test.ts.
+  language: 'de',
 }
 
 export interface FakeBridge extends FactorialBridge {
