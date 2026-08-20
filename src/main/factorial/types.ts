@@ -27,6 +27,8 @@ export interface BreakConfigOption {
  * A break splits a working day into several of these, so the day's worked time
  * is the sum over all of them plus the running shift.
  */
+import type { BreakConfiguration } from '@shared/attendance-state'
+
 export interface ShiftSummary {
   id: string
   date: string
@@ -37,6 +39,31 @@ export interface ShiftSummary {
    * is unverified — the consumer decides how to add it up.
    */
   minutes: number | null
+  /**
+   * Whether this record is time that counts as work.
+   *
+   * A break is a shift record of its own — starting one closes the work record
+   * and opens a break record, which is why `openShift.timeSettingsBreakConfiguration`
+   * can identify the state at all (DESIGN.md, "Zustandsmodell"). For the day's
+   * total that means the two kinds arrive in the same list and have to be told
+   * apart, and `workable` is the field that answers exactly that question:
+   * `false` on a break, `true` on work. Confirmed live on 2026-08-12 for the
+   * open shift; the same field is listed on the closed-shift query in the spec.
+   *
+   * Nullable because it is not worth crashing the day sum over, and because a
+   * record that answers neither way is covered by `breakConfiguration` below.
+   */
+  workable: boolean | null
+  /**
+   * The break this record IS, if it is one.
+   *
+   * A second signal for the same question, and deliberately not a second truth:
+   * both are read, and either one saying "break" is enough to keep the record
+   * out of the worked total. They are expected to agree — the correlation is
+   * confirmed for the open shift — and neither is confirmed for a *closed*
+   * record, which is the whole reason for reading both.
+   */
+  breakConfiguration: BreakConfiguration | null
 }
 
 /**

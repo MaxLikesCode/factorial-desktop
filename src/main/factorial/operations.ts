@@ -90,6 +90,12 @@ function asNullableInteger(value: unknown, path: string): number | null {
  * number and break configuration ids as numbers too, while the UI and the IPC
  * contract use strings throughout — the conversion happens here, once.
  */
+function asNullableBoolean(value: unknown, path: string): boolean | null {
+  if (value === null || value === undefined) return null
+  if (typeof value !== 'boolean') throw new FactorialError('malformed', `${path} is not a boolean`)
+  return value
+}
+
 function asId(value: unknown, path: string): string {
   if (typeof value === 'string' && value.length > 0) return value
   if (typeof value === 'number' && Number.isInteger(value)) return String(value)
@@ -327,7 +333,7 @@ export function createOperations(client: GraphQLClient) {
         query: `query TodayShifts($id: Int!, $startOn: ISO8601Date!, $endOn: ISO8601Date!) {
           attendance { employee(id: $id) {
             attendanceShiftsConnection(startOn: $startOn, endOn: $endOn) {
-              nodes { id date minutes }
+              nodes { id date minutes workable timeSettingsBreakConfiguration { id name } }
             }
           } }
         }`,
@@ -341,6 +347,13 @@ export function createOperations(client: GraphQLClient) {
           id: asId(field(node, path, 'id'), `${path}.id`),
           date: asString(field(node, path, 'date'), `${path}.date`),
           minutes: asNullableInteger(field(node, path, 'minutes'), `${path}.minutes`),
+          // Both signals for "is this a break", because a break is a shift
+          // record like any other and the day's total must not count it.
+          workable: asNullableBoolean(field(node, path, 'workable'), `${path}.workable`),
+          breakConfiguration: parseBreakConfiguration(
+            field(node, path, 'timeSettingsBreakConfiguration'),
+            `${path}.timeSettingsBreakConfiguration`,
+          ),
         }
       })
     },

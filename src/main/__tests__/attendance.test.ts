@@ -35,12 +35,31 @@ const ON_BREAK: OpenShift = {
  * the mock helpers rather than through constructor overrides, so every mock keeps
  * its precise type.
  */
+/**
+ * A day record. Work by default — a break is a shift record like any other and
+ * differs only in these two fields, which is exactly what made it easy to add
+ * into the worked total by accident.
+ */
+function shift(
+  id: string,
+  minutes: number | null,
+  kind: 'work' | 'break' = 'work',
+): ShiftSummary {
+  return {
+    id,
+    date: TODAY,
+    minutes,
+    workable: kind === 'work',
+    breakConfiguration: kind === 'break' ? { id: '19613', name: 'Mittagspause' } : null,
+  }
+}
+
 function makeOps() {
   return {
     fetchOpenShift: vi.fn(async (_employeeId: number): Promise<OpenShift | null> => null),
     fetchTodayShifts: vi.fn(
       async (_employeeId: number, _date: string): Promise<ShiftSummary[]> => [
-        { id: '1', date: TODAY, minutes: 120 },
+        shift('1', 120),
       ],
     ),
     fetchExpectedMinutes: vi.fn(
@@ -134,11 +153,74 @@ describe('refresh', () => {
     expect(ops.fetchOpenShift).toHaveBeenCalledWith(EMPLOYEE_ID)
   })
 
+  /**
+   * Reported from the real account: the widget read 7:56 for a day Factorial had
+   * at 7:23 — the 33 minutes of break, added into the worked total.
+   *
+   * Starting a break closes the work record and opens a break record, so both
+   * arrive in the same list, and the day query used to ask only for `id date
+   * minutes`. With nothing to tell them apart, every break was worked time. On a
+   * widget people use to decide when to clock out, that sends them home early.
+   */
+  it('leaves break records out of the day’s worked minutes', async () => {
+    const ops = makeOps()
+    ops.fetchTodayShifts.mockResolvedValue([
+      shift('1', 90),
+      shift('2', 33, 'break'),
+      shift('3', 45),
+    ])
+    const store = makeStore(ops)
+    await store.refresh()
+
+    expect(store.getSnapshot().todayMinutes).toBe(135)
+  })
+
+  /**
+   * Neither field is confirmed on a CLOSED record, so both are read and either
+   * one is believed. They are not two truths about one question — they are one
+   * question asked twice, and a record that answers it only once still answers.
+   */
+  it('believes either signal on its own', async () => {
+    const ops = makeOps()
+    ops.fetchTodayShifts.mockResolvedValue([
+      shift('1', 90),
+      // Says it is not workable, but names no break configuration.
+      { id: '2', date: TODAY, minutes: 20, workable: false, breakConfiguration: null },
+      // Names a break configuration, but does not say it is unworkable.
+      {
+        id: '3',
+        date: TODAY,
+        minutes: 13,
+        workable: null,
+        breakConfiguration: { id: '19613', name: 'Mittagspause' },
+      },
+    ])
+    const store = makeStore(ops)
+    await store.refresh()
+
+    expect(store.getSnapshot().todayMinutes).toBe(90)
+  })
+
+  /**
+   * A break Factorial has not totalled yet says nothing about how complete the
+   * day's WORKED time is. Letting it mark the day incomplete would put a warning
+   * under a number that is already right.
+   */
+  it('does not let an untotalled break mark the day incomplete', async () => {
+    const ops = makeOps()
+    ops.fetchTodayShifts.mockResolvedValue([shift('1', 90), shift('2', null, 'break')])
+    const store = makeStore(ops)
+    await store.refresh()
+
+    expect(store.getSnapshot().todayMinutes).toBe(90)
+    expect(store.getSnapshot().incompleteShifts).toBe(0)
+  })
+
   it('sums today’s minutes across the shifts a break split apart', async () => {
     const ops = makeOps()
     ops.fetchTodayShifts.mockResolvedValue([
-      { id: '1', date: TODAY, minutes: 90 },
-      { id: '2', date: TODAY, minutes: 45 },
+      shift('1', 90),
+      shift('2', 45),
     ])
     const store = makeStore(ops)
     await store.refresh()
@@ -150,8 +232,8 @@ describe('refresh', () => {
     const ops = makeOps()
     ops.fetchOpenShift.mockResolvedValue(OPEN)
     ops.fetchTodayShifts.mockResolvedValue([
-      { id: '1', date: TODAY, minutes: 90 },
-      { id: OPEN.id, date: TODAY, minutes: 25 },
+      shift('1', 90),
+      shift(OPEN.id, 25),
     ])
     const store = makeStore(ops)
     await store.refresh()
@@ -161,8 +243,8 @@ describe('refresh', () => {
   it('counts a record without minutes instead of silently adding it as zero', async () => {
     const ops = makeOps()
     ops.fetchTodayShifts.mockResolvedValue([
-      { id: '1', date: TODAY, minutes: 90 },
-      { id: '2', date: TODAY, minutes: null },
+      shift('1', 90),
+      shift('2', null),
     ])
     const store = makeStore(ops)
     await store.refresh()

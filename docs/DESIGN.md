@@ -517,8 +517,36 @@ Zeitzone der Maschine geht ein. Diese Rekonstruktion liegt in **einer** Funktion
 in `time.ts` (`reconstructInstant(localDate, apiTimestamp, offset)`) und wird
 nirgends dupliziert.
 
-Die Tagessumme ist die Summe über `minutes` aller heutigen Shifts plus die
-laufende Zeit des offenen Shifts — Pausen splitten den Shift in mehrere Records.
+Die Tagessumme ist die Summe über `minutes` der heutigen **Arbeits**-Records plus
+die laufende Zeit des offenen Shifts.
+
+> **Pausen splitten den Shift in mehrere Records — und einer dieser Records IST
+> die Pause.** Eine Pause zu starten schließt den Arbeits-Record und öffnet einen
+> Pausen-Record; genau deshalb kann `openShift.timeSettingsBreakConfiguration`
+> den Zustand überhaupt erkennen. Für die Tagessumme heißt das: beide Sorten
+> kommen in derselben Liste an und müssen auseinandergehalten werden.
+>
+> Die erste Fassung holte nur `id date minutes` und hatte damit nichts, woran sie
+> das hätte tun können — jede Pause zählte als Arbeitszeit. Am echten Konto
+> gemeldet: 7:56 im Widget für einen Tag, den Factorial mit 7:23 führte, also
+> genau die 33 Minuten Pause. Auf einem Widget, an dem man abliest, wann man
+> Feierabend machen kann, schickt das Leute zu früh nach Hause.
+>
+> Ausgeschlossen wird über **beide** Signale des Records: `workable === false`
+> oder ein gesetztes `timeSettingsBreakConfiguration`. Das sind keine zwei
+> Wahrheiten über eine Frage, sondern eine Frage, zweimal gestellt — die
+> Korrelation ist für den *offenen* Shift live bestätigt, für einen
+> *geschlossenen* Record aber keines von beiden, und deshalb wird beiden
+> geglaubt. Fehlen beide, verhält sich die Summe wie vorher.
+>
+> Die Schieflage ist Absicht: eine unerkannte Pause bläht den Tag auf und
+> schickt jemanden zu früh heim, ein fälschlich als Pause gelesener
+> Arbeits-Record untertreibt ihn und kostet nichts als einen zweiten Blick in
+> Factorial.
+>
+> Ein Pausen-Record ohne `minutes` macht den Tag **nicht** unvollständig: ob
+> Factorial eine Pause schon summiert hat, sagt nichts darüber aus, wie
+> vollständig die *Arbeits*zeit ist.
 
 ## Fehlerbehandlung
 

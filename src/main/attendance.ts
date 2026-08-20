@@ -144,11 +144,40 @@ function describeFailure(error: unknown): Failure {
 }
 
 /**
+ * Whether a record is a break rather than work.
+ *
+ * Starting a break closes the work record and opens a break record, so both
+ * arrive in the same day list and look alike apart from these two fields. Adding
+ * a break into the worked total is not a rounding error: it reported 7:56 for a
+ * day Factorial had at 7:23, on a widget people use to decide when to clock out.
+ *
+ * Either signal is enough. `workable: false` is the direct answer to "does this
+ * count as work"; a break configuration says which break it is. The correlation
+ * between them was confirmed live for the open shift (DESIGN.md,
+ * "Zustandsmodell") but for a *closed* record neither is confirmed, so both are
+ * read and either one is believed. They are not two truths about one question —
+ * they are one question asked twice, and the answers are only ever allowed to
+ * agree or be absent.
+ *
+ * The bias is deliberate: an unrecognised break inflates the day and sends
+ * someone home early, while a work record mistaken for a break understates it
+ * and costs them nothing but a second look at Factorial.
+ */
+export function isBreakRecord(shift: ShiftSummary): boolean {
+  return shift.workable === false || shift.breakConfiguration !== null
+}
+
+/**
  * The day's worked minutes, and how much of the answer was unusable.
  *
  * Whether the running shift shows up in `attendanceShiftsConnection` at all is
  * unverified, so it is filtered out by id rather than trusted to be absent —
  * double counting the current shift would inflate every day sum.
+ *
+ * Breaks are dropped before anything else, including before the missing-minutes
+ * count: whether Factorial has totalled a break yet says nothing about how
+ * complete the day's WORKED time is, and letting a break mark the day incomplete
+ * would put a warning under the widget for a number that is already right.
  */
 function summariseDay(
   shifts: ShiftSummary[],
@@ -158,6 +187,7 @@ function summariseDay(
   let incompleteShifts = 0
   for (const shift of shifts) {
     if (openShiftId !== null && shift.id === openShiftId) continue
+    if (isBreakRecord(shift)) continue
     if (shift.minutes === null) {
       incompleteShifts += 1
       continue

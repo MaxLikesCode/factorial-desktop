@@ -194,37 +194,99 @@ describe('fetchOpenShift', () => {
 })
 
 describe('fetchTodayShifts', () => {
-  it('returns the day’s shifts with string ids and passes the date twice', async () => {
-    // A break splits a day into several records; the day sum is over all of them.
+  /**
+   * A break splits a day into several records — and one of those records IS the
+   * break. Both signals that tell them apart have to survive the parse, or the
+   * day sum counts lunch as work (which it did).
+   */
+  it('returns the day’s shifts with both break signals and passes the date twice', async () => {
     const { client, calls } = recordingClient({
       attendance: {
         employee: {
           attendanceShiftsConnection: {
             nodes: [
-              { id: 543343386, date: '2026-08-12', minutes: 67 },
-              { id: 543343999, date: '2026-08-12', minutes: 30 },
+              {
+                id: 543343386,
+                date: '2026-08-12',
+                minutes: 67,
+                workable: true,
+                timeSettingsBreakConfiguration: null,
+              },
+              {
+                id: 543343999,
+                date: '2026-08-12',
+                minutes: 30,
+                workable: false,
+                timeSettingsBreakConfiguration: { id: 19613, name: 'Mittagspause' },
+              },
             ],
           },
         },
       },
     })
     await expect(createOperations(client).fetchTodayShifts(1111111, '2026-08-12')).resolves.toEqual([
-      { id: '543343386', date: '2026-08-12', minutes: 67 },
-      { id: '543343999', date: '2026-08-12', minutes: 30 },
+      {
+        id: '543343386',
+        date: '2026-08-12',
+        minutes: 67,
+        workable: true,
+        breakConfiguration: null,
+      },
+      {
+        id: '543343999',
+        date: '2026-08-12',
+        minutes: 30,
+        workable: false,
+        breakConfiguration: { id: '19613', name: 'Mittagspause' },
+      },
     ])
-    expect(only(calls).variables).toEqual({ id: 1111111, startOn: '2026-08-12', endOn: '2026-08-12' })
+
+    const call = only(calls)
+    expect(call.variables).toEqual({ id: 1111111, startOn: '2026-08-12', endOn: '2026-08-12' })
+    // Asked for by name: a query that quietly stops requesting these is the bug
+    // coming back, and nothing else would notice.
+    expect(call.query).toContain('workable')
+    expect(call.query).toContain('timeSettingsBreakConfiguration')
   })
 
   it('keeps a null minutes as null instead of counting it as zero', async () => {
     const { client } = recordingClient({
       attendance: {
         employee: {
-          attendanceShiftsConnection: { nodes: [{ id: 1, date: '2026-08-12', minutes: null }] },
+          attendanceShiftsConnection: {
+            nodes: [
+              {
+                id: 1,
+                date: '2026-08-12',
+                minutes: null,
+                workable: true,
+                timeSettingsBreakConfiguration: null,
+              },
+            ],
+          },
         },
       },
     })
     await expect(createOperations(client).fetchTodayShifts(1111111, '2026-08-12')).resolves.toEqual([
-      { id: '1', date: '2026-08-12', minutes: null },
+      { id: '1', date: '2026-08-12', minutes: null, workable: true, breakConfiguration: null },
+    ])
+  })
+
+  /**
+   * Neither field is confirmed on a closed record. An older account, or a
+   * Factorial that simply omits them, must degrade to the previous behaviour
+   * rather than failing the whole day sum.
+   */
+  it('tolerates a record that carries neither signal', async () => {
+    const { client } = recordingClient({
+      attendance: {
+        employee: {
+          attendanceShiftsConnection: { nodes: [{ id: 1, date: '2026-08-12', minutes: 42 }] },
+        },
+      },
+    })
+    await expect(createOperations(client).fetchTodayShifts(1111111, '2026-08-12')).resolves.toEqual([
+      { id: '1', date: '2026-08-12', minutes: 42, workable: null, breakConfiguration: null },
     ])
   })
 
