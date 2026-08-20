@@ -65,6 +65,8 @@ export interface TrayDeps {
    * the wording fits, not in what has to happen.
    */
   onSignIn: () => void
+  /** Looks for a new version now and reports either way. See `updater.ts`. */
+  onCheckForUpdates: () => void
   onQuit: () => void
 }
 
@@ -204,6 +206,7 @@ export function createTray(deps: TrayDeps): Tray {
               lastActionError = null
               void deps.store.refresh()
             },
+            checkForUpdates: deps.onCheckForUpdates,
             quit: deps.onQuit,
           },
         }),

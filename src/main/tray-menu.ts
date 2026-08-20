@@ -47,6 +47,14 @@ export interface TrayActions {
   setAlwaysOnTop: (value: boolean) => void
   setTheme: (value: ThemeSetting) => void
   setExpandDirection: (value: ExpandDirection) => void
+  /**
+   * Asks the release feed now and reports either way.
+   *
+   * Separate from the automatic check because a requested check must answer —
+   * "you are up to date" is the useful outcome most of the time, and an entry
+   * that silently does nothing reads as broken.
+   */
+  checkForUpdates: () => void
   quit: () => void
 }
 
@@ -313,6 +321,11 @@ function settingsSubmenu(
     },
     { label: 'Aufklappen', submenu: directionSubmenu(settings, actions) },
     { label: 'Erscheinungsbild', submenu: themeSubmenu(settings, actions) },
+    { type: 'separator' },
+    // Not next to "Aktualisieren" one level up on purpose: that one reloads the
+    // times, this one looks for a new program. Two very different things that
+    // would read as the same one if they sat together.
+    { label: 'Nach Updates suchen …', click: () => actions.checkForUpdates() },
   ]
 
   // With no session there is nothing to drop, and the top-level entry already

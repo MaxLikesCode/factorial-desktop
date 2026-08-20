@@ -73,6 +73,7 @@ function noopActions(): TrayActions {
     setAlwaysOnTop: vi.fn(),
     setTheme: vi.fn(),
     setExpandDirection: vi.fn(),
+    checkForUpdates: vi.fn(),
     quit: vi.fn(),
   }
 }

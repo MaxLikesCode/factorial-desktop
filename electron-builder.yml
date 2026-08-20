@@ -1,5 +1,14 @@
 appId: com.maxgiess.factorial-desktop
 productName: Factorial Desktop
+# Not an upload target — the CI attaches the files itself (see the workflow).
+# This is here because electron-builder turns it into `app-update.yml` inside
+# the package, and that file is the only way the running app knows where to look
+# for a new version. Without it electron-updater has no feed and fails at
+# startup with "provider is not specified".
+publish:
+  provider: github
+  owner: MaxLikesCode
+  repo: factorial-desktop
 directories:
   output: release
   buildResources: build
@@ -27,6 +36,14 @@ mac:
 # The installer builds, installs without admin rights, and the Run-key entry it
 # leads to points at the installed .exe. The icon sizes were never a problem.
 win:
+  # PLATFORM: the signature check exists only on Windows.
+  # The builds are unsigned, and electron-updater checks the signature of what
+  # it downloaded against the running app's publisher before installing it. With
+  # nothing to compare, that check fails and the update never applies — so it is
+  # turned off explicitly rather than left to fail at the last step. Turn it back
+  # on the day there is a certificate; leaving it off with one would defeat the
+  # point of having it.
+  verifyUpdateCodeSignature: false
   target:
     # The installer: a Start-menu entry, an uninstaller, and the path the
     # autostart entry can safely point at.

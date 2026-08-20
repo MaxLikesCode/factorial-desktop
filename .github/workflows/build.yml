@@ -134,10 +134,19 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           # Not win-unpacked/ or mac/: the same app again as loose files.
+          #
+          # `latest*.yml` is not optional — it is the feed the installed app
+          # reads to learn a new version exists. Without it every update check
+          # fails with a 404 and the whole updater is decoration. The blockmaps
+          # go with it: electron-updater uses them to download only the changed
+          # parts of an installer, and falls back to the full file when they are
+          # missing.
           files: |
             release/*.exe
             release/*.dmg
             release/*.zip
+            release/latest*.yml
+            release/*.blockmap
           fail_on_unmatched_files: false
           # A plain release. What is and is not tested belongs in the notes,
           # which people read, rather than in a flag that only says "not final"

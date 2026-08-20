@@ -24,6 +24,7 @@ import { registerIpc } from './ipc'
 import { applyBrowserUserAgent, clearSession, createNetFetch, getFactorialSession } from './session'
 import { buildLoginItemSettings, createSettings, type Settings } from './settings'
 import { createTray, hasTray } from './tray'
+import { createUpdater } from './updater'
 import {
   createWidgetWindow,
   getWidget,
@@ -218,6 +219,13 @@ async function bootstrap(): Promise<void> {
   // Built before the first read so that a failing refresh still leaves a tray
   // behind — otherwise a bad network on start would produce an app with a hidden
   // widget and no way to quit it.
+  // Reads the state per prompt rather than capturing it: whether a restart is
+  // acceptable depends on whether a shift is running *at that moment*, not on
+  // what was true when the app started.
+  const updater = createUpdater({
+    getStateKind: () => store.getSnapshot().state.kind,
+  })
+
   createTray({
     store,
     settings: settingsWithWindowEffects,
@@ -225,6 +233,7 @@ async function bootstrap(): Promise<void> {
     onSignIn: () => {
       void signInAgain()
     },
+    onCheckForUpdates: () => void updater.checkNow(true),
     onQuit: () => app.quit(),
   })
 
@@ -233,6 +242,10 @@ async function bootstrap(): Promise<void> {
 
   // DESIGN.md, "Synchronisation": every 60 s in the background.
   store.startPolling()
+
+  // After the store, not before: the first update check waits half a minute and
+  // has no business competing with the first attendance read for the network.
+  updater.start()
 
   // The timer is recomputed from the shift's start on every render, so it cannot
   // drift while the machine sleeps — but `todayMinutes` and the state itself
