@@ -1,5 +1,11 @@
 appId: com.maxgiess.factorial-desktop
 productName: Factorial Desktop
+# Where `--publish` sends the artefacts. Named explicitly rather than left to be
+# guessed from the git remote, because the guess is silent when it is wrong.
+# Draft, so a release is never public before somebody has looked at it.
+publish:
+  provider: github
+  releaseType: draft
 directories:
   output: release
   buildResources: build

@@ -13,6 +13,18 @@
 #   minutes in a couple of days. To have that anyway, delete the `if:` on the
 #   build job and accept the bill.
 #
+# Where the artefacts end up depends on why the run happened:
+#
+# - On a **tag**, electron-builder uploads them straight to a draft GitHub
+#   release. Release assets do not count against the Actions artifact quota,
+#   which is not a detail: the first tagged run failed at exactly that quota
+#   with both platforms already built. They also outlive the 30-day retention
+#   an Actions artifact gets, which is what you want from a release anyway.
+# - On a **manual run**, there is no release to publish to, so the files go to
+#   Actions artifacts instead. That upload is allowed to fail without failing
+#   the run — a manual run is asking "does it still build", and the answer to
+#   that is the packaging step, not the upload.
+#
 # Neither platform is code-signed: `identity: null` in electron-builder.yml for
 # macOS, and no certificate for Windows. The artefacts therefore carry the usual
 # warnings — Gatekeeper wants right-click → Open on the first launch, SmartScreen
@@ -71,6 +83,9 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     needs: check
     runs-on: ${{ matrix.os }}
+    permissions:
+      # electron-builder creates and fills the draft release itself.
+      contents: write
     strategy:
       # One platform failing should not hide whether the other one worked.
       fail-fast: false
@@ -95,15 +110,25 @@ jobs:
 
       - run: npm ci
 
-      - name: Package
-        run: npm run ${{ matrix.script }} -- --publish never
+      - name: Package and publish
+        # `always` on a tag: build, then attach to the draft release. Both
+        # platforms publish into the same release — electron-builder creates it
+        # on the first one and adds to it on the second.
+        run: npm run ${{ matrix.script }} -- --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
         env:
           # Without this electron-builder hunts the keychain for a signing
           # identity and fails the build when it finds none. `identity: null`
           # already says not to sign; this stops the search itself.
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Collect artefacts
+        # Only where there is no release to publish to. See the note at the top.
+        if: github.event_name == 'workflow_dispatch'
+        # The quota is an account-wide limit that a green build cannot do
+        # anything about, and failing the run over it would report "the build is
+        # broken" for something that built fine.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
@@ -115,36 +140,4 @@ jobs:
             release/*.dmg
             release/*.zip
           if-no-files-found: error
-          retention-days: 30
-
-  release:
-    name: release
-    # Only for tags, and only if both platforms produced something.
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          merge-multiple: true
-
-      - name: Publish
-        uses: softprops/action-gh-release@v2
-        with:
-          files: artifacts/*
-          draft: true
-          generate_release_notes: true
-          # Neither build is signed; saying so where people download it is
-          # cheaper than answering the question every time.
-          body: |
-            Unsignierte Builds.
-
-            - **Windows:** `Factorial Desktop Setup <version>.exe` installiert
-              (Startmenü, Deinstaller, Autostart über das Tray-Menü);
-              `Factorial Desktop.exe` läuft ohne Installation. SmartScreen beim
-              ersten Start: „Weitere Informationen" → „Trotzdem ausführen".
-            - **macOS:** `.dmg` oder `.zip`, Apple Silicon. Beim ersten Start
-              Rechtsklick → „Öffnen", sonst weist Gatekeeper die App ab.
+          retention-days: 7
