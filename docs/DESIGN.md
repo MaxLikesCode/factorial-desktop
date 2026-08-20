@@ -728,6 +728,19 @@ einzublenden — sind eingeklappt aber `inert` und `aria-hidden`. Ohne das läuf
 die Tabulatortaste in ein unsichtbares „Ausstempeln", und Enter beendet eine
 Schicht, von der auf dem Bildschirm nichts zu sehen ist.
 
+**`inert` reicht dafür nicht, und `pointer-events: none` auch nicht.**
+`-webkit-app-region` löst Chromiums Fenster-Hit-Testing auf, nicht die
+Ereignisverarbeitung — eine unsichtbare Zeile mit `no-drag` bleibt eine
+`no-drag`-Fläche. Die eingeklappte Karte ließ sich deshalb nur an einem 14 px
+schmalen Streifen am linken Rand anfassen: genau links von der absolut
+positionierten Aktionszeile. Eine Regel unter `[data-open='false']` gibt die
+Fläche zurück, für den Container *und* für die Buttons darin — letztere werden
+von `.drag-region button` einzeln erwischt und brauchen einen eigenen Selektor.
+
+Der Aufklapp-Knopf liegt außerhalb dieser Zeilen und behält deshalb sein
+`no-drag`. Das ist die einzige Stelle der eingeklappten Karte, die klickt statt
+zu ziehen — und der Grund, warum sie außerhalb liegen muss.
+
 #### Die Feder
 
 Zwei Kurven, absichtlich verschieden (`--spring-out`, `--spring-back` in

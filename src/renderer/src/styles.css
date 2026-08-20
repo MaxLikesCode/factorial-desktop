@@ -157,6 +157,29 @@ body {
         transform 320ms var(--spring-out) 130ms;
 }
 
+/*
+ * A hidden row must not eat the drag region.
+ *
+ * `-webkit-app-region` is resolved by Chromium's window hit testing, not by
+ * pointer events — so `.morph-late`'s `pointer-events: none` does nothing for
+ * it, and neither does `inert`. The global `.drag-region button` rule therefore
+ * kept carving a no-drag hole out of the COLLAPSED card, wherever the invisible
+ * action row happened to sit. That row is absolutely positioned 14 px from the
+ * left, which left a 14 px strip down the left edge as the only place the widget
+ * could be picked up at all.
+ *
+ * Both selectors are needed: the container carries `.no-drag` itself, and the
+ * buttons inside it are caught by `.drag-region button`. Specificity does the
+ * rest — 0-3-0 and 0-3-1 against 0-1-0 and 0-1-1.
+ *
+ * Only while collapsed. Open, the row is visible and its buttons must be
+ * clickable, which is exactly what the rules this one overrides are for.
+ */
+.morph-card[data-open='false'] .morph-late,
+.morph-card[data-open='false'] .morph-late button {
+    -webkit-app-region: drag;
+}
+
 .morph-card[data-open='true'] .morph-late[data-row='2'] {
     transition:
         opacity 170ms var(--ease-out) 180ms,

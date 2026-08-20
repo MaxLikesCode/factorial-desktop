@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppSnapshot } from '@shared/ipc-contract'
@@ -146,5 +148,49 @@ describe('the minimal card', () => {
 
     act(() => bridge.pushSettings({ widgetSize: 'standard' }))
     expect(bridge.setWindowInteractive).toHaveBeenLastCalledWith(true)
+  })
+})
+
+/**
+ * The whole card is the handle, and that has to survive the rows that are
+ * present but invisible while it is collapsed.
+ *
+ * `-webkit-app-region` cannot be evaluated in jsdom — it is resolved by
+ * Chromium's window hit testing — so the rule itself is read back out of the
+ * stylesheet. What jsdom *can* prove is the structure the rule depends on, and
+ * that is asserted against the rendered card rather than trusted.
+ */
+describe('dragging the collapsed card', () => {
+  const css = readFileSync(join(process.cwd(), 'src/renderer/src/styles.css'), 'utf8')
+
+  /**
+   * Reported from using it: the widget could only be picked up by a narrow strip
+   * down its left edge. The invisible action row is absolutely positioned 14 px
+   * from the left and carries `no-drag`, and its buttons are caught by the
+   * global `.drag-region button` rule — neither of which `pointer-events: none`
+   * or `inert` has any effect on.
+   */
+  it('hands the drag region back while collapsed, container and buttons alike', () => {
+    const rule = /\.morph-card\[data-open='false'\][^{]*\{[^}]*-webkit-app-region:\s*drag/
+    expect(rule.test(css)).toBe(true)
+
+    const selectors = css.slice(css.indexOf(".morph-card[data-open='false']")).split('{')[0]
+    expect(selectors).toContain('.morph-late')
+    // The buttons need their own selector: `.drag-region button` reaches them
+    // directly and out-specifies a rule aimed only at their container.
+    expect(selectors).toContain('.morph-late button')
+  })
+
+  /**
+   * The one exception the user asked for. It only holds because the control
+   * lives outside the rows that rule targets — move it inside one and the
+   * collapsed card would swallow its own clicks.
+   */
+  it('keeps the expand control out of the rows that give the drag region back', async () => {
+    await mount('minimal')
+    const toggle = screen.getByRole('button', { name: 'Aktionen zeigen' })
+
+    expect(toggle.closest('.morph-late')).toBeNull()
+    expect(toggle.classList.contains('no-drag')).toBe(true)
   })
 })
