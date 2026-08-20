@@ -133,6 +133,15 @@ export function createWidgetWindow(deps: {
     frame: false,
     resizable: false,
     maximizable: false,
+    // PLATFORM: a double click on a draggable region is a title-bar double click
+    // as far as the platform is concerned, and both platforms have a window
+    // action bound to it — macOS whatever "Double-click a window's title bar to"
+    // is set to, Windows maximise/restore. For a `skipTaskbar` widget with no
+    // frame, being minimised means being gone: there is no taskbar button and no
+    // Dock tile to bring it back, only the tray's "Fenster zeigen". Refusing
+    // both actions closes that trap and is what leaves the gesture free for the
+    // card's own expand/collapse. Verified on neither platform.
+    minimizable: false,
     fullscreenable: false,
     skipTaskbar: true,
     transparent: true,

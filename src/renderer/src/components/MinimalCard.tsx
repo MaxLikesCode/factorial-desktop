@@ -45,6 +45,16 @@ interface Props {
  * draggable — it is a floating window and moving it matters more — and the
  * 20 px control next to the timer is what the size setting pays 8 px of width
  * for.
+ *
+ * The double click on the card is the same gesture asked for a second time, and
+ * it may or may not arrive. A draggable region is a title bar to the platform,
+ * and a title-bar double click is the platform's to handle: on Windows it is a
+ * maximise/restore that never reaches the page, on macOS it is whatever the
+ * system preference says. `minimizable: false` and `maximizable: false` on the
+ * window leave both with nothing to do, which is the most that can be arranged
+ * from here — whether the event then falls through to this handler is the
+ * platform's answer, not ours, and it is not answerable without running the app.
+ * It is additive either way: the control beside the timer does not depend on it.
  */
 export function MinimalCard({
   view,
@@ -109,6 +119,13 @@ export function MinimalCard({
       ref={cardRef}
       data-open={open}
       data-slot="minimal-card"
+      onDoubleClick={(event) => {
+        // A double click that landed on a control has already been dealt with by
+        // it: two clicks on the chevron are two toggles, and a third from here
+        // would put the card back where it started.
+        if ((event.target as HTMLElement).closest('button') !== null) return
+        onToggle()
+      }}
       className={`morph-card drag-region absolute top-0 overflow-hidden rounded-xl border bg-background/95 backdrop-blur ${
         // Pinned against the edge it does not grow into, so the transparent
         // remainder of the window is exactly the room the expansion moves into.

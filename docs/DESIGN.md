@@ -749,6 +749,22 @@ nicht anklicken. Verschieben wiegt bei einem schwebenden Fenster schwerer, also
 bleibt die Karte Drag-Region und bekommt einen eigenen Knopf. Die 8 px Breite,
 die Minimal über den Inhalt hinaus misst, sind genau das.
 
+**Ein Doppelklick auf die Karte klappt ebenfalls auf und zu — falls er ankommt.**
+Für die Plattform ist eine Drag-Region eine Titelleiste, und ein Doppelklick auf
+die Titelleiste gehört ihr: unter Windows Maximieren/Wiederherstellen, unter
+macOS das, was in den Systemeinstellungen dafür hinterlegt ist. `minimizable:
+false` und `maximizable: false` nehmen beiden Aktionen ihre Wirkung — mehr lässt
+sich von hier aus nicht arrangieren. Ob das Ereignis danach bis in den Renderer
+durchfällt, beantwortet die Plattform, nicht dieser Code, und ohne laufende App
+ist es nicht zu beantworten. Die Geste ist additiv: der Knopf neben der Zahl
+hängt nicht an ihr.
+
+`minimizable: false` schließt nebenbei eine ältere Falle. Steht in macOS
+„Doppelklick auf Titelleiste" auf „Im Dock ablegen", minimierte ein Doppelklick
+auf die Karte das Fenster — und für ein rahmenloses `skipTaskbar`-Fenster heißt
+minimiert *weg*: kein Taskleisten-Knopf, kein Dock-Symbol, nur „Fenster zeigen"
+im Tray.
+
 Die verborgenen Zeilen bleiben die ganze Zeit im DOM — sonst gäbe es nichts
 einzublenden — sind eingeklappt aber `inert` und `aria-hidden`. Ohne das läuft
 die Tabulatortaste in ein unsichtbares „Ausstempeln", und Enter beendet eine

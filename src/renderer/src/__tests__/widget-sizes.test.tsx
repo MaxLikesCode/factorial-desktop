@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppSnapshot } from '@shared/ipc-contract'
 import { WIDGET_LAYOUTS } from '@shared/widget-size'
@@ -262,5 +262,42 @@ describe('the expand direction', () => {
 
     act(() => bridge.pushSettings({ expandDirection: 'left' }))
     expect(minimalCard().classList.contains('right-0')).toBe(true)
+  })
+})
+
+/**
+ * The second way to open the card.
+ *
+ * Whether the gesture ever arrives is the platform's answer: a draggable region
+ * is a title bar as far as the window manager is concerned, and a title-bar
+ * double click is its to handle. What is testable is the handler itself and the
+ * one way it can go wrong — a double click on the chevron is already two
+ * toggles, and letting it bubble would add a third and leave the card exactly
+ * where it started.
+ */
+describe('double clicking the collapsed card', () => {
+  it('toggles the card, both ways', async () => {
+    await mount('minimal')
+    expect(minimalCard().dataset.open).toBe('false')
+
+    await act(async () => void fireEvent.dblClick(minimalCard()))
+    expect(minimalCard().dataset.open).toBe('true')
+
+    await act(async () => void fireEvent.dblClick(minimalCard()))
+    expect(minimalCard().dataset.open).toBe('false')
+  })
+
+  it('ignores a double click that landed on a control', async () => {
+    await mount('minimal')
+    const toggle = screen.getByRole('button', { name: 'Aktionen zeigen' })
+
+    // Two clicks on the chevron: open, then closed. The dblclick that follows
+    // them must not make it three.
+    await act(async () => {
+      toggle.click()
+      toggle.click()
+      fireEvent.dblClick(toggle)
+    })
+    expect(minimalCard().dataset.open).toBe('false')
   })
 })
