@@ -19,7 +19,13 @@
 
 import { BrowserWindow, app, screen } from 'electron'
 import { join } from 'node:path'
-import { hasTransparentMargin, windowSizeFor, type WidgetSize } from '@shared/widget-size'
+import {
+  hasTransparentMargin,
+  keepCardInPlace,
+  windowSizeFor,
+  type ExpandDirection,
+  type WidgetSize,
+} from '@shared/widget-size'
 import {
   clampToVisibleArea,
   readPositionStore,
@@ -44,6 +50,13 @@ import {
  * `src/shared/widget-size.ts`.
  */
 let currentSize: WidgetSize = 'standard'
+
+/**
+ * Which way the Minimal card grows. Kept here beside the size because the two
+ * are only ever useful together: the size gives the window its dimensions, the
+ * direction says where in them the card sits.
+ */
+let currentDirection: ExpandDirection = 'right'
 
 /** The window's pixel size for whatever size is currently selected. */
 function windowSize(): { width: number; height: number } {
@@ -102,10 +115,12 @@ export function createWidgetWindow(deps: {
   positionFile: string
   alwaysOnTop: boolean
   widgetSize: WidgetSize
+  expandDirection: ExpandDirection
 }): BrowserWindow {
   hookBeforeQuit()
 
   currentSize = deps.widgetSize
+  currentDirection = deps.expandDirection
 
   let store: PositionStore = readPositionStore(deps.positionFile)
   const { x, y } = resolveWidgetPosition(store, currentDisplays(), windowSize())
@@ -250,32 +265,42 @@ export function setWidgetInteractive(interactive: boolean): void {
 }
 
 /**
- * Switches the widget to another size.
+ * Switches the widget to another size, another expand direction, or both.
  *
- * Three things have to happen together, and the order matters. The window is
- * resized first; then its position is re-clamped, because a window that was
- * flush against the right or bottom edge of a display is now smaller and its
- * remembered position may put it partly past that edge — or, growing the other
- * way, off it entirely. Only then is the mouse mask re-applied: whether the
- * window has a transparent margin at all is a property of the new size.
+ * Four things have to happen together and the order matters. The window is
+ * resized; then it is moved so the card does not appear to jump; then the result
+ * is clamped, because a window that was flush against an edge may now hang off
+ * it; and only then is the mouse mask re-applied, since whether the window has a
+ * transparent margin at all is a property of the new size.
  *
- * The renderer is told nothing here. It reads the size from its settings
+ * The renderer is told nothing here. It reads both values from its settings
  * subscription like any other preference, and the card inside animates itself.
  */
-export function setWidgetWindowSize(size: WidgetSize): void {
-  currentSize = size
+export function setWidgetLayout(layout: {
+  size: WidgetSize
+  direction: ExpandDirection
+}): void {
+  const before = { size: currentSize, direction: currentDirection }
+  currentSize = layout.size
+  currentDirection = layout.direction
   if (!widget || widget.isDestroyed()) return
 
   const { width, height } = windowSize()
   widget.setSize(width, height)
 
-  const { x, y } = widget.getBounds()
+  // The user is looking at the CARD, not at the invisible rectangle around it.
+  // Flipping the direction moves the card to the other end of that rectangle, so
+  // without this the visible widget would slide the full width of its growth
+  // room sideways — 163 px — for a setting that is supposed to change nothing
+  // but which way it opens.
+  const bounds = widget.getBounds()
+  const kept = keepCardInPlace({ x: bounds.x, y: bounds.y }, before, layout)
   const next = clampToVisibleArea(
-    { x, y },
+    kept,
     currentDisplays().map((d) => d.bounds),
     { width, height },
   )
-  if (next.x !== x || next.y !== y) widget.setPosition(next.x, next.y)
+  if (next.x !== bounds.x || next.y !== bounds.y) widget.setPosition(next.x, next.y)
 
   // A size without a margin must end up plainly interactive, which is exactly
   // what `setWidgetInteractive` does for that case whatever it is passed.

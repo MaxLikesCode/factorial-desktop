@@ -183,8 +183,8 @@ export function isThemeSetting(value: string): value is ThemeSetting {
   return (THEME_SETTINGS as readonly string[]).includes(value)
 }
 
-import type { WidgetSize } from './widget-size'
-export type { WidgetSize }
+import type { ExpandDirection, WidgetSize } from './widget-size'
+export type { ExpandDirection, WidgetSize }
 
 export interface AppSettings {
   openAtLogin: boolean
@@ -199,6 +199,12 @@ export interface AppSettings {
    * the window is not always the same size as the card.
    */
   widgetSize: WidgetSize
+  /**
+   * Which way the Minimal card grows when it opens. Ignored by the other sizes,
+   * which have nothing to grow into — the tray only offers it while Minimal is
+   * selected.
+   */
+  expandDirection: ExpandDirection
 }
 
 /**

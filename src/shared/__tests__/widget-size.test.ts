@@ -2,7 +2,11 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  EXPAND_DIRECTIONS,
   OVERSHOOT,
+  cardOffsetFor,
+  isExpandDirection,
+  keepCardInPlace,
   WIDGET_LAYOUTS,
   WIDGET_SIZES,
   hasTransparentMargin,
@@ -67,6 +71,87 @@ describe('windowSizeFor', () => {
     const win = windowSizeFor('standard')
     win.width = 9999
     expect(WIDGET_LAYOUTS.standard.card.width).toBe(340)
+  })
+})
+
+describe('cardOffsetFor', () => {
+  it('accepts exactly the two directions', () => {
+    for (const direction of EXPAND_DIRECTIONS) expect(isExpandDirection(direction)).toBe(true)
+    for (const value of ['Right', 'up', 'down', '']) expect(isExpandDirection(value)).toBe(false)
+  })
+
+  it('leaves a size that fills its own window at the origin, whatever the direction', () => {
+    for (const size of ['standard', 'kompakt'] as const) {
+      for (const direction of EXPAND_DIRECTIONS) {
+        expect(cardOffsetFor(size, direction)).toEqual({ x: 0, y: 0 })
+      }
+    }
+  })
+
+  /**
+   * The card sits against the edge it does NOT grow into, so the transparent
+   * remainder is exactly the room the expansion needs.
+   */
+  it('pins the minimal card against the edge it does not grow into', () => {
+    const { card } = WIDGET_LAYOUTS.minimal
+    const win = windowSizeFor('minimal')
+
+    expect(cardOffsetFor('minimal', 'right')).toEqual({ x: 0, y: 0 })
+    expect(cardOffsetFor('minimal', 'left')).toEqual({ x: win.width - card.width, y: 0 })
+  })
+
+  /**
+   * Both directions grow downwards. That is what keeps the expand control's y
+   * fixed when growing left, which is the whole point of offering that
+   * direction — a control that moved vertically would still make the pointer
+   * chase it.
+   */
+  it('never offsets vertically, in either direction', () => {
+    for (const direction of EXPAND_DIRECTIONS) {
+      expect(cardOffsetFor('minimal', direction).y).toBe(0)
+    }
+  })
+})
+
+describe('keepCardInPlace', () => {
+  const at = (x: number, y: number) => ({ x, y })
+
+  it('does not move a window whose card sits in the same place as before', () => {
+    const origin = at(400, 300)
+    expect(
+      keepCardInPlace(origin, { size: 'minimal', direction: 'right' }, { size: 'minimal', direction: 'right' }),
+    ).toEqual(origin)
+  })
+
+  /**
+   * The regression this exists for: the card is what the user is looking at, and
+   * flipping the direction otherwise slides it the full width of the growth room
+   * for no reason anybody asked for.
+   */
+  it('shifts the window so the card stays put when the direction flips', () => {
+    const { card } = WIDGET_LAYOUTS.minimal
+    const room = windowSizeFor('minimal').width - card.width
+
+    const toLeft = keepCardInPlace(
+      at(400, 300),
+      { size: 'minimal', direction: 'right' },
+      { size: 'minimal', direction: 'left' },
+    )
+    expect(toLeft).toEqual(at(400 - room, 300))
+
+    // And exactly back again — the two directions must not drift apart over
+    // repeated switching.
+    expect(
+      keepCardInPlace(toLeft, { size: 'minimal', direction: 'left' }, { size: 'minimal', direction: 'right' }),
+    ).toEqual(at(400, 300))
+  })
+
+  it('keeps the card in place when leaving minimal for a size that fills its window', () => {
+    const room = windowSizeFor('minimal').width - WIDGET_LAYOUTS.minimal.card.width
+
+    expect(
+      keepCardInPlace(at(400, 300), { size: 'minimal', direction: 'left' }, { size: 'standard', direction: 'left' }),
+    ).toEqual(at(400 + room, 300))
   })
 })
 

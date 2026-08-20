@@ -24,7 +24,7 @@
 import type { MenuItemConstructorOptions } from 'electron'
 import { describeActionError, describeActionFailure, describeStaleReason } from '@shared/errors'
 import type { AppSettings, AppSnapshot, ThemeSetting } from '@shared/ipc-contract'
-import { WIDGET_LAYOUTS, type WidgetSize } from '@shared/widget-size'
+import { WIDGET_LAYOUTS, type ExpandDirection, type WidgetSize } from '@shared/widget-size'
 import { classifyActionError } from './ipc-handlers'
 
 /** Drives the colour-coded Windows icon; macOS uses one template icon for all. */
@@ -46,6 +46,7 @@ export interface TrayActions {
   setAlwaysOnTop: (value: boolean) => void
   setTheme: (value: ThemeSetting) => void
   setWidgetSize: (value: WidgetSize) => void
+  setExpandDirection: (value: ExpandDirection) => void
   quit: () => void
 }
 
@@ -272,6 +273,37 @@ function sizeSubmenu(settings: AppSettings, actions: TrayActions): MenuItemConst
   })
 }
 
+/**
+ * Which way the Minimal card grows.
+ *
+ * Only offered while Minimal is selected. The other two sizes fill their own
+ * window and have nothing to grow into, so the entry would sit there doing
+ * nothing — and a settings menu that lists inert options teaches people to
+ * distrust the ones that do work.
+ *
+ * The labels name the direction rather than the benefit, because the benefit
+ * ("the button stays under your pointer") is only half of it: the window is
+ * wider than the collapsed card and gets clamped to the display as a whole, so
+ * the direction also decides which screen edge the widget can be pushed all the
+ * way into.
+ */
+const DIRECTION_LABEL: ReadonlyArray<{ value: ExpandDirection; label: string }> = [
+  { value: 'right', label: 'Nach rechts' },
+  { value: 'left', label: 'Nach links' },
+]
+
+function directionSubmenu(
+  settings: AppSettings,
+  actions: TrayActions,
+): MenuItemConstructorOptions[] {
+  return DIRECTION_LABEL.map(({ value, label }) => ({
+    label,
+    type: 'radio',
+    checked: settings.expandDirection === value,
+    click: () => actions.setExpandDirection(value),
+  }))
+}
+
 function settingsSubmenu(
   snapshot: AppSnapshot,
   settings: AppSettings,
@@ -291,6 +323,10 @@ function settingsSubmenu(
       click: () => actions.setAlwaysOnTop(!settings.alwaysOnTop),
     },
     { label: 'Größe', submenu: sizeSubmenu(settings, actions) },
+    // Only Minimal has anywhere to grow, so only Minimal is offered a direction.
+    ...(settings.widgetSize === 'minimal'
+      ? [{ label: 'Aufklappen', submenu: directionSubmenu(settings, actions) }]
+      : []),
     { label: 'Erscheinungsbild', submenu: themeSubmenu(settings, actions) },
   ]
 

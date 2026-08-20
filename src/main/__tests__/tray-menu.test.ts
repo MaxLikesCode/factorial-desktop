@@ -48,6 +48,7 @@ const settings: AppSettings = {
   lastWorkplaceId: null,
   theme: 'system',
   widgetSize: 'standard',
+  expandDirection: 'right',
 }
 
 function clockedIn(since: Date): AppSnapshot['state'] {
@@ -72,6 +73,7 @@ function noopActions(): TrayActions {
     setAlwaysOnTop: vi.fn(),
     setTheme: vi.fn(),
     setWidgetSize: vi.fn(),
+    setExpandDirection: vi.fn(),
     quit: vi.fn(),
   }
 }
@@ -389,6 +391,47 @@ describe('buildTrayMenu', () => {
       expect(actions.setWidgetSize).toHaveBeenCalledWith('minimal')
       fire(sizes[0])
       expect(actions.setWidgetSize).toHaveBeenCalledWith('standard')
+    })
+
+    /**
+     * Only Minimal has anywhere to grow. A menu that lists options which do
+     * nothing teaches people to distrust the ones that do.
+     */
+    it('offers the expand direction only while Minimal is selected', () => {
+      for (const size of ['standard', 'kompakt'] as const) {
+        const entries = submenuOf(
+          itemAt(menu(base, { settings: { ...settings, widgetSize: size } }), 'Einstellungen'),
+        )
+        expect(labels(entries)).not.toContain('Aufklappen')
+      }
+
+      const minimal = submenuOf(
+        itemAt(menu(base, { settings: { ...settings, widgetSize: 'minimal' } }), 'Einstellungen'),
+      )
+      expect(labels(minimal)).toContain('Aufklappen')
+    })
+
+    it('offers both directions as radios and writes the one it names', () => {
+      const actions = noopActions()
+      const directions = submenuOf(
+        itemAt(
+          submenuOf(
+            itemAt(
+              menu(base, { settings: { ...settings, widgetSize: 'minimal' }, actions }),
+              'Einstellungen',
+            ),
+          ),
+          'Aufklappen',
+        ),
+      )
+
+      expect(directions.map((entry) => entry.label)).toEqual(['Nach rechts', 'Nach links'])
+      for (const entry of directions) expect(entry.type).toBe('radio')
+      // The fixture stores 'right', the direction that shipped first.
+      expect(directions.map((entry) => entry.checked)).toEqual([true, false])
+
+      fire(directions[1])
+      expect(actions.setExpandDirection).toHaveBeenCalledWith('left')
     })
 
     it('offers the appearance as three radios, with the stored one marked', () => {

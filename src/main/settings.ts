@@ -27,7 +27,12 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { isThemeSetting, type AppSettings, type ThemeSetting } from '@shared/ipc-contract'
-import { isWidgetSize, type WidgetSize } from '@shared/widget-size'
+import {
+  isExpandDirection,
+  isWidgetSize,
+  type ExpandDirection,
+  type WidgetSize,
+} from '@shared/widget-size'
 import { isLocationType } from './factorial/types'
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -42,6 +47,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   // The size that shipped before this was a choice.
   widgetSize: 'standard',
+  // The direction that shipped first; the alternative is opt-in.
+  expandDirection: 'right',
 }
 
 export interface SettingsDeps {
@@ -50,8 +57,14 @@ export interface SettingsDeps {
   applyLoginItem: (openAtLogin: boolean) => void
   /** Called with the new value whenever `theme` actually changes. */
   applyTheme: (theme: ThemeSetting) => void
-  /** Called with the new value whenever `widgetSize` actually changes. */
-  applyWidgetSize: (size: WidgetSize) => void
+  /**
+   * Called whenever the widget's size OR its expand direction changes.
+   *
+   * One callback for both, because the window cannot act on either alone: it
+   * needs the pair to work out its own dimensions and where the card sits inside
+   * them, and two callbacks would each have to go looking for the other's value.
+   */
+  applyWidgetLayout: (layout: { size: WidgetSize; direction: ExpandDirection }) => void
 }
 
 /**
@@ -97,6 +110,10 @@ function sanitise(raw: unknown, base: AppSettings): AppSettings {
       typeof r.widgetSize === 'string' && isWidgetSize(r.widgetSize)
         ? r.widgetSize
         : base.widgetSize,
+    expandDirection:
+      typeof r.expandDirection === 'string' && isExpandDirection(r.expandDirection)
+        ? r.expandDirection
+        : base.expandDirection,
   }
 }
 
@@ -104,7 +121,7 @@ export function createSettings({
   filePath,
   applyLoginItem,
   applyTheme,
-  applyWidgetSize,
+  applyWidgetLayout,
 }: SettingsDeps): Settings {
   let current: AppSettings
   try {
@@ -135,11 +152,15 @@ export function createSettings({
       persist(next)
       const loginItemChanged = next.openAtLogin !== current.openAtLogin
       const themeChanged = next.theme !== current.theme
-      const sizeChanged = next.widgetSize !== current.widgetSize
+      const layoutChanged =
+        next.widgetSize !== current.widgetSize ||
+        next.expandDirection !== current.expandDirection
       current = next
       if (loginItemChanged) applyLoginItem(current.openAtLogin)
       if (themeChanged) applyTheme(current.theme)
-      if (sizeChanged) applyWidgetSize(current.widgetSize)
+      if (layoutChanged) {
+        applyWidgetLayout({ size: current.widgetSize, direction: current.expandDirection })
+      }
       return { ...current }
     },
   }

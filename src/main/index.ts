@@ -12,7 +12,7 @@
 import { app, dialog, nativeTheme, powerMonitor } from 'electron'
 import { join } from 'node:path'
 import { IPC, type ThemeSetting } from '@shared/ipc-contract'
-import type { WidgetSize } from '@shared/widget-size'
+import type { ExpandDirection, WidgetSize } from '@shared/widget-size'
 import { resolveUserDataPath } from './app-identity'
 import { createAttendanceStore, type ClockInInput } from './attendance'
 import { ensureAuthenticated, openLoginWindow } from './auth'
@@ -29,7 +29,7 @@ import {
   getWidget,
   setWidgetAlwaysOnTop,
   setWidgetInteractive,
-  setWidgetWindowSize,
+  setWidgetLayout,
   showWidget,
 } from './windows'
 
@@ -86,15 +86,15 @@ function applyTheme(theme: ThemeSetting): void {
 }
 
 /**
- * Resizes the widget window for a newly chosen size.
+ * Re-lays-out the widget window for a newly chosen size or expand direction.
  *
- * Thin on purpose: the window module owns the resize, the position re-clamp and
- * the click-through mask, because all three are properties of the window and
- * none of them belong to a settings store that deliberately knows nothing about
- * Electron.
+ * Thin on purpose: the window module owns the resize, the repositioning, the
+ * clamp and the click-through mask, because all four are properties of the
+ * window and none of them belong to a settings store that deliberately knows
+ * nothing about Electron.
  */
-function applyWidgetSize(size: WidgetSize): void {
-  setWidgetWindowSize(size)
+function applyWidgetLayout(layout: { size: WidgetSize; direction: ExpandDirection }): void {
+  setWidgetLayout(layout)
 }
 
 function applyLoginItem(openAtLogin: boolean): void {
@@ -140,7 +140,7 @@ async function bootstrap(): Promise<void> {
     filePath: join(app.getPath('userData'), 'settings.json'),
     applyLoginItem,
     applyTheme,
-    applyWidgetSize,
+    applyWidgetLayout,
   })
 
   // One wrapped instance for both writers — the widget through IPC and the
@@ -207,6 +207,7 @@ async function bootstrap(): Promise<void> {
     positionFile: join(app.getPath('userData'), 'window-position.json'),
     alwaysOnTop: settings.get().alwaysOnTop,
     widgetSize: settings.get().widgetSize,
+    expandDirection: settings.get().expandDirection,
   })
 
   // Built before the first read so that a failing refresh still leaves a tray

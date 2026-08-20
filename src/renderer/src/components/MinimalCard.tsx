@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { ChevronDownIcon } from 'lucide-react'
-import { WIDGET_LAYOUTS } from '@shared/widget-size'
+import { WIDGET_LAYOUTS, type ExpandDirection } from '@shared/widget-size'
 import type { WidgetView } from './WidgetView'
 import { Timer } from './StatusCard'
 
@@ -11,6 +11,16 @@ interface Props {
   open: boolean
   onToggle: () => void
   actions: ReactNode
+  /**
+   * Which way the card grows, and with it whether the expand control travels.
+   *
+   * `right` grows away from the control, so the control rides the card's far
+   * corner and the pointer that just clicked it has to follow. `left` grows the
+   * other way: the card's right edge is fixed, the control keeps its place, and
+   * the same pointer closes it again without moving. Both grow downwards, which
+   * is what lets the control's y stay put in the second case.
+   */
+  direction: ExpandDirection
 }
 
 /**
@@ -36,7 +46,13 @@ interface Props {
  * 20 px control next to the timer is what the size setting pays 8 px of width
  * for.
  */
-export function MinimalCard({ view, open, onToggle, actions }: Props): React.JSX.Element {
+export function MinimalCard({
+  view,
+  open,
+  onToggle,
+  actions,
+  direction,
+}: Props): React.JSX.Element {
   const cardRef = useRef<HTMLDivElement>(null)
 
   /**
@@ -93,7 +109,11 @@ export function MinimalCard({ view, open, onToggle, actions }: Props): React.JSX
       ref={cardRef}
       data-open={open}
       data-slot="minimal-card"
-      className="morph-card drag-region relative overflow-hidden rounded-xl border bg-background/95 backdrop-blur"
+      className={`morph-card drag-region absolute top-0 overflow-hidden rounded-xl border bg-background/95 backdrop-blur ${
+        // Pinned against the edge it does not grow into, so the transparent
+        // remainder of the window is exactly the room the expansion moves into.
+        direction === 'left' ? 'right-0' : 'left-0'
+      }`}
       style={{ width: size.width, height: size.height }}
       // Collapsed, the state is carried by a 7 px coloured dot and nothing else
       // in words. The label row right below is inert then, so the card says it.
@@ -154,8 +174,12 @@ export function MinimalCard({ view, open, onToggle, actions }: Props): React.JSX
         onClick={onToggle}
         aria-label={open ? 'Widget verkleinern' : 'Aktionen zeigen'}
         aria-expanded={open}
+        // Always 10 px from the card's right edge. Growing left that edge does
+        // not move, so this stays exactly where it was clicked — the whole point
+        // of the direction. Growing right it rides along, and drops to sit
+        // opposite the action buttons rather than crowding the status line.
         className="morph-move no-drag absolute right-2.5 grid size-5 place-items-center rounded-md text-muted-foreground transition-colors duration-150 ease-(--ease-out) hover:bg-muted hover:text-foreground"
-        style={{ top: open ? 88 : 12 }}
+        style={{ top: open && direction === 'right' ? 88 : 12 }}
       >
         <ChevronDownIcon
           className={`size-3.5 transition-transform duration-300 ease-(--ease-out) ${

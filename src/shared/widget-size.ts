@@ -34,6 +34,28 @@ export function isWidgetSize(value: string): value is WidgetSize {
   return (WIDGET_SIZES as readonly string[]).includes(value)
 }
 
+/**
+ * Which way the Minimal card grows when it is opened.
+ *
+ * `right` grows away from the expand control, which therefore travels with the
+ * card's far corner: the pointer that just clicked it is left behind and has to
+ * chase it to close again. `left` grows the other way and pins the control where
+ * it already is — click, act, click again without moving the mouse.
+ *
+ * Both are offered rather than one being fixed, because the better answer
+ * depends on where the widget is parked. The window is wider than the collapsed
+ * card and is clamped to the display as a whole, so the card cannot be pushed
+ * fully into the edge the growth room sits against: growing right keeps the left
+ * screen edge reachable, growing left keeps the right one.
+ */
+export const EXPAND_DIRECTIONS = ['right', 'left'] as const
+
+export type ExpandDirection = (typeof EXPAND_DIRECTIONS)[number]
+
+export function isExpandDirection(value: string): value is ExpandDirection {
+  return (EXPAND_DIRECTIONS as readonly string[]).includes(value)
+}
+
 export interface Size {
   width: number
   height: number
@@ -93,4 +115,52 @@ export function windowSizeFor(size: WidgetSize): Size {
 /** True when the window carries transparent margin the card does not fill. */
 export function hasTransparentMargin(size: WidgetSize): boolean {
   return WIDGET_LAYOUTS[size].expanded !== null
+}
+
+export interface Point {
+  x: number
+  y: number
+}
+
+/**
+ * Where the collapsed card sits inside its window, from the window's top-left.
+ *
+ * A size that fills its window sits at the origin and has nowhere else to be.
+ * The Minimal card sits against the edge it does *not* grow into: growing right
+ * pins it left, growing left pins it right, and the transparent remainder is the
+ * room the expansion moves into.
+ *
+ * Vertically there is never an offset — both directions grow downwards, which
+ * keeps the expand control's y fixed in the `left` case and is the only reason
+ * that case can leave the pointer where it is.
+ */
+export function cardOffsetFor(size: WidgetSize, direction: ExpandDirection): Point {
+  const { card, expanded } = WIDGET_LAYOUTS[size]
+  if (expanded === null || direction === 'right') return { x: 0, y: 0 }
+  return { x: windowSizeFor(size).width - card.width, y: 0 }
+}
+
+/**
+ * Where to put the window so the card does not appear to jump.
+ *
+ * Changing the size or the direction changes both the window's dimensions and
+ * where the card sits inside it. The user's eye is on the card, not on the
+ * invisible rectangle around it, so the card's screen position is what has to be
+ * preserved — switching direction otherwise slides the visible widget 163 px
+ * sideways for no reason the user asked for.
+ *
+ * Returns the new window origin. Clamping to a display is the caller's job; this
+ * is arithmetic and knows nothing about screens.
+ */
+export function keepCardInPlace(
+  origin: Point,
+  from: { size: WidgetSize; direction: ExpandDirection },
+  to: { size: WidgetSize; direction: ExpandDirection },
+): Point {
+  const before = cardOffsetFor(from.size, from.direction)
+  const after = cardOffsetFor(to.size, to.direction)
+  return {
+    x: origin.x + before.x - after.x,
+    y: origin.y + before.y - after.y,
+  }
 }

@@ -39,7 +39,7 @@ import {
   type ClockInInput,
 } from './attendance'
 import { FactorialError } from './factorial/client'
-import { isWidgetSize } from '@shared/widget-size'
+import { isExpandDirection, isWidgetSize } from '@shared/widget-size'
 import { isLocationType } from './factorial/types'
 
 type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
@@ -177,6 +177,9 @@ function asSettingsPatch(payload: unknown): Partial<AppSettings> {
   // Same reasoning: an unknown size has no entry in the layout table.
   if (typeof raw.widgetSize === 'string' && isWidgetSize(raw.widgetSize)) {
     patch.widgetSize = raw.widgetSize
+  }
+  if (typeof raw.expandDirection === 'string' && isExpandDirection(raw.expandDirection)) {
+    patch.expandDirection = raw.expandDirection
   }
   return patch
 }

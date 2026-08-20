@@ -23,8 +23,11 @@ const CLOCKED_IN: Partial<AppSnapshot> = {
   expectedMinutes: 480,
 }
 
-async function mount(size: 'standard' | 'kompakt' | 'minimal'): Promise<FakeBridge> {
-  const bridge = installBridge(CLOCKED_IN, { widgetSize: size })
+async function mount(
+  size: 'standard' | 'kompakt' | 'minimal',
+  direction: 'right' | 'left' = 'right',
+): Promise<FakeBridge> {
+  const bridge = installBridge(CLOCKED_IN, { widgetSize: size, expandDirection: direction })
   render(<StatusWidget />)
   await act(async () => {})
   await act(async () => {
@@ -207,5 +210,57 @@ describe('dragging the collapsed card', () => {
 
     expect(toggle.closest('.morph-late')).toBeNull()
     expect(toggle.classList.contains('no-drag')).toBe(true)
+  })
+})
+
+/**
+ * Which way the card grows, and what that costs the pointer.
+ *
+ * Growing right, the expand control rides the card's far corner: it moves right
+ * with the card's right edge and drops to sit opposite the action buttons, so
+ * the pointer that opened the card has to chase it to close again. Growing left,
+ * the card's right edge does not move and the control keeps both coordinates —
+ * click, act, click again without moving the mouse. That is the whole feature,
+ * and it rests on two positions being exactly equal, so it is asserted rather
+ * than looked at.
+ */
+describe('the expand direction', () => {
+  const control = (): HTMLElement => screen.getByRole('button', { name: /Aktionen zeigen|verkleinern/ })
+
+  it('pins the card against the edge it does not grow into', async () => {
+    await mount('minimal', 'right')
+    expect(minimalCard().classList.contains('left-0')).toBe(true)
+    cleanup()
+
+    await mount('minimal', 'left')
+    expect(minimalCard().classList.contains('right-0')).toBe(true)
+  })
+
+  it('leaves the control exactly where it was when growing left', async () => {
+    await mount('minimal', 'left')
+    const before = control().style.top
+
+    await act(async () => void control().click())
+    expect(minimalCard().dataset.open).toBe('true')
+    // Same offset from the top, and still 10 px from a right edge that has not
+    // moved — so the pointer is still on it.
+    expect(control().style.top).toBe(before)
+    expect(control().classList.contains('right-2.5')).toBe(true)
+  })
+
+  it('moves the control down out of the way when growing right', async () => {
+    await mount('minimal', 'right')
+    expect(control().style.top).toBe('12px')
+
+    await act(async () => void control().click())
+    expect(control().style.top).toBe('88px')
+  })
+
+  it('follows a direction change pushed from the tray', async () => {
+    const bridge = await mount('minimal', 'right')
+    expect(minimalCard().classList.contains('left-0')).toBe(true)
+
+    act(() => bridge.pushSettings({ expandDirection: 'left' }))
+    expect(minimalCard().classList.contains('right-0')).toBe(true)
   })
 })

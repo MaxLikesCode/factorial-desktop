@@ -22,6 +22,7 @@ const SETTINGS: AppSettings = {
   lastWorkplaceId: null,
   theme: 'system',
   widgetSize: 'standard',
+  expandDirection: 'right',
 }
 
 function fakeStore(overrides: Partial<IpcStore> = {}): IpcStore & { listeners: (() => void)[] } {
@@ -291,6 +292,18 @@ describe('settings and session channels', () => {
     const { handlers, settings } = handlersFor(fakeStore())
     await handlers[IPC.setSettings]({ widgetSize: 'kompakt' })
     expect(settings.set).toHaveBeenCalledWith({ widgetSize: 'kompakt' })
+  })
+
+  it('passes a known expand direction through', async () => {
+    const { handlers, settings } = handlersFor(fakeStore())
+    await handlers[IPC.setSettings]({ expandDirection: 'left' })
+    expect(settings.set).toHaveBeenCalledWith({ expandDirection: 'left' })
+  })
+
+  it('drops an expand direction that is not one of the two', async () => {
+    const { handlers, settings } = handlersFor(fakeStore())
+    await handlers[IPC.setSettings]({ expandDirection: 'up' })
+    expect(settings.set).toHaveBeenCalledWith({})
   })
 
   it('drops a widget size that has no layout', async () => {

@@ -685,6 +685,7 @@ Fenster schließen blendet aus statt zu beenden; beendet wird nur über das Tray
 - Autostart beim Login (Standard: an, `app.setLoginItemSettings`)
 - Always-on-Top an/aus
 - Größe: Standard (Vorgabe) / Kompakt / Minimal
+- Aufklappen: Nach rechts (Vorgabe) / Nach links — nur bei „Minimal" angeboten
 - Erscheinungsbild: Systemvorgabe (Standard) / Hell / Dunkel
 - Abmelden (Partition-Cookies löschen)
 
@@ -765,6 +766,37 @@ von `.drag-region button` einzeln erwischt und brauchen einen eigenen Selektor.
 Der Aufklapp-Knopf liegt außerhalb dieser Zeilen und behält deshalb sein
 `no-drag`. Das ist die einzige Stelle der eingeklappten Karte, die klickt statt
 zu ziehen — und der Grund, warum sie außerhalb liegen muss.
+
+#### Aufklapprichtung
+
+Zwei Richtungen, im Tray wählbar, aber **nur solange „Minimal" gewählt ist**.
+Die anderen beiden Größen füllen ihr Fenster aus und haben nichts, wohinein sie
+wachsen könnten; ein Menüeintrag, der nichts tut, bringt Leuten bei, auch den
+anderen zu misstrauen.
+
+**Nach rechts** (Vorgabe) wächst von der Aufklapp-Schaltfläche weg. Die reitet
+damit auf der fernen Ecke der Karte mit: sie wandert nach rechts und rutscht
+nach unten, den Aktionsknöpfen gegenüber. Der Zeiger, der eben geklickt hat,
+muss ihr folgen, um wieder zuzuklappen.
+
+**Nach links** wächst in die andere Richtung. Die rechte Kante der Karte bleibt
+stehen, die Schaltfläche behält beide Koordinaten — klicken, handeln, wieder
+klicken, ohne die Maus zu bewegen. Dass beide Richtungen nach *unten* wachsen,
+ist die Voraussetzung dafür: eine vertikal wandernde Schaltfläche würde den
+Zeiger genauso abhängen.
+
+Es geht dabei nicht nur um den Mausweg. Das Fenster ist breiter als die
+eingeklappte Karte und wird als Ganzes auf den Bildschirm geklemmt, also
+entscheidet die Richtung auch, an welche Bildschirmkante sich die Karte
+vollständig schieben lässt: nach rechts wachsend bleibt die linke Kante
+erreichbar, nach links wachsend die rechte.
+
+**Beim Umschalten wird das Fenster mitverschoben.** Die Karte sitzt an der
+Kante, in die sie *nicht* wächst — ein Richtungswechsel setzt sie also ans
+andere Ende des unsichtbaren Rechtecks. Ohne Ausgleich würde das sichtbare
+Widget um die volle Breite des Wachstumsraums springen, 163 px, für eine
+Einstellung, die nichts als die Aufklapprichtung ändern soll. `keepCardInPlace`
+rechnet den Versatz aus, `setWidgetLayout` verschiebt und klemmt.
 
 #### Die Feder
 

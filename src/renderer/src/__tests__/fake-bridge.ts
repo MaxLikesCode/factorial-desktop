@@ -34,6 +34,7 @@ export const TEST_SETTINGS: AppSettings = {
   lastWorkplaceId: null,
   theme: 'system',
   widgetSize: 'standard',
+  expandDirection: 'right',
 }
 
 export interface FakeBridge extends FactorialBridge {

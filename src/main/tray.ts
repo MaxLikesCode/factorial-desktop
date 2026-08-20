@@ -194,6 +194,7 @@ export function createTray(deps: TrayDeps): Tray {
             setAlwaysOnTop: (value) => applySetting({ alwaysOnTop: value }),
             setTheme: (value) => applySetting({ theme: value }),
             setWidgetSize: (value) => applySetting({ widgetSize: value }),
+            setExpandDirection: (value) => applySetting({ expandDirection: value }),
             toggleWindow: () => {
               toggleWidget()
               // `isVisible()` decides the menu's wording, so the menu has to be

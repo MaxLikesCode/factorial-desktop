@@ -268,6 +268,7 @@ export function StatusWidget(): React.JSX.Element {
         open={expanded}
         onToggle={() => setExpanded((current) => !current)}
         actions={actions}
+        direction={settings?.expandDirection ?? 'right'}
       />
     )
   }
