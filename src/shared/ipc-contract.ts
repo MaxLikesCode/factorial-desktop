@@ -42,19 +42,20 @@ export const IPC = {
   setWindowInteractive: 'widget:setInteractive',
   setWindowDragging: 'widget:setDragging',
   popupMenu: 'widget:popupMenu',
+  cursorMoved: 'widget:cursorMoved',
 } as const
 
 /**
  * Every channel the renderer may `invoke`.
  *
- * `snapshotChanged` and `settingsChanged` are push-only: the main process sends
- * them, nobody answers them. Excluding them here is what makes
+ * `snapshotChanged`, `settingsChanged` and `cursorMoved` are push-only: the main
+ * process sends them, nobody answers them. Excluding them here is what makes
  * `Record<InvokeChannel, IpcHandler>` fail to compile if a handler is forgotten
  * — and refuse a handler for a channel that can never carry one.
  */
 export type InvokeChannel = Exclude<
   (typeof IPC)[keyof typeof IPC],
-  typeof IPC.snapshotChanged | typeof IPC.settingsChanged
+  typeof IPC.snapshotChanged | typeof IPC.settingsChanged | typeof IPC.cursorMoved
 >
 
 export interface BreakOption {
@@ -324,6 +325,22 @@ export interface FactorialBridge {
    * currently is; the main process owns the window and does it.
    */
   setWindowInteractive(interactive: boolean): Promise<void>
+  /**
+   * The pointer's position in window coordinates, pushed by the main process
+   * while the window is click-through.
+   *
+   * PLATFORM: on Windows this is the *only* way the card learns the pointer has
+   * arrived. `setIgnoreMouseEvents(true, { forward: true })` is documented to
+   * keep delivering mouse *moves*, and that is what makes click-through
+   * recoverable — but on Windows it delivers none. Measured against a bare
+   * transparent window: 29 `mousemove` while interactive, 0 while forwarding,
+   * focused or not. Without this channel the card goes click-through once and
+   * never comes back, which is a widget nobody can use.
+   *
+   * Coordinates match `MouseEvent.clientX/clientY`, so the renderer can treat a
+   * push and a real move as the same thing. Returns its own unsubscribe.
+   */
+  onCursorMoved(callback: (position: { x: number; y: number }) => void): () => void
   /**
    * Starts and stops moving the window with the pointer.
    *

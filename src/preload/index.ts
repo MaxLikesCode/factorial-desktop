@@ -56,6 +56,16 @@ const bridge: FactorialBridge = {
   },
   setWindowInteractive: (interactive: boolean) =>
     ipcRenderer.invoke(IPC.setWindowInteractive, interactive),
+
+  onCursorMoved: (callback) => {
+    // Same rule as the other two subscriptions: the event object stays here.
+    const handler = (_event: unknown, position: { x: number; y: number }): void =>
+      callback(position)
+    ipcRenderer.on(IPC.cursorMoved, handler)
+    return () => {
+      ipcRenderer.off(IPC.cursorMoved, handler)
+    }
+  },
   setWindowDragging: (dragging: boolean) =>
     ipcRenderer.invoke(IPC.setWindowDragging, dragging),
   popupMenu: (items, anchor) => ipcRenderer.invoke(IPC.popupMenu, { items, anchor }),

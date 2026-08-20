@@ -1,8 +1,12 @@
 # Factorial Desktop — Windows-Übergabe
 
-**Status:** abgeschlossen mit Task 15. Der Inhalt beschreibt den Stand nach
-Task 14 (Packaging); Task 15 hat die Zahlen nachgeprüft, den `README.md`
-angelegt und Abschnitt 7 ergänzt.
+**Status:** Erste Inbetriebnahme auf Windows am **2026-08-20** gelaufen
+(Windows 11 Pro 26200, Node 24.19.0, npm 11.17.0, Electron 43.4.0, ein Display
+3840 × 2400 bei 200 % Skalierung). Die Schritte 1 bis 6 aus Abschnitt 7 sind
+durch, Schritt 8 — die echte Zeiterfassung — bewusst nicht. Was dabei
+herauskam, steht in **Abschnitt 4a**; die Sätze weiter unten, die „nie
+ausgeführt" sagen, sind entsprechend nachgezogen. Davor: abgeschlossen mit
+Task 15, Inhalt auf dem Stand nach Task 14 (Packaging).
 
 > **Du sitzt an einer Windows-Maschine und willst anfangen?** → **Abschnitt 7**.
 > Der ist die Schritt-für-Schritt-Inbetriebnahme, in der Reihenfolge, in der die
@@ -19,8 +23,13 @@ Alles, was zum Weiterarbeiten nötig ist, steht im Repository.
 
 **Die drei Sätze, die alles andere einordnen:**
 
-1. Diese App wurde ausschließlich auf macOS gebaut und geprüft. Sämtlicher
-   Windows-Code ist **geschrieben, kompiliert, typgeprüft — und nie ausgeführt**.
+1. Diese App wurde auf macOS gebaut und dort geprüft; am 2026-08-20 ist sie das
+   erste Mal auf Windows gebaut und gestartet worden. Was dort **wirklich lief**,
+   steht in Abschnitt 4a und nur dort — der Rest des Windows-Codes ist
+   weiterhin geschrieben, kompiliert, typgeprüft und nicht ausgeführt. Wer eine
+   Aussage über Windows sucht, liest 4a **vor** dem Rest: die älteren Abschnitte
+   sind an den geprüften Stellen nachgezogen, aber 4a ist die Fassung, hinter
+   der jemand gesessen hat.
 2. Die App schreibt in eine **echte Arbeitszeiterfassung**. Ein falscher
    Zeitstempel ist der teure Fehlerfall. Deshalb rät der Code nie eine Zeit; ist
    ein Snapshot veraltet, zeigt das Widget die letzte bekannte Zeit mit Hinweis.
@@ -50,7 +59,7 @@ Einstempeln, Pause, Fortsetzen, Ausstempeln — ohne den Browser zu öffnen.
 | `npm run typecheck` | `tsconfig.node.json` (Main/Preload/Shared) + `tsconfig.web.json` (Renderer) |
 | `npm run build` | Typecheck + electron-vite build nach `out/` |
 | `npm run package:mac` | Build + electron-builder DMG/ZIP arm64, unsigniert (auf macOS ausgeführt, siehe Abschnitt 4) |
-| `npm run package:win` | Build + electron-builder NSIS (**nie ausgeführt**) |
+| `npm run package:win` | Build + electron-builder NSIS (am 2026-08-20 auf Windows gelaufen, Abschnitt 4a) |
 
 Beide `package:`-Skripte laufen über `npm run build`, also **inklusive
 Typecheck** — ein Typfehler bricht das Packaging ab, bevor electron-builder
@@ -118,7 +127,7 @@ die erklärte Fassung davon und muss mit dem Grep-Ergebnis übereinstimmen.
 > **Seit Task 14 reicht `src/` als Suchraum nicht mehr.** Die
 > Windows-Konfiguration steht in `electron-builder.yml`, also außerhalb von
 > `src/`. Vollständig ist erst `grep -rn "PLATFORM:" src/ electron-builder.yml`
-> — 16 Treffer in `src/`, einer in der YAML.
+> — 21 Treffer in `src/`, einer in der YAML.
 >
 > **Seit Task 15 muss man das nicht mehr glauben.**
 > `src/shared/__tests__/handoff-docs.test.ts` läuft in `npm test` mit und
@@ -143,10 +152,13 @@ die erklärte Fassung davon und muss mit dem Grep-Ergebnis übereinstimmen.
 | `src/main/tray.ts:269` | Linksklick → `toggleWidget()`, nur wenn **nicht** `darwin` | Auf Windows öffnet das Kontextmenü per Rechtsklick, der Linksklick ist per Konvention „App öffnen". Auf macOS öffnet der Linksklick das Menü selbst — dort zusätzlich das Fenster zu schalten, würde gegen die Plattform arbeiten. | Linksklick auf das Tray-Icon blendet das Widget ein und wieder aus; Rechtsklick öffnet das Menü. Zusätzlich prüfen, ob der Doppelklick (beide Plattformen, `showWidget`) nicht mit dem Einfachklick kollidiert — auf Windows feuert vor dem Doppelklick immer auch ein `click` |
 | `src/main/tray-menu.ts:120` | `trayLabel` ist der Text für `setTitle` — Kommentar, keine Verzweigung | Dokumentiert, dass diese Funktion auf Windows **keinen** Konsumenten hat. Ihr Inhalt taucht dort nur über `trayStatusLine` auf. | Nichts direkt |
 | `src/main/tray-menu.ts:147` | `trayStatusLine` ist auf Windows die einzige Stelle mit der laufenden Zeit — Kommentar, keine Verzweigung | Sie füllt den Tooltip **und** den ersten, deaktivierten Menüeintrag. Beide sind auf Windows der Ersatz für den fehlenden Menubar-Titel. | Tooltip anzeigen lassen: `Factorial · Eingestempelt · 1:30`. Menü öffnen: derselbe Text als erster, ausgegrauter Eintrag. Beides muss sich mit der Zeit fortschreiben |
-| `src/main/windows.ts:108` | `minimizable: false` (neben `maximizable: false`) | Ein Doppelklick auf eine Drag-Region ist für die Plattform ein Doppelklick auf die Titelleiste, und beide Plattformen haben darauf eine Fensteraktion gelegt: Windows Maximieren/Wiederherstellen, macOS das, was unter „Doppelklick auf Titelleiste" eingestellt ist — im Zweifel „Im Dock ablegen". Für ein rahmenloses `skipTaskbar`-Fenster heißt minimiert aber *weg*: kein Taskleisten-Knopf, kein Dock-Symbol, nur „Fenster zeigen" im Tray. Die Karte ist inzwischen keine Drag-Region mehr, also ist die Falle für sie geschlossen; die Option bleibt trotzdem gesetzt, weil ein rahmenloses `skipTaskbar`-Fenster niemals minimierbar sein sollte. | In den macOS-Systemeinstellungen „Doppelklick auf Titelleiste" auf „Im Dock ablegen" stellen, auf die Karte doppelklicken: das Widget darf **nicht** verschwinden, sondern muss auf- und wieder zuklappen. Auf Windows darf es sich nicht vergrößern |
-| `src/main/windows.ts:120` | `transparent: true` + `backgroundColor: '#00000000'` | macOS zeichnet ein transparentes, frameless Fenster mit runden Ecken und weichem Schatten von selbst. Windows setzt hinter ein transparentes Fenster sonst ein weißes Rechteck und zeichnet einen eckigen Schatten drumherum. | Sichtprüfung: keine weißen Ecken hinter dem Widget, kein eckiger Schattenrahmen. Falls doch, sind `transparent`, `thickFrame: false` und ein Renderer-seitiger `border-radius` die Stellschrauben (DESIGN.md, „Frameless & Transparenz") |
-| `src/main/windows.ts:139` | `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })` nur auf `darwin` | Der Sinn eines schwebenden Zeit-Widgets ist, über Vollbild-Spaces sichtbar zu bleiben. `visibleOnFullScreen` ist eine macOS-Option; auf Windows gibt es kein Äquivalent, dort trägt allein `alwaysOnTop`. | Prüfen, ob das Widget über einer Vollbild-App sichtbar bleibt. Wenn nicht: `setAlwaysOnTop(true, 'screen-saver')` ist die Windows-taugliche Verschärfung, hat aber Nebenwirkungen auf Fokus und Taskleiste |
-| `src/main/windows.ts:301` | `setIgnoreMouseEvents(true, { forward: true })` für die Größe „Minimal“ | Bei „Minimal“ ist das Fenster größer als die sichtbare Karte — es hält den Platz vor, in den die Aufklapp-Feder überschwingt. Der unsichtbare Rand würde sonst Klicks schlucken, die dem Desktop dahinter galten, und zwar bei einem Fenster, das immer im Vordergrund liegt. `forward: true` ist das, was die Sache umkehrbar macht: das Fenster bekommt trotz Durchlässigkeit weiterhin Mausbewegungen, und nur daran merkt der Renderer, dass der Zeiger über der Karte angekommen ist, und fordert die Klicks zurück. Dokumentiert ist das für macOS und Windows; unter Linux verhält es sich anders, was dieses Projekt nicht betrifft. | Größe „Minimal“ wählen. Neben die Karte klicken — der Klick muss das Fenster *dahinter* treffen, nicht ins Leere gehen. Dann auf die Karte zeigen: der Aufklapp-Pfeil muss auf Hover reagieren und klickbar sein. Danach wieder auf „Standard“ stellen und prüfen, dass das ganze Fenster wieder Klicks annimmt — ein Fenster, das durchlässig hängen bleibt, ist von Hand nicht mehr zu retten |
+| `src/main/windows.ts:109` | `minimizable: false` (neben `maximizable: false`) | Ein Doppelklick auf eine Drag-Region ist für die Plattform ein Doppelklick auf die Titelleiste, und beide Plattformen haben darauf eine Fensteraktion gelegt: Windows Maximieren/Wiederherstellen, macOS das, was unter „Doppelklick auf Titelleiste" eingestellt ist — im Zweifel „Im Dock ablegen". Für ein rahmenloses `skipTaskbar`-Fenster heißt minimiert aber *weg*: kein Taskleisten-Knopf, kein Dock-Symbol, nur „Fenster zeigen" im Tray. Die Karte ist inzwischen keine Drag-Region mehr, also ist die Falle für sie geschlossen; die Option bleibt trotzdem gesetzt, weil ein rahmenloses `skipTaskbar`-Fenster niemals minimierbar sein sollte. | In den macOS-Systemeinstellungen „Doppelklick auf Titelleiste" auf „Im Dock ablegen" stellen, auf die Karte doppelklicken: das Widget darf **nicht** verschwinden, sondern muss auf- und wieder zuklappen. Auf Windows darf es sich nicht vergrößern |
+| `src/main/windows.ts:121` | `transparent: true` + `backgroundColor: '#00000000'` | macOS zeichnet ein transparentes, frameless Fenster mit runden Ecken und weichem Schatten von selbst. Windows setzt hinter ein transparentes Fenster sonst ein weißes Rechteck und zeichnet einen eckigen Schatten drumherum. | Sichtprüfung: keine weißen Ecken hinter dem Widget, kein eckiger Schattenrahmen. Falls doch, sind `transparent`, `thickFrame: false` und ein Renderer-seitiger `border-radius` die Stellschrauben (DESIGN.md, „Frameless & Transparenz") |
+| `src/main/windows.ts:140` | `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })` nur auf `darwin` | Der Sinn eines schwebenden Zeit-Widgets ist, über Vollbild-Spaces sichtbar zu bleiben. `visibleOnFullScreen` ist eine macOS-Option; auf Windows gibt es kein Äquivalent, dort trägt allein `alwaysOnTop`. | Prüfen, ob das Widget über einer Vollbild-App sichtbar bleibt. Wenn nicht: `setAlwaysOnTop(true, 'screen-saver')` ist die Windows-taugliche Verschärfung, hat aber Nebenwirkungen auf Fokus und Taskleiste |
+| `src/main/windows.ts:367` | `setIgnoreMouseEvents(!interactive, { forward: true })` | Das Fenster ist größer als die sichtbare Karte — es hält den Rand vor, in den die Karte beim Aufklappen wächst. Dieser unsichtbare Rand würde sonst Klicks schlucken, die dem Desktop dahinter galten, und zwar bei einem Fenster, das immer im Vordergrund liegt. `forward: true` **soll** die Sache umkehrbar machen: das durchlässige Fenster bekommt weiterhin Mausbewegungen, und nur daran merkt der Renderer, dass der Zeiger über der Karte angekommen ist, und fordert die Klicks zurück. | **Auf Windows gemessen: die Weiterleitung kommt nicht an** (2026-08-20, Electron 43.4.0) — siehe Abschnitt 4. Deshalb steht daneben `startCursorLoop`. Der Aufruf bleibt, weil macOS auf ihm steht; wer ihn anfasst, prüft beide Plattformen. Zu prüfen bleibt nur, ob macOS die Weiterleitung wirklich liefert — dort ist sie weiter unbelegt |
+| `src/main/windows.ts:315` | `startCursorLoop`: pollt `screen.getCursorScreenPoint()` alle 32 ms und schickt die Position als `IPC.cursorMoved` an den Renderer — nur auf Windows, nur solange das Fenster durchlässig ist | Der Ersatz für die Weiterleitung, die es auf Windows nicht gibt. Gemessen an einem nackten transparenten Fenster: 29 `mousemove` im interaktiven Zustand, **0** im durchlässigen, mit und ohne Fokus. Ohne diesen Ersatz wird die Karte einmal durchlässig und kommt nie zurück — ein Widget, das niemand mehr bedienen kann. Die Entscheidung bleibt bewusst im Renderer: nur der weiß, wo die Karte gerade steht, auch mitten in der Animation. Gesendet wird nur bei tatsächlicher Bewegung, ein stehender Zeiger kostet einen `getCursorScreenPoint` pro Takt und kein IPC | Karte am Rand des Fensters: neben die Karte klicken muss den Desktop dahinter treffen, auf die Karte zeigen muss sie binnen ~2 Bildern wieder klickbar machen. Bleibt sie tot, ist `CURSOR_INTERVAL_MS` **nicht** die Stellschraube — dann kommt der Push gar nicht an, und `IPC.cursorMoved` im Renderer ist die Stelle |
+| `src/main/windows.ts:376` | der Aufruf: `process.platform !== 'win32'` → keine Cursor-Schleife | macOS bleibt auf dem dokumentierten Verhalten, weil dort niemand nachgemessen hat und zwei Mechanismen nebeneinander ein Weg sind, zwei Fehler zu bekommen. | Nichts direkt. Sollte sich zeigen, dass macOS die Weiterleitung ebenfalls nicht liefert, fällt die Verzweigung weg und die Schleife läuft überall |
+| `src/shared/ipc-contract.ts:332` | `onCursorMoved` im `FactorialBridge` | Der Kanal für ebendiesen Push. Steht im Kontrakt und nicht im Windows-Zweig, weil der Renderer keine Plattform kennen darf (`contextIsolation: true`, kein `process`) — er behandelt einen Push und ein echtes `mousemove` als dieselbe Eingabe, und auf macOS kommt eben nie einer. | Nichts direkt; die Wirkung steht in den beiden Zeilen darüber |
 | `src/renderer/src/styles.css:32` | `.drag-region { -webkit-app-region: drag }` plus `.no-drag` für alles Anklickbare darin | Das Fenster ist `frame: false` und hat keine Titelleiste zum Anfassen; die Drag-Region **ist** die einzige Möglichkeit, das Widget zu verschieben. Chromium kennt die Eigenschaft auf beiden Plattformen, verhält sich aber nicht gleich. | Widget an der Kopfzeile ziehen: es muss sich bewegen und die Position nach dem Debounce speichern. Dann drei Windows-Eigenheiten prüfen: (1) an den oberen Bildschirmrand ziehen darf **kein** Aero Snap auslösen — das Fenster ist `resizable: false`, ein Snap-Versuch führt dort erfahrungsgemäß zu einem verzerrten oder unverschiebbaren Fenster; (2) Buttons und das Arbeitsort-Select innerhalb der Region müssen klickbar bleiben (dafür ist `.no-drag` da; unter Windows greift die Vererbung teils anders); (3) `moved` feuert unter Windows beim Ziehen laufend statt einmal — der 250-ms-Debounce in `src/main/windows.ts` ist genau dafür da |
 | `electron-builder.yml:26` | der ganze `win:`-Block (`nsis`, `x64`) plus die `nsis:`-Optionen | Die einzige plattformabhängige Stelle außerhalb von `src/`: macOS bekommt DMG + ZIP, Windows einen NSIS-Installer. Kein Code, sondern Konfiguration — und die einzige im Repo, die **nie** ausgeführt wurde. | `npm run package:win` als Allererstes ausprobieren. Danach: enthält `build/icon.ico` genug Auflösungen (16–256 px sind drin), installiert der Installer in ein wählbares Verzeichnis (`allowToChangeInstallationDirectory: true`), und läuft er ohne Adminrechte durch (`perMachine: false`)? Siehe Abschnitt 4 für das, was auf macOS belegt ist |
 
@@ -158,9 +170,12 @@ Task 10 zwei weitere (Transparenz, Vollbild-Sichtbarkeit) und zwei bestehende
 umgeschrieben, Task 11 einen (die Drag-Region im CSS), Task 12 sieben (fünf im
 Tray, zwei erklärende Kommentare in `tray-menu.ts`) und den
 `window-all-closed`-Eintrag komplett umgeschrieben; Task 14 einen
-(`electron-builder.yml`). Die Tabelle hat **19** Zeilen und deckt
-`grep -rn "PLATFORM:" src/ electron-builder.yml` vollständig ab (16 Treffer in
-sechs Dateien unter `src/`, plus einer in der YAML). Die Tasks 13
+(`electron-builder.yml`). Die erste Windows-Inbetriebnahme (2026-08-20) hat drei
+weitere ergänzt — die Cursor-Schleife, ihre Plattformverzweigung und den Kanal
+im Kontrakt —, weil sich die Weiterleitung von Mausbewegungen dort als nicht
+vorhanden herausgestellt hat. Die Tabelle hat **22** Zeilen und deckt
+`grep -rn "PLATFORM:" src/ electron-builder.yml` vollständig ab (21 Treffer in
+sieben Dateien unter `src/`, plus einer in der YAML). Die Tasks 13
 (Soll-Zeit im Ring), 14 (Packaging) und 15 (diese Übergabe) haben in `src/`
 **keine** neue Verzweigung erzeugt: die Soll-Zeit ist reine Rechnung, das
 Packaging ist Konfiguration, und Task 15 hat nur Dokumentation und einen Test
@@ -229,7 +244,7 @@ Reihenfolge, in der man sie abarbeitet, steht in Abschnitt 7:
 |---|---|---|
 | Single-Instance | zwingend, siehe oben | `src/main/index.ts` (erledigt, ungetestet) |
 | IPC und Preload | kein Unterschied. Der Pfad zum Preload wird aus `import.meta.dirname` zusammengesetzt, nicht als String gebaut — auf Windows kommen dabei Backslashes heraus, was `BrowserWindow` erwartet | `src/main/index.ts`, `src/preload/index.ts` |
-| Login-Fenster | Frameless/Transparenz spielt hier keine Rolle — das Fenster ist bewusst ein normales Fenster mit Titelleiste. Titel `Bei Factorial anmelden` erscheint auf Windows in der Titelleiste, auf macOS nur im Fenstermenü | `src/main/auth.ts` |
+| Login-Fenster | Frameless/Transparenz spielt hier keine Rolle — das Fenster ist bewusst ein normales Fenster mit Titelleiste. **Korrektur nach dem Windows-Lauf:** der gesetzte Titel `Bei Factorial anmelden` erscheint dort **nicht** — die geladene Seite setzt ihren eigenen (`Factorial ID`), und auf Windows steht der sichtbar in der Titelleiste. Dazu kommt Electrons Standard-Menüleiste im Fenster. Beides unkorrigiert, siehe Abschnitt 4a | `src/main/auth.ts` |
 | Session-Partition | `persist:factorial` liegt unter `%APPDATA%\factorial-desktop`; auf macOS unter `~/Library/Application Support/factorial-desktop`. Kein Codeunterschied, aber der relevante Ort zum Zurücksetzen | `src/main/session.ts` |
 | Autostart | `app.setLoginItemSettings` schreibt auf Windows in den Registry-Run-Key, auf macOS in die Service-Management-Datenbank. Auf Windows **müssen** `path` und `args` gesetzt sein (siehe Tabelle in Abschnitt 2), auf macOS dürfen sie es nicht. `openAsHidden` ist macOS-only und wird bewusst nicht gesetzt — das Widget soll beim Start sichtbar sein. **Auslösbar ist der Schalter nur über das Tray:** Tray-Menü → „Einstellungen" → „Autostart" (Checkbox). Eine andere Oberfläche dafür gibt es in der App nicht | `src/main/settings.ts` (`buildLoginItemSettings`), `src/main/index.ts` (`applyLoginItem`), `src/main/tray-menu.ts` (`settingsSubmenu`) — geschrieben, auf Windows ungetestet |
 | Einstellungsdatei | gleicher Code, anderer Ort: `%APPDATA%\factorial-desktop\settings.json`. Geschrieben wird über eine `.tmp`-Datei plus `renameSync`; das ist auf NTFS ebenso atomar wie auf APFS, **aber** ein Virenscanner kann das `rename` kurzzeitig mit `EBUSY` blockieren. Wenn Einstellungen auf Windows sporadisch nicht speichern: hier zuerst nachsehen | `src/main/settings.ts` |
@@ -253,7 +268,7 @@ Reihenfolge, in der man sie abarbeitet, steht in Abschnitt 7:
 
 **Verifiziert auf macOS (Darwin 25.5, Electron 43):**
 
-- `npm test` — **384 Tests in 20 Dateien** grün, `npm run typecheck` sauber,
+- `npm test` — **384 Tests in 20 Dateien** grün (Stand Task 15; inzwischen 504, siehe Abschnitt 4a), `npm run typecheck` sauber,
   `npm run build` fehlerfrei (Stand Task 15; in Task 14 waren es 364, die 20
   neuen prüfen dieses Dokument und den `README.md`). Auf Windows ist dieselbe
   Zahl zu erwarten: in der Suite läuft kein Electron und keine Verzweigung nach
@@ -438,7 +453,10 @@ Reihenfolge, in der man sie abarbeitet, steht in Abschnitt 7:
 
 **Nicht verifiziert, auf keiner Plattform:**
 
-- **Die `.ico`-Dateien.** Electron kann auf macOS überhaupt kein ICO lesen:
+- ~~**Die `.ico`-Dateien.**~~ — **auf Windows erledigt** (Abschnitt 4a): sie
+  dekodieren, der PNG-Fallback greift nicht, alle vier Töne sind im Infobereich
+  scharf zu unterscheiden. Der macOS-Befund hier bleibt stehen, weil er erklärt,
+  warum es den Fallback überhaupt gibt. Electron kann auf macOS überhaupt kein ICO lesen:
   `nativeImage.createFromPath('resources/tray-active.ico')` liefert ein leeres
   0×0-Bild — auch dann, wenn die Datei klassische BMP-Einträge statt
   eingebetteter PNGs enthält (beides ausprobiert). Nachgeprüft ist seit Task 15
@@ -577,7 +595,9 @@ Reihenfolge, in der man sie abarbeitet, steht in Abschnitt 7:
   ob `LSUIElement` das Dock-Icon tatsächlich unterdrückt, ob die Session aus
   `~/Library/Application Support/factorial-desktop` auch für das Bundle gilt,
   und ob der Anmeldeobjekt-Eintrag den richtigen Pfad bekommt.
-- **`npm run package:win`.** Nie ausgeführt — es gab keine Windows-Maschine.
+- ~~**`npm run package:win`.**~~ — **am 2026-08-20 gelaufen** (Abschnitt 4a):
+  NSIS-Installer, 98,2 MB, ohne Beanstandung des Icons. Der Rest dieses Punktes
+  beschreibt den Stand davor. Nie ausgeführt — es gab keine Windows-Maschine.
   Belegt ist nur, dass electron-builder die Konfiguration **lädt** (es
   protokolliert `loaded configuration file=…/electron-builder.yml` beim
   macOS-Lauf) und dass `build/icon.ico` die von electron-builder geforderte
@@ -622,6 +642,174 @@ enthält.
    Entwicklungsordner. Steht dort ein falscher Pfad, ist das ein echter Fehler
    und kein Schönheitsfehler: die App startet dann bei jedem Login aus einem
    Ordner, den es vielleicht nicht mehr gibt.
+
+## 4a. Was auf Windows tatsächlich gelaufen ist (2026-08-20)
+
+Erste Inbetriebnahme auf einer echten Windows-Maschine. **Windows 11 Pro
+26200, Node 24.19.0, npm 11.17.0, Electron 43.4.0**, ein Display 3840 × 2400
+bei 200 % Skalierung. Die Abschnitte darüber sind an den geprüften Stellen
+nachgezogen; hier steht, was gemessen wurde, und daneben, wie.
+
+Zwei Dinge, die dieser Abschnitt **nicht** belegt: die App lief nie mit einer
+echten Anmeldung bis ins Widget durch, und Schritt 8 (Ein- und Ausstempeln
+gegen die echte API) ist bewusst nicht gelaufen. Alles, was unten „Smoke" heißt,
+ist ein Electron-Prozess mit gefälschtem Store gegen den **gebauten** Renderer
+und das **gebaute** Preload aus `out/` — also der echte Renderer-Code in einem
+echten Chromium, aber ohne Factorial dahinter.
+
+### Der Fund, der diese Änderung ausgelöst hat
+
+**`setIgnoreMouseEvents(true, { forward: true })` liefert auf Windows keine
+Mausbewegungen.** Nicht „unzuverlässig", sondern gar keine. Gemessen an einem
+nackten transparenten Fenster mit einer `data:`-URL, ohne App-Code:
+
+| Zustand | `mousemove` im Renderer bei bewegtem Zeiger |
+|---|---|
+| interaktiv (`setIgnoreMouseEvents(false)`) | 29 |
+| durchlässig, `forward: true` | **0** |
+| durchlässig, `forward: true`, Fenster fokussiert | **0** |
+
+Die Karte fordert die Klickbarkeit über genau diese Bewegungen zurück
+(`WidgetCard.tsx`). Ohne sie wird das Widget beim Start einmal durchlässig und
+bleibt es — nachgestellt: die kollabierte Karte reagierte auf keinen Klick, und
+dieselbe synthetische Maus klappte sie sofort auf, sobald das Fenster
+interaktiv blieb. Das ist kein Schönheitsfehler, sondern ein Widget, das
+niemand mehr bedienen kann.
+
+**Behoben** durch `startCursorLoop` in `src/main/windows.ts`: der Main-Prozess
+pollt `screen.getCursorScreenPoint()` alle 32 ms, solange das Fenster
+durchlässig ist, und schickt die Position in Fensterkoordinaten als
+`IPC.cursorMoved`. Die Entscheidung bleibt im Renderer — nur der weiß, wo die
+Karte gerade steht, auch mitten in der Animation. Nur auf Windows, weil auf
+macOS niemand nachgemessen hat und zwei Mechanismen nebeneinander ein Weg sind,
+zwei Fehler zu bekommen. Zwei Tests in `widget-card.test.tsx` halten es fest,
+beide gegengeprüft: die Verdrahtung entfernt → rot, das Abmelden entfernt →
+rot.
+
+### Verifiziert auf Windows
+
+- **`npm test`: 504 Tests grün, `npm run typecheck` still, `npm run build`
+  fehlerfrei.** Drei Tests waren zuerst rot, alle drei dieselbe Ursache und
+  **kein** App-Fehler: `node:path` liefert auf Windows Backslashes, die
+  Assertions erwarteten Slashes. Betroffen waren `app-identity.test.ts` und
+  `handoff-docs.test.ts` (dort las **jede** Tabellenzeile als veraltet, weil
+  dieses Dokument POSIX-Pfade zitiert). Beide sind jetzt separatorneutral. Das
+  ist genau der Fund, den Abschnitt 7 Schritt 1 unter „Kandidaten, falls doch
+  etwas rot ist" vermutet hat.
+- **`npm run package:win` läuft durch** — zum ersten Mal überhaupt.
+  `release/Factorial Desktop Setup 0.1.0.exe`, 98,2 MB, dazu
+  `release/win-unpacked/`. Der in Schritt 6 ausdrücklich als Verdacht notierte
+  Fall ist **nicht** eingetreten: NSIS stolpert nicht über die
+  PNG-komprimierten Einträge in `build/icon.ico`. Nachgezählt im gebauten
+  `app.asar`: `out/main/index.js`, `out/preload/index.mjs`, acht Dateien unter
+  `out/renderer/` und **alle elf Dateien aus `resources/`**, der Pfad
+  `app.asar/resources` existiert also auch im Windows-Paket.
+- **Die gepackte App startet.** Vier Prozesse, und weil keine Session bestand,
+  öffnete sich Factorials Login-Fenster.
+- **Die `.ico`-Dateien dekodieren auf Windows** — der wichtigste offene Punkt
+  des ganzen Dokuments (Schritt 3). `nativeImage.createFromPath` liefert für
+  alle vier ein nicht-leeres Bild, der PNG-Fallback in `iconFor` greift
+  **nicht**. Im Infobereich sind alle vier Töne sauber und scharf zu
+  unterscheiden: rot, amber, grün, grau, bei 200 % Skalierung. Eine Kuriosität
+  ohne sichtbare Folge: Electron meldet die Bilder als **256 × 256**, obwohl die
+  Dateien nachweislich nur 16/32/48 enthalten (Verzeichniseinträge direkt aus
+  den Dateiköpfen gelesen) — es skaliert also hoch, und Windows rechnet für das
+  Tray sichtbar verlustfrei wieder herunter.
+- **Das Tray-Menü** in einem echten Windows-Kontextmenü: `Eingestempelt · 1:30`
+  als erster, ausgegrauter Eintrag — der Windows-Ersatz für den Menubar-Titel
+  steht also da, wo er soll. Darunter `Pause` (mit Untermenü-Pfeil),
+  `Ausstempeln`, `Fenster zeigen`, `Aktualisieren`, `Einstellungen`, `Beenden`.
+  Umlaute und der Mittelpunkt `·` rendern korrekt, keine Ersatzkästchen. Das
+  Untermenü „Einstellungen" zeigt `✓ Autostart`, `✓ Immer im Vordergrund`,
+  Trennlinie, `Abmelden` — womit auch der in Abschnitt 4 als „nicht geprüft"
+  geführte Punkt „wie das Untermenü aussieht (Häkchen-Darstellung)" erledigt
+  ist.
+- **`mouse-enter` feuert auf Windows.** Stand in Abschnitt 6 als offene Frage
+  („ob `mouse-enter` dort überhaupt feuert"). Es feuert.
+- **Das Widget in einem echten Chromium** — vorher auf keiner Plattform
+  gelaufen. Belegt: `typeof window.factorial === 'object'` mit allen 14
+  Funktionen; `getSnapshot()` liefert `state.sinceMs` als **Zahl**; ein Push
+  über `onSnapshot` kommt an (eine Pausen-Aktion änderte den sichtbaren
+  Zustand); `document`, `body` und `#root` sind **exakt** 302 × 164, es läuft
+  also nichts über; `getComputedStyle(body).backgroundColor` ist
+  `rgba(0, 0, 0, 0)`.
+- **Transparenz und Ecken stimmen.** Keine weißen Rechtecke hinter den runden
+  Ecken, kein eckiger Schattenrahmen — die Sorge aus `windows.ts:121` ist auf
+  dieser Maschine unbegründet.
+- **Beide Kartenzustände.** Kollabiert 156 × 44 mit Punkt, Timer und dem
+  Tagesbalken, in dem die Pause als amber Segment zwischen zwei grünen sichtbar
+  ist; expandiert mit Status, verbleibender Zeit, Aktionen, Arbeitsort und
+  Pausensumme. Der Timer läuft, die Zeit friert während einer Pause ein und die
+  Fußzeile zeigt `Mittagspause · 0:00:09`.
+- **Das native Popup-Menü** (`widget:popupMenu`) öffnet als echtes
+  Windows-Menü mit `Büro` / `✓ Mobiles Arbeiten` / `Dienstreise` und ragt dabei
+  bewusst über den Fensterrand hinaus — genau der Grund, aus dem die Picker
+  nativ sind. Der Renderer schickt die Labels bereits übersetzt und `checked`
+  gesetzt.
+- **Der komplette IPC-Pfad zur Laufzeit**, den Abschnitt 4 als „nie in einem
+  laufenden Electron ausgeführt" führte: `clockOut`, `startBreak`, `popupMenu`
+  und `setSettings` sind alle aus einem echten Klick heraus im Main-Prozess
+  angekommen. Nebenbefund, der zum Design passt: der erste Klick neben ein
+  offenes Popup schließt nur das Popup und löst keine Aktion aus.
+
+### Was auf Windows anders ist als dieses Dokument annahm
+
+- **Das Tray-Icon ist zunächst unsichtbar.** Windows 11 legt neue Icons in den
+  Überlauf hinter dem `^`; in der Taskleiste selbst erscheint nichts. Schritt 3
+  behandelt ein unsichtbares Icon als Alarmzeichen („sofort die Konsole
+  lesen"), aber der Normalfall auf Windows 11 ist genau das. Mit
+  `skipTaskbar: true` ist es trotzdem ernst: bis der Benutzer das Icon einmal
+  aus dem Überlauf zieht, ist der einzige sichtbare Weg zum Fenster zwei Klicks
+  tief versteckt. Wer die Konsolenzeile `[tray] icon missing or unreadable`
+  **nicht** sieht, hat kein Icon-Problem, sondern ein Überlauf-Problem.
+- **Der Titel des Login-Fensters wird überschrieben.** `src/main/auth.ts` setzt
+  `Bei Factorial anmelden`, in der Titelleiste steht aber `Factorial ID` — die
+  geladene Seite setzt ihren eigenen Titel. Auf macOS fällt das nicht auf, weil
+  es dort keine Titelleiste gibt; auf Windows steht es sichtbar im Fenster.
+  Abschnitt 3 („Login-Fenster") behauptet das Gegenteil. Ein
+  `page-title-updated`-Handler mit `preventDefault()` wäre die Korrektur —
+  bewusst **nicht** gemacht, weil es Verhalten ändert, das niemand gemeldet
+  hat. Dazu trägt das Fenster Electrons Standard-Menüleiste
+  (File/Edit/View/Window), die auf Windows im Fenster sitzt statt in einer
+  Systemmenüleiste.
+- **`npm install` reicht hier nicht.** Diese npm-Installation blockiert
+  Install-Skripte (`npm warn allow-scripts`), und damit läuft Electrons
+  `postinstall` nicht: `node_modules/electron/dist/` bleibt leer, und weder
+  `npm run dev` noch ein Smoke noch das Packaging funktionieren.
+  `node node_modules/electron/install.js` holt die Binärdatei nach. Schritt 0
+  behauptet, `npm install` lade „nur Pakete und die Electron-Binärdatei" — das
+  gilt nur ohne diese Policy.
+- **Die Testzahl stimmte schon vorher nicht.** Abschnitt 4 und Schritt 1 nennen
+  384; auf `main` sind es 504 (mit den zwei hier ergänzten). Die Zahl ist beim
+  Weiterentwickeln mitgewachsen, ohne dass dieses Dokument nachgezogen wurde —
+  sie ist deshalb als Erwartungswert unbrauchbar. Verlässlich ist nur „grün".
+
+### Ein Nebeneffekt, den man vor dem Start kennen muss
+
+Der Start der **gepackten** App hat einen Autostart-Eintrag unter
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Run` hinterlassen, der auf den
+`release\win-unpacked`-Ordner zeigt (`electron.app.Factorial Desktop`), und
+`%APPDATA%\factorial-desktop\settings.json` angelegt. Der Kasten in Schritt 2
+sagt das für den **Dev**-Modus voraus; es gilt genauso für einen Start aus
+`release\`, und dort ist der Pfad noch schlechter — ein Build-Ordner, den es
+nach dem nächsten Löschen von `release\` nicht mehr gibt. Beide Einträge wurden
+von Hand wieder entfernt.
+
+**Wer aus `release\win-unpacked` startet, prüft danach den Run-Key.** Der
+eigentliche Autostart-Test gehört weiterhin hinter die Installation
+(Schritt 7). Warum der Eintrag entstand, obwohl `applyLoginItem` im Code erst
+**nach** `ensureAuthenticated` steht, ist nicht geklärt: `settings.json` trägt
+einen Zeitstempel nach dem Start, der Bootstrap kam also weiter, als das
+Login-Fenster vermuten ließ. Wer das aufklärt, trägt es hier nach.
+
+### Weiterhin offen
+
+Alles aus Abschnitt 4 unter „Nicht verifiziert", das oben nicht ausdrücklich
+abgeräumt ist. Insbesondere auf Windows: der Drag der Karte samt Aero Snap, das
+Verhalten über einer Vollbild-App, zwei Monitore mit gemischter Skalierung,
+Suspend/Resume, der Single-Instance-Lock, der Installer selbst (gebaut, aber
+nicht ausgeführt), der Autostart nach echter Installation — und der ganze
+Abschnitt 8.
 
 ## 5. Wie man die Factorial-API selbst weiter erforscht
 
@@ -807,9 +995,9 @@ Kurzfassung:
   `mouse-enter`, `click` und `right-click`, gedrosselt auf einen Refresh pro
   10 s (`OPEN_REFRESH_MIN_INTERVAL_MS`). Ein bereits geöffnetes Menü behält den
   Snapshot, mit dem es gebaut wurde — die Antwort landet erst im nächsten
-  Render. Auf Windows ist zu prüfen, ob `mouse-enter` dort überhaupt feuert;
-  wenn nicht, bleibt der Klick, und der Effekt ist erst beim zweiten Öffnen
-  sichtbar.
+  Render. ~~Auf Windows ist zu prüfen, ob `mouse-enter` dort überhaupt feuert~~ —
+  **es feuert** (Abschnitt 4a), der Refresh beim Überfahren des Icons greift also
+  auch dort.
 - **Die Zeit im Tray-Menü ist beim Öffnen bis zu 15 s alt** (Render-Takt), auf
   Windows entsprechend auch der Tooltip. Das ist bewusst so: die Zahl wird bei
   jedem Render neu aus `state.since` gerechnet und kann deshalb nicht driften,
@@ -872,7 +1060,9 @@ Diese Reihenfolge ist nicht beliebig. Sie geht von „kostet nichts, wenn es
 schiefgeht" zu „schreibt in eine echte Arbeitszeiterfassung". **Schritt 8 als
 Letztes**, und bewusst.
 
-Nichts davon ist gelaufen. Jeder Schritt hat deshalb ein „erwartet" — und wenn
+Die Schritte 1 bis 6 sind am 2026-08-20 gelaufen; **was dabei herauskam, steht
+in Abschnitt 4a** und nicht hier, damit diese Anleitung eine Anleitung bleibt.
+Schritt 7 und 8 sind weiter offen. Jeder Schritt hat ein „erwartet" — und wenn
 die Wirklichkeit davon abweicht, ist die Wirklichkeit recht zu geben und dieses
 Dokument zu korrigieren.
 
@@ -898,7 +1088,9 @@ Ein-Zeilen-Korrektur — aber erst messen, dann ändern.)
     npm test
     npm run typecheck
 
-Erwartet: 384 Tests grün und ein stiller Typecheck, so wie auf macOS
+Erwartet: alle Tests grün und ein stiller Typecheck, so wie auf macOS. Eine
+Zahl steht hier bewusst nicht mehr — sie wächst mit jedem Task und war schon
+zweimal veraltet; am 2026-08-20 waren es 504. Frühere Fassung: 384 Tests
 (Abschnitt 4 nennt den Stand, unter dem diese Zahl gilt). Diese Suite
 enthält **keinen** Electron-Code und sollte auf Windows identisch durchlaufen;
 tut sie es nicht, ist das der erste echte Windows-Fund und er gehört behoben,
@@ -1035,7 +1227,8 @@ In dieser Reihenfolge, weil jeder einzeln beobachtbar ist:
     npm run package:win
 
 Das ist der Punkt, an dem am ehesten etwas gar nicht erst durchläuft: die
-`win:`- und `nsis:`-Blöcke in `electron-builder.yml` sind **nie ausgeführt**
+`win:`- und `nsis:`-Blöcke in `electron-builder.yml` waren bis 2026-08-20 **nie
+ausgeführt**
 worden. Belegt ist nur, dass electron-builder die Datei lädt (beim macOS-Lauf
 protokolliert) und dass `build/icon.ico` die geforderte 256-px-Auflösung
 enthält.

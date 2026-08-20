@@ -109,23 +109,31 @@ export function WidgetCard({
       void window.factorial.setWindowInteractive(next).catch(() => {})
     }
 
-    function onMove(event: MouseEvent): void {
+    function at(x: number, y: number): void {
       if (element === null) return
       const box = element.getBoundingClientRect()
-      setInteractive(
-        event.clientX >= box.left &&
-          event.clientX <= box.right &&
-          event.clientY >= box.top &&
-          event.clientY <= box.bottom,
-      )
+      setInteractive(x >= box.left && x <= box.right && y >= box.top && y <= box.bottom)
+    }
+
+    function onMove(event: MouseEvent): void {
+      at(event.clientX, event.clientY)
     }
 
     // Start click-through: until a mouse move says otherwise, the pointer is not
     // over the card and the desktop behind must stay reachable.
     setInteractive(false)
     window.addEventListener('mousemove', onMove)
+    // The same question from the other side. While the window is click-through
+    // Windows delivers no forwarded moves at all, so on that platform this is
+    // the only thing that ever gets the card clickable again; the main process
+    // pushes the pointer in the same coordinates a `mousemove` would carry. See
+    // `startCursorLoop` in src/main/windows.ts for the measurement.
+    const stopCursor = window.factorial.onCursorMoved(({ x, y }) => {
+      at(x, y)
+    })
     return () => {
       window.removeEventListener('mousemove', onMove)
+      stopCursor()
       // Leaving this size must not leave the window click-through: the next size
       // fills its whole window and would be unclickable.
       void window.factorial.setWindowInteractive(true).catch(() => {})

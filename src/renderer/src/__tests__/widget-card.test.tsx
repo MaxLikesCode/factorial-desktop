@@ -254,4 +254,45 @@ describe('letting the desktop through', () => {
     })
     expect(bridge.setWindowInteractive).toHaveBeenLastCalledWith(false)
   })
+
+  /**
+   * The Windows half of the same behaviour, and the reason it exists.
+   *
+   * A click-through window is supposed to keep receiving forwarded mouse moves,
+   * and the test above is that contract. On Windows it receives none — measured
+   * against a bare transparent window: 29 moves while interactive, 0 while
+   * forwarding. Everything above would still pass while the real widget sat
+   * there unclickable, so what the main process pushes instead is asserted
+   * separately: same question, same answer, different source.
+   */
+  it('takes the pointer from the main process too, since Windows forwards none', async () => {
+    const bridge = await mount()
+    expect(bridge.setWindowInteractive).toHaveBeenCalledWith(false)
+
+    card().getBoundingClientRect = () => ({ left: 0, top: 0, right: 156, bottom: 44 }) as DOMRect
+
+    await act(async () => {
+      bridge.pushCursor({ x: 40, y: 20 })
+    })
+    expect(bridge.setWindowInteractive).toHaveBeenLastCalledWith(true)
+
+    await act(async () => {
+      bridge.pushCursor({ x: 300, y: 20 })
+    })
+    expect(bridge.setWindowInteractive).toHaveBeenLastCalledWith(false)
+  })
+
+  it('stops listening for pushed positions when the card goes away', async () => {
+    const bridge = await mount()
+    expect(bridge.cursorListenerCount).toBe(1)
+
+    cleanup()
+
+    // Asserted as a count rather than through a later push: unmounting also
+    // hands interactivity back, and `setInteractive` drops a repeat of the value
+    // it already sent — so a leaked listener would go on being called and the
+    // spy would still look untouched.
+    expect(bridge.cursorListenerCount).toBe(0)
+    expect(bridge.setWindowInteractive).toHaveBeenLastCalledWith(true)
+  })
 })

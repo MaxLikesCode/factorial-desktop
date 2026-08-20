@@ -42,6 +42,13 @@ export interface FakeBridge extends FactorialBridge {
   push(snapshot: AppSnapshot): void
   /** Pushes changed settings the same way the tray's writes reach the widget. */
   pushSettings(patch: Partial<AppSettings>): void
+  /**
+   * Pushes a pointer position the way the main process does while the window is
+   * click-through — on Windows the only source of those the card ever gets.
+   */
+  pushCursor(position: { x: number; y: number }): void
+  /** How many cursor subscriptions are live; a leak shows up here as a number that never falls. */
+  readonly cursorListenerCount: number
   readonly listenerCount: number
 }
 
@@ -51,6 +58,7 @@ export function createFakeBridge(
 ): FakeBridge {
   const listeners = new Set<(snapshot: SerialisedSnapshot) => void>()
   const settingsListeners = new Set<(settings: AppSettings) => void>()
+  const cursorListeners = new Set<(position: { x: number; y: number }) => void>()
   let current: AppSnapshot = { ...EMPTY_SNAPSHOT, ...initial }
   let currentSettings: AppSettings = { ...TEST_SETTINGS, ...settings }
 
@@ -80,11 +88,20 @@ export function createFakeBridge(
       }
     },
     setWindowInteractive: vi.fn(async () => {}),
+    onCursorMoved: (callback) => {
+      cursorListeners.add(callback)
+      return () => {
+        cursorListeners.delete(callback)
+      }
+    },
     setWindowDragging: vi.fn(async () => {}),
     popupMenu: vi.fn(async () => null),
     pushSettings(patch) {
       currentSettings = { ...currentSettings, ...patch }
       for (const listener of [...settingsListeners]) listener(currentSettings)
+    },
+    pushCursor(position) {
+      for (const listener of [...cursorListeners]) listener(position)
     },
     push(snapshot) {
       current = snapshot
@@ -92,6 +109,9 @@ export function createFakeBridge(
     },
     get listenerCount() {
       return listeners.size
+    },
+    get cursorListenerCount() {
+      return cursorListeners.size
     },
   }
 }

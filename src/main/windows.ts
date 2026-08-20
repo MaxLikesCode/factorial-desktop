@@ -19,6 +19,7 @@
 
 import { BrowserWindow, Menu, app, screen } from 'electron'
 import { join } from 'node:path'
+import { IPC } from '@shared/ipc-contract'
 import {
   keepCardInPlace,
   windowSize,
@@ -203,8 +204,10 @@ export function createWidgetWindow(deps: {
 
   win.on('closed', () => {
     // A drag loop that outlived its window would keep firing against a destroyed
-    // handle every 16 ms for the rest of the session.
+    // handle every 16 ms for the rest of the session. The cursor loop is the
+    // same story and, unlike the drag, is running most of the time.
     stopDragLoop()
+    stopCursorLoop()
     screen.removeListener('display-removed', revalidatePosition)
     screen.removeListener('display-added', revalidatePosition)
     screen.removeListener('display-metrics-changed', revalidatePosition)
@@ -286,6 +289,68 @@ export function setWidgetDragging(dragging: boolean): void {
 }
 
 /**
+ * How often the pointer is sampled while the window is click-through.
+ *
+ * Slower than the drag loop on purpose: a drag is a continuous gesture the eye
+ * follows frame by frame, whereas this only has to notice the pointer arriving
+ * over the card. 32 ms is two frames of lag before the card becomes clickable —
+ * below the threshold where a click feels dropped — at a fraction of the wake-ups
+ * a 16 ms loop would cost for something that idles all day.
+ */
+const CURSOR_INTERVAL_MS = 32
+
+let cursorTimer: NodeJS.Timeout | null = null
+let lastCursor: Point | null = null
+
+function stopCursorLoop(): void {
+  if (cursorTimer === null) return
+  clearInterval(cursorTimer)
+  cursorTimer = null
+  lastCursor = null
+}
+
+/**
+ * Pushes the pointer's window-relative position to the renderer.
+ *
+ * PLATFORM: Windows only, and the reason is measured rather than assumed.
+ * `setIgnoreMouseEvents(true, { forward: true })` is documented to keep
+ * delivering mouse *moves*, and the card's recovery from click-through is built
+ * on exactly that. On Windows it delivers none: against a bare transparent
+ * window, a moving pointer produced 29 `mousemove` while the window was
+ * interactive and 0 while it was forwarding — focused or not. So the card never
+ * learned the pointer had arrived, never asked for interactivity back, and the
+ * widget stayed click-through for the rest of its life.
+ *
+ * Sampling the cursor from here is the smallest replacement that keeps the
+ * design intact: the renderer still decides — it is the only side that knows
+ * where the card is mid-animation — and this only restores the events it decides
+ * on. Positions are sent in window coordinates so a push and a real `mousemove`
+ * are the same input, and only when the pointer actually moved, so a still
+ * pointer costs one `getCursorScreenPoint` per tick and no IPC at all.
+ *
+ * macOS is left on the documented behaviour, since nobody has measured it there
+ * and a second mechanism running alongside a working one is a way to get two.
+ */
+function startCursorLoop(): void {
+  if (cursorTimer !== null) return
+  cursorTimer = setInterval(() => {
+    if (!widget || widget.isDestroyed()) {
+      stopCursorLoop()
+      return
+    }
+    const cursor = screen.getCursorScreenPoint()
+    if (lastCursor && lastCursor.x === cursor.x && lastCursor.y === cursor.y) return
+    lastCursor = cursor
+
+    const bounds = widget.getBounds()
+    widget.webContents.send(IPC.cursorMoved, {
+      x: cursor.x - bounds.x,
+      y: cursor.y - bounds.y,
+    })
+  }, CURSOR_INTERVAL_MS)
+}
+
+/**
  * Lets clicks through the window's transparent margin, or takes them back.
  *
  * Only a size that expands has such a margin. For every other size the window is
@@ -293,18 +358,27 @@ export function setWidgetDragging(dragging: boolean): void {
  * stays plainly interactive — calling this with `false` there would make the
  * widget itself unclickable.
  *
- * `forward: true` is what keeps this recoverable: a click-through window still
- * receives mouse *move* events, which is how the renderer notices the pointer
- * has arrived over the card and asks for interactivity back. Without it the
- * window would go through and never come back.
+ * `forward: true` is meant to keep this recoverable: a click-through window
+ * still receives mouse *move* events, which is how the renderer notices the
+ * pointer has arrived over the card and asks for interactivity back. It is left
+ * on because that is what macOS uses; on Windows it delivers nothing, and
+ * `startCursorLoop` stands in — see the note there for the measurement.
  *
  * PLATFORM: `setIgnoreMouseEvents` with forwarding is documented for macOS and
  * Windows and behaves differently on Linux, which this app does not target.
- * Verified on neither — see docs/WINDOWS.md.
+ * Windows verified — the forwarding does not arrive; macOS still unverified.
+ * See docs/WINDOWS.md.
  */
 export function setWidgetInteractive(interactive: boolean): void {
   if (!widget || widget.isDestroyed()) return
   widget.setIgnoreMouseEvents(!interactive, { forward: true })
+
+  // PLATFORM: the stand-in for forwarding that never arrives. Only while the
+  // window is click-through — once it is interactive again Chromium delivers
+  // real moves and a second source would just be noise.
+  if (process.platform !== 'win32') return
+  if (interactive) stopCursorLoop()
+  else startCursorLoop()
 }
 
 /**
