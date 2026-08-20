@@ -2,7 +2,6 @@ import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodeActionError, type AppSnapshot } from '@shared/ipc-contract'
 import { StatusWidget, UNKNOWN_TIME } from '@renderer/components/StatusWidget'
-import { RING_CIRCUMFERENCE } from '@renderer/components/ProgressRing'
 import { EMPTY_SNAPSHOT, installBridge, type FakeBridge } from './fake-bridge'
 
 const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }))
@@ -19,14 +18,29 @@ async function mount(
   const bridge = installBridge(snapshot, settings)
   render(<StatusWidget />)
   await act(async () => {})
-  // The progress arc draws itself in on the frame after mount, so its first
-  // frame is deliberately empty. Every assertion here is about the settled arc,
+  // The progress bar fills itself in on the frame after mount, so its first
+  // frame is deliberately empty. Every assertion here is about the settled bar,
   // so carry the clock past that frame. 32 ms is under a second and therefore
   // cannot move any of the timer readings below.
   await act(async () => {
     vi.advanceTimersByTime(32)
   })
   return bridge
+}
+
+/**
+ * The whole timer reading.
+ *
+ * The seconds render in a nested span (they carry less contrast than the rest),
+ * and Testing Library's `getByText` concatenates only an element's *direct*
+ * text children — so it sees "2:01" and ":30" and never the reading itself.
+ * Reading `textContent` off the timer is both correct and stricter: it asserts
+ * the exact string, on the one element that is allowed to show it.
+ */
+function timer(): string {
+  const el = document.querySelector('[data-slot="worked-timer"]')
+  if (!el) throw new Error('timer not rendered')
+  return el.textContent ?? ''
 }
 
 beforeEach(() => {
@@ -50,7 +64,7 @@ describe('StatusWidget — the three states', () => {
     expect(screen.getByRole('button', { name: 'Einstempeln' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Ausstempeln' })).toBeNull()
     // 125 closed minutes and nothing running: 2:05:00 worked, 08:00 - 2:05 left.
-    expect(screen.getByText('2:05:00')).toBeTruthy()
+    expect(timer()).toBe('2:05:00')
     expect(screen.getByText('Verbleibende Zeit 05:55')).toBeTruthy()
   })
 
@@ -67,7 +81,7 @@ describe('StatusWidget — the three states', () => {
     })
 
     expect(screen.getByText('Eingestempelt')).toBeTruthy()
-    expect(screen.getByText('2:01:30')).toBeTruthy()
+    expect(timer()).toBe('2:01:30')
     expect(screen.getByRole('button', { name: 'Ausstempeln' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Pause' })).toBeTruthy()
   })
@@ -140,11 +154,11 @@ describe('StatusWidget — the three states', () => {
       },
       todayMinutes: 120,
     })
-    expect(screen.getByText('2:01:30')).toBeTruthy()
+    expect(timer()).toBe('2:01:30')
 
     // Two seconds of wall clock; the widget must read the clock, not increment.
     act(() => void vi.advanceTimersByTime(2_000))
-    expect(screen.getByText('2:01:32')).toBeTruthy()
+    expect(timer()).toBe('2:01:32')
   })
 
   it('on break: the worked timer freezes, the break gets its own running time', async () => {
@@ -162,7 +176,7 @@ describe('StatusWidget — the three states', () => {
 
     expect(screen.getByText('In einer Pause')).toBeTruthy()
     // Break time is not worked time: the day total stays at the closed shifts.
-    expect(screen.getByText('2:00:00')).toBeTruthy()
+    expect(timer()).toBe('2:00:00')
     expect(screen.getByText('Mittagspause · 0:12:34')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Fortsetzen' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Ausstempeln' })).toBeTruthy()
@@ -173,8 +187,8 @@ describe('StatusWidget — the three states', () => {
     await mount({ state: { kind: 'unknown' } })
 
     expect(screen.getByText('Lädt …')).toBeTruthy()
-    expect(screen.getByText(UNKNOWN_TIME)).toBeTruthy()
-    expect(screen.queryByText('0:00:00')).toBeNull()
+    expect(timer()).toBe(UNKNOWN_TIME)
+    expect(timer()).not.toBe('0:00:00')
     // Without a known worked time there is no honest "remaining" either.
     expect(screen.queryByText(/Verbleibende Zeit/)).toBeNull()
   })
@@ -183,7 +197,7 @@ describe('StatusWidget — the three states', () => {
     const bridge = await mount({ state: { kind: 'unauthenticated' } })
 
     expect(screen.getByText('Nicht angemeldet')).toBeTruthy()
-    expect(screen.getByText(UNKNOWN_TIME)).toBeTruthy()
+    expect(timer()).toBe(UNKNOWN_TIME)
     const button = screen.getByRole('button', { name: 'Anmelden' })
     await act(async () => void button.click())
     expect(bridge.signOut).toHaveBeenCalledTimes(1)
@@ -191,18 +205,17 @@ describe('StatusWidget — the three states', () => {
 })
 
 describe('StatusWidget — the day’s target', () => {
-  /** The undrawn part of the ring; `RING_CIRCUMFERENCE` means "empty". */
-  function arcOffset(): number {
-    const arc = document.querySelector('[data-slot="progress-ring-arc"]')
-    if (!arc) throw new Error('arc not rendered')
-    return Number(arc.getAttribute('stroke-dashoffset'))
+  /** The filled share of the track, or null when no bar is rendered at all. */
+  function fill(): string | null {
+    const bar = document.querySelector<HTMLElement>('[data-slot="progress-bar-fill"]')
+    return bar === null ? null : bar.style.width
   }
 
   it('uses the target the API sent, not a hard-coded eight hours', async () => {
-    // 300 minutes of goal, 120 worked: 03:00 left and 40 % of the ring drawn.
+    // 300 minutes of goal, 120 worked: 03:00 left and 40 % of the track filled.
     await mount({ state: { kind: 'out' }, todayMinutes: 120, expectedMinutes: 300 })
     expect(screen.getByText('Verbleibende Zeit 03:00')).toBeTruthy()
-    expect(arcOffset()).toBeCloseTo(RING_CIRCUMFERENCE * 0.6, 5)
+    expect(fill()).toBe('40%')
   })
 
   it('counts the running shift towards the target while clocked in', async () => {
@@ -220,31 +233,53 @@ describe('StatusWidget — the day’s target', () => {
     expect(screen.getByText('Verbleibende Zeit 05:30')).toBeTruthy()
   })
 
+  /**
+   * An empty track is not neutral: it claims "0 % of something". On a day with
+   * no goal there is no something, so the bar must be absent rather than empty —
+   * the same rule that makes the timer a dash instead of 0:00:00.
+   */
   it('drops the comparison when the API has no target for the day', async () => {
-    // A day off: no goal exists, so there is no honest "remaining" and the ring
-    // shows the plain elapsed time with an empty arc.
     await mount({ state: { kind: 'out' }, todayMinutes: 125, expectedMinutes: null })
     expect(screen.queryByText(/Verbleibende Zeit/)).toBeNull()
-    expect(screen.getByText('2:05:00')).toBeTruthy()
-    expect(arcOffset()).toBeCloseTo(RING_CIRCUMFERENCE, 5)
+    expect(timer()).toBe('2:05:00')
+    expect(fill()).toBeNull()
   })
 
   it('treats a zero target the same way — a holiday is not "done for today"', async () => {
     await mount({ state: { kind: 'out' }, todayMinutes: 125, expectedMinutes: 0 })
     expect(screen.queryByText(/Verbleibende Zeit/)).toBeNull()
-    expect(arcOffset()).toBeCloseTo(RING_CIRCUMFERENCE, 5)
+    expect(fill()).toBeNull()
   })
 
-  it('stops at zero remaining and a full ring once the target is met', async () => {
+  /**
+   * Past the goal the remaining time is always 00:00, which reports the nothing
+   * that is left instead of the surplus — the only interesting number at that
+   * point in the day.
+   */
+  it('reports the surplus once the target is met, not a zero remainder', async () => {
     await mount({ state: { kind: 'out' }, todayMinutes: 540, expectedMinutes: 480 })
+    expect(screen.getByText('Soll erfüllt · +1:00')).toBeTruthy()
+    expect(screen.queryByText(/Verbleibende Zeit/)).toBeNull()
+    expect(fill()).toBe('100%')
+  })
+
+  /**
+   * The switch is on the rounded surplus, so the reading never contradicts what
+   * it prints. Half a minute over would otherwise show "+0:00", which looks
+   * like a bug rather than like a day that has just come due.
+   */
+  it('does not flip to a "+0:00" surplus in the seconds around the goal', async () => {
+    await mount({ state: { kind: 'out' }, todayMinutes: 480, expectedMinutes: 480 })
     expect(screen.getByText('Verbleibende Zeit 00:00')).toBeTruthy()
-    expect(arcOffset()).toBeCloseTo(0, 5)
+    expect(screen.queryByText(/Soll erfüllt/)).toBeNull()
   })
 
   it('shows no remaining time before the first snapshot, even with a target', async () => {
     await mount({ state: { kind: 'unknown' }, expectedMinutes: 480 })
     expect(screen.queryByText(/Verbleibende Zeit/)).toBeNull()
-    expect(screen.getByText(UNKNOWN_TIME)).toBeTruthy()
+    expect(timer()).toBe(UNKNOWN_TIME)
+    // No worked time either, so there is nothing to be a fraction of yet.
+    expect(fill()).toBeNull()
   })
 })
 

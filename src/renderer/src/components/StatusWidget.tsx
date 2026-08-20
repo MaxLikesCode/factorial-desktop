@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { formatDuration, formatHoursMinutes } from '@shared/time'
+import { formatDuration, formatHoursMinutes, formatOvertime } from '@shared/time'
 import type { AppSettings } from '@shared/ipc-contract'
 import { describeActionError, describeStaleReason } from '@renderer/lib/errors'
 import { useAttendance, useTicker } from '@renderer/hooks/useAttendance'
-import { ProgressRing } from './ProgressRing'
+import { ProgressBar } from './ProgressBar'
 import { ActionBar } from './ActionBar'
 import { LocationSelect } from './LocationSelect'
 
@@ -39,6 +39,31 @@ const TONE = {
   in: 'active',
   break: 'paused',
 } as const
+
+/**
+ * The day's worked time, at the size this card is now built around.
+ *
+ * The seconds are one step down in *contrast*, not in size. At 42 px they tick
+ * once a second in the corner of someone's eye for eight hours, and that
+ * movement is the one thing about this widget that could become tiring; muting
+ * them settles it while every digit stays fully readable. Shrinking them would
+ * have bought the same calm by giving up legibility instead.
+ *
+ * The split is on the last colon, so it works on `UNKNOWN_TIME` too — the dash
+ * placeholder gets the same treatment rather than a second code path.
+ */
+function Timer({ value }: { value: string }): React.JSX.Element {
+  const cut = value.lastIndexOf(':')
+  return (
+    <span
+      data-slot="worked-timer"
+      className="text-[42px] leading-[1.04] font-semibold tracking-[-0.038em] tabular-nums"
+    >
+      {value.slice(0, cut)}
+      <span className="text-muted-foreground">{value.slice(cut)}</span>
+    </span>
+  )
+}
 
 export function StatusWidget(): React.JSX.Element {
   const snapshot = useAttendance()
@@ -79,16 +104,47 @@ export function StatusWidget(): React.JSX.Element {
    * `expectedMinutes: 0` or an empty node list (which `fetchExpectedMinutes`
    * reports as `null`), and rendering the first of those as „Verbleibende Zeit
    * 00:00" would read as "you are done for today" on a day that never had a
-   * goal. DESIGN.md, "Soll-Zeit und Fortschrittsring": on a day off the
-   * comparison is dropped and the ring shows plain elapsed time.
+   * goal. DESIGN.md, "Soll-Zeit und Fortschrittsbalken": on a day off the
+   * comparison is dropped and the card shows plain elapsed time.
    */
   const target =
     snapshot.expectedMinutes !== null && snapshot.expectedMinutes > 0
       ? snapshot.expectedMinutes
       : null
 
-  const remainingMinutes =
-    workedMs === null || target === null ? null : Math.max(0, target - workedMs / 60_000)
+  /**
+   * The fraction of the day's goal that is done, or `null` when there is no
+   * comparison to draw. Both halves matter: without a goal there is nothing to
+   * be a fraction of, and before the first snapshot there is no worked time.
+   *
+   * `null` means the bar is not rendered at all rather than rendered empty. An
+   * empty track is not neutral — it claims "0 % of something", which on a
+   * holiday or before the first answer is a statement this app does not have.
+   * Same reasoning as `UNKNOWN_TIME` above.
+   */
+  const progress = workedMs === null || target === null ? null : workedMs / 60_000 / target
+
+  /** Minutes past the goal; negative while there is still time owed. */
+  const overtimeMinutes = workedMs === null || target === null ? null : workedMs / 60_000 - target
+
+  /**
+   * The line beside the status.
+   *
+   * Past the goal it switches from what is left to what is already over.
+   * „Verbleibende Zeit 00:00" was true and useless — it reported the nothing
+   * that remained instead of the surplus, which is the only interesting number
+   * at that point in the day.
+   *
+   * The switch is on the *rounded* surplus, so the two readings never disagree
+   * with what they print: a tenth of a minute past the goal still shows
+   * „Verbleibende Zeit 00:00" rather than a „+0:00" that looks like a bug.
+   */
+  const goalLine =
+    overtimeMinutes === null
+      ? null
+      : Math.round(overtimeMinutes) > 0
+        ? `Soll erfüllt · ${formatOvertime(overtimeMinutes)}`
+        : `Verbleibende Zeit ${formatHoursMinutes(-overtimeMinutes)}`
 
   async function run(action: () => Promise<void>): Promise<void> {
     setBusy(true)
@@ -134,8 +190,8 @@ export function StatusWidget(): React.JSX.Element {
   const ready = state.kind !== 'unknown'
 
   /**
-   * The advisory line under the status. Order matters: a lost connection
-   * explains why everything else might be old, so it is read first.
+   * The advisory line under the bar. Order matters: a lost connection explains
+   * why everything else might be old, so it is read first.
    *
    * C4: a record without `minutes` counts as 0 — visibly, not silently.
    */
@@ -147,64 +203,68 @@ export function StatusWidget(): React.JSX.Element {
   return (
     <div className="flex h-full flex-col rounded-xl border bg-background/95 p-2.5 backdrop-blur">
       {/*
-        The ring is the subject, centred in the space the actions leave over.
-        `flex-1` plus `justify-center` is what removed the dead band the old
-        `justify-between` opened up between the header and the buttons: the room
-        now belongs to the composition instead of falling out of it.
+        Left-aligned and full-width, where the old composition stacked everything
+        in a narrow centred column and left roughly 200 px of the card's 340 dark.
+        The timer is the subject because it is the largest thing on the card, not
+        because it sits in the middle of a ring — which is what freed it to be
+        legible at every reading length. „10:23:45" needs 178 px of the 312 here;
+        inside the old ring it had 67.6 px and ran over the stroke on both sides.
       */}
       <div
-        className={`drag-region flex flex-1 flex-col items-center justify-center gap-1 transition-[opacity,transform] duration-[220ms] ease-(--ease-out) ${
+        className={`drag-region flex flex-1 flex-col justify-center gap-1.5 px-1 transition-[opacity,transform] duration-[220ms] ease-(--ease-out) ${
           ready ? 'scale-100 opacity-100' : 'scale-[0.98] opacity-0'
         }`}
       >
-        <ProgressRing
-          // Without a target there is nothing to be a fraction of: the arc stays
-          // empty and the ring is just a frame around the timer.
-          progress={workedMs === null || target === null ? 0 : workedMs / 60_000 / target}
-          label={workedMs === null ? UNKNOWN_TIME : formatDuration(workedMs)}
-          tone={TONE[state.kind]}
-        />
-
-        <div className="flex min-w-0 flex-col items-center gap-0.5 text-center">
-          <div className="flex items-center gap-1.5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-1.5">
             <span
-              // The dot and the ring are the only carriers of the state change.
+              // The dot and the bar are the only carriers of the state change.
               // Both transition their colour rather than cutting to it.
               className={`size-2 shrink-0 rounded-full transition-colors duration-300 ease-(--ease-out) ${DOT[state.kind]}`}
             />
             <span className="truncate text-sm font-semibold">{LABEL[state.kind]}</span>
           </div>
-          {remainingMinutes !== null && (
-            <p className="text-xs text-muted-foreground">
-              Verbleibende Zeit {formatHoursMinutes(remainingMinutes)}
-            </p>
-          )}
-          {/*
-            One line, not two stacked ones.
-
-            Both hints are advisory and both are rare, but together they used to
-            add 28 px to a card with 7 px to spare — which pushed the work-location
-            select clean off the bottom edge. Losing a control the user can still
-            click at is far worse than reading two short warnings side by side.
-
-            `stale` is keyed off the flag, never off `lastError !== null`: a
-            successful refresh clears `stale` but keeps `lastError` forever (see
-            the contract's note on `AppSnapshot.lastError`), so the other test
-            would glue this hint to the widget for the rest of the session.
-
-            Fades rather than appearing: these arrive on their own, with no click
-            behind them to explain the change. No slide — a warning should be
-            noticed, not performed.
-          */}
-          {hints.length > 0 && (
-            <p className="animate-in fade-in-0 max-w-full truncate text-[10px] text-muted-foreground duration-[140ms] ease-(--ease-out)">
-              {hints.join(' · ')}
-            </p>
+          {goalLine !== null && (
+            <span className="shrink-0 text-[11.5px] text-muted-foreground tabular-nums">
+              {goalLine}
+            </span>
           )}
         </div>
+
+        <Timer value={workedMs === null ? UNKNOWN_TIME : formatDuration(workedMs)} />
+
+        {progress !== null && (
+          <div className="mt-1.5">
+            <ProgressBar progress={progress} tone={TONE[state.kind]} />
+          </div>
+        )}
+
+        {/*
+          One line, not two stacked ones.
+
+          Both hints are advisory and both are rare. On the old ring layout the
+          two of them together added 28 px to a card with 7 px to spare, which
+          pushed the work-location select clean off the bottom edge; this layout
+          has around 40 px of slack and no longer depends on that, but two short
+          warnings side by side still read faster than a stack.
+
+          `stale` is keyed off the flag, never off `lastError !== null`: a
+          successful refresh clears `stale` but keeps `lastError` forever (see
+          the contract's note on `AppSnapshot.lastError`), so the other test
+          would glue this hint to the widget for the rest of the session.
+
+          Fades rather than appearing: these arrive on their own, with no click
+          behind them to explain the change. No slide — a warning should be
+          noticed, not performed.
+        */}
+        {hints.length > 0 && (
+          <p className="animate-in fade-in-0 max-w-full truncate text-[10px] text-muted-foreground duration-[140ms] ease-(--ease-out)">
+            {hints.join(' · ')}
+          </p>
+        )}
       </div>
 
-      <div className="no-drag flex flex-col items-center gap-2">
+      <div className="no-drag flex flex-col items-start gap-2 px-1">
         {/*
           Keyed by state so React remounts the row and replays the entrance. The
           whole set of buttons changes shape between states (one button becomes

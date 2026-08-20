@@ -536,17 +536,35 @@ Eine fehlgeschlagene Mutation wird nie als Erfolg dargestellt.
 **Widget:** ca. 320×210, frameless, `alwaysOnTop`, transparent abgerundet, eigene
 Drag-Region. Position wird pro Monitor gemerkt.
 
-**Aufbau** (angelehnt an das Factorial-Web-Widget):
+**Aufbau** — linksbündig über die volle Kartenbreite:
 
-- Statuszeile mit farbigem Punkt: *Ausgestempelt* / *Eingestempelt* / *In einer Pause*
-- Darunter "Verbleibende Zeit HH:MM"
-- Fortschrittsring (SVG) mit großem Timer in der Mitte
+- Kopfzeile: farbiger Punkt + Status (*Ausgestempelt* / *Eingestempelt* /
+  *In einer Pause*), rechts daneben die Soll-Zeile
+- Darunter der Timer, 42 px; die Sekunden eine Kontraststufe leiser
+- Darunter der Fortschrittsbalken (6 px) über die volle Breite
 - Buttons je nach Zustand:
   - aus → **Einstempeln**
   - ein → **Pause** (Dropdown mit Pausentypen) + **Ausstempeln**
   - Pause → **Fortsetzen** + **Ausstempeln**
 - Fußzeile: Arbeitsort-Selector (Büro / Mobiles Arbeiten / Dienstreise), bei
   aktiver Pause zusätzlich der Pausenname
+
+> **Der Ring ist einem Balken gewichen — aus Platzgründen, nicht aus Geschmack.**
+> Der Ring maß 88 px bei 6 px Strich, also 67,6 px lichte Weite innen. „2:00:14"
+> braucht bei 18 px rund 62 px und klebte damit schon am Strich; „10:23:45"
+> braucht rund 73 px und lief beidseitig darüber hinaus. Die Zahl kleiner zu
+> setzen hätte die Lesbarkeit gekostet, den Ring größer zu ziehen den
+> Arbeitsort-Selector über die Unterkante gedrückt — die Karte hatte 6 px Luft.
+>
+> Der Balken löst beides auf einmal: er läuft über die volle Breite, gibt die
+> Mitte der Karte für den Timer frei (42 px statt 18) und löst den Tag bei
+> 320 px etwa viermal feiner auf, als es der Umfang eines 88-px-Rings konnte.
+> Preis: das Widget sieht dem Factorial-Web-Widget nicht mehr ähnlich.
+>
+> **Die Sekunden tragen weniger Kontrast als der Rest der Zahl.** Bei 42 px
+> tickt diese Bewegung den ganzen Tag im Augenwinkel mit — deutlich präsenter
+> als bei 18 px. Gedämpft statt verkleinert: die Unruhe verschwindet, jede
+> Ziffer bleibt voll lesbar.
 
 > **Der Selector zeigt bei offener Schicht deren echten Arbeitsort, nicht die
 > gespeicherte Voreinstellung.** Die Voreinstellung sagt nur, was das *nächste*
@@ -572,7 +590,7 @@ Komponenten: Button, DropdownMenu, Select, Tooltip, Badge, Sonner.
 Der Arbeitsort merkt sich die letzte Wahl und wird beim Einstempeln als
 `locationType` + `workplaceId` mitgeschickt.
 
-### Soll-Zeit und Fortschrittsring — geklärt
+### Soll-Zeit und Fortschrittsbalken — geklärt
 
 Die Tages-Soll-Zeit kommt aus `attendanceEstimatedTimes`:
 
@@ -604,8 +622,23 @@ gegengeprüft mit dem Stundenzettel („0h 00m / 8h 00m" für den 12.8.).
 Summe über `shift.minutes` des Tages plus laufender Zeit gebildet.
 
 An freien Tagen bzw. bei Abwesenheit ist mit `expectedMinutes: 0` oder einem
-leeren `nodes`-Array zu rechnen; dann entfällt der Soll-Vergleich und der Ring
+leeren `nodes`-Array zu rechnen; dann entfällt der Soll-Vergleich und die Karte
 zeigt reine Ist-Zeit.
+
+**Der Balken entfällt dann ganz, er wird nicht leer gezeichnet.** Ein leerer
+Balken ist nicht neutral — er behauptet „0 % von etwas", und dieses Etwas gibt
+es an einem Tag ohne Soll nicht. Dieselbe Regel, aus der auch der Timer vor der
+ersten Antwort ein Strich ist und keine 0:00:00. Das gilt genauso vor dem ersten
+Snapshot: ohne bekannte Ist-Zeit gibt es nichts, wovon der Balken ein Bruchteil
+wäre.
+
+**Über dem Soll wechselt die Zeile von „Verbleibende Zeit 00:00" zu
+„Soll erfüllt · +H:MM".** Die alte Angabe stimmte, nannte aber das
+Uninteressante: nicht, dass nichts mehr übrig ist, sondern wie viel schon
+darüber. Der Wechsel hängt an den *gerundeten* Überminuten, damit die Zeile nie
+im Widerspruch zu dem steht, was sie druckt — eine Zehntelminute über dem Soll
+zeigt weiterhin „Verbleibende Zeit 00:00" statt ein „+0:00", das wie ein Fehler
+aussieht.
 
 ## Tray
 

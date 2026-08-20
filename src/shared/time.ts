@@ -110,6 +110,20 @@ export function formatHoursMinutes(minutes: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
+/**
+ * `"+H:MM"` — how far the day has run past its goal.
+ *
+ * Hours are not zero-padded, unlike `formatHoursMinutes`: this reading is
+ * prefixed and short-lived where the other sits in a fixed column, and "+2:23"
+ * reads as a surplus where "+02:23" reads as a clock time.
+ */
+export function formatOvertime(minutes: number): string {
+  const total = Math.max(0, Math.round(minutes))
+  const h = Math.floor(total / 60)
+  const m = total % 60
+  return `+${h}:${String(m).padStart(2, '0')}`
+}
+
 /** The local calendar day, in the shape `shift.date` uses: "2026-08-12". */
 export function toLocalDate(d: Date): string {
   return [

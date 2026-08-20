@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  reconstructInstant, formatDuration, formatHoursMinutes,
+  reconstructInstant, formatDuration, formatHoursMinutes, formatOvertime,
   toLocalIsoWithOffset, toLocalOffset, toLocalDate,
 } from '@shared/time'
 
@@ -125,6 +125,26 @@ describe('formatHoursMinutes', () => {
   })
   it('clamps negatives so remaining-time never renders a minus', () => {
     expect(formatHoursMinutes(-30)).toBe('00:00')
+  })
+})
+
+describe('formatOvertime', () => {
+  it('prefixes the surplus and leaves the hour unpadded', () => {
+    expect(formatOvertime(143)).toBe('+2:23')
+  })
+  it('pads the minutes, so the reading keeps a fixed shape', () => {
+    expect(formatOvertime(65)).toBe('+1:05')
+  })
+  it('rounds to the minute the widget prints', () => {
+    expect(formatOvertime(0.4)).toBe('+0:00')
+    expect(formatOvertime(59.6)).toBe('+1:00')
+  })
+  /**
+   * The widget switches to this reading only once the surplus is positive, but
+   * a negative must not render as "+-1:00" if a future caller gets there first.
+   */
+  it('clamps negatives rather than printing a signed contradiction', () => {
+    expect(formatOvertime(-30)).toBe('+0:00')
   })
 })
 
