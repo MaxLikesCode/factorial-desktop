@@ -15,15 +15,19 @@
 #
 # Where the artefacts end up depends on why the run happened:
 #
-# - On a **tag**, electron-builder uploads them straight to a draft GitHub
-#   release. Release assets do not count against the Actions artifact quota,
-#   which is not a detail: the first tagged run failed at exactly that quota
-#   with both platforms already built. They also outlive the 30-day retention
-#   an Actions artifact gets, which is what you want from a release anyway.
-#   The platforms build one after another, and the release is a prerelease
-#   rather than a draft, both so that the second platform adds to the release
-#   the first one made instead of starting another — see `max-parallel` here and
-#   `publish:` in electron-builder.yml.
+# - On a **tag**, each job attaches its own files to the GitHub release for that
+#   tag. Release assets do not count against the Actions artifact quota, which
+#   is not a detail: the first tagged run failed at exactly that quota with both
+#   platforms already built. They also outlive the 30-day retention an Actions
+#   artifact gets, which is what you want from a release anyway.
+#
+#   The upload is `softprops/action-gh-release`, not electron-builder's own
+#   `--publish`. That was tried first and consistently produced *two* releases
+#   for one tag, with the assets split between them — as a draft (no tag to find
+#   it by) and as a prerelease (a real tag, and it still made a second one),
+#   with the platforms building strictly one after the other. This action looks
+#   the release up by tag and adds to it, which is the behaviour that was
+#   wanted.
 # - On a **manual run**, there is no release to publish to, so the files go to
 #   Actions artifacts instead. That upload is allowed to fail without failing
 #   the run — a manual run is asking "does it still build", and the answer to
@@ -93,12 +97,8 @@ jobs:
     strategy:
       # One platform failing should not hide whether the other one worked.
       fail-fast: false
-      # One at a time, so the first platform has created the release before the
-      # second looks for it. On its own this was not enough — a draft release
-      # has no tag to find it by, and serialising two jobs still produced two
-      # drafts; the fix for that is `releaseType: prerelease` in
-      # electron-builder.yml. This stays because "create, then add to" is a
-      # sequence, and running it concurrently is asking for the race back.
+      # One at a time: the first job to finish creates the release, the second
+      # adds to it. Concurrently, both would be creating it at once.
       max-parallel: 1
       matrix:
         include:
@@ -121,17 +121,37 @@ jobs:
 
       - run: npm ci
 
-      - name: Package and publish
-        # `always` on a tag: build, then attach to the prerelease.
-        # electron-builder creates it on the first platform to get here and adds
-        # to it on the second.
-        run: npm run ${{ matrix.script }} -- --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
+      - name: Package
+        run: npm run ${{ matrix.script }} -- --publish never
         env:
           # Without this electron-builder hunts the keychain for a signing
           # identity and fails the build when it finds none. `identity: null`
           # already says not to sign; this stops the search itself.
           CSC_IDENTITY_AUTO_DISCOVERY: false
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          # Not win-unpacked/ or mac/: the same app again as loose files.
+          files: |
+            release/*.exe
+            release/*.dmg
+            release/*.zip
+          fail_on_unmatched_files: false
+          # Visible, but marked for what it is — the real-API path is still
+          # untested (docs/WINDOWS.md §4a). Promote it by hand once that changes.
+          prerelease: true
+          generate_release_notes: true
+          body: |
+            Unsignierte Builds.
+
+            - **Windows:** `Factorial-Desktop-Setup-<version>.exe` installiert
+              (Startmenü, Deinstaller, Autostart über das Tray-Menü);
+              `Factorial-Desktop.exe` läuft ohne Installation. SmartScreen beim
+              ersten Start: „Weitere Informationen" → „Trotzdem ausführen".
+            - **macOS:** `.dmg` oder `.zip`, Apple Silicon. Beim ersten Start
+              Rechtsklick → „Öffnen", sonst weist Gatekeeper die App ab.
 
       - name: Collect artefacts
         # Only where there is no release to publish to. See the note at the top.
