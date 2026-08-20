@@ -38,10 +38,22 @@ export const IPC = {
   signOut: 'auth:signOut',
   getSettings: 'settings:get',
   setSettings: 'settings:set',
+  settingsChanged: 'settings:changed',
+  setWindowInteractive: 'widget:setInteractive',
 } as const
 
-/** Every channel the renderer may `invoke`; `snapshotChanged` is push-only. */
-export type InvokeChannel = Exclude<(typeof IPC)[keyof typeof IPC], typeof IPC.snapshotChanged>
+/**
+ * Every channel the renderer may `invoke`.
+ *
+ * `snapshotChanged` and `settingsChanged` are push-only: the main process sends
+ * them, nobody answers them. Excluding them here is what makes
+ * `Record<InvokeChannel, IpcHandler>` fail to compile if a handler is forgotten
+ * — and refuse a handler for a channel that can never carry one.
+ */
+export type InvokeChannel = Exclude<
+  (typeof IPC)[keyof typeof IPC],
+  typeof IPC.snapshotChanged | typeof IPC.settingsChanged
+>
 
 export interface BreakOption {
   id: string
@@ -171,6 +183,9 @@ export function isThemeSetting(value: string): value is ThemeSetting {
   return (THEME_SETTINGS as readonly string[]).includes(value)
 }
 
+import type { WidgetSize } from './widget-size'
+export type { WidgetSize }
+
 export interface AppSettings {
   openAtLogin: boolean
   alwaysOnTop: boolean
@@ -178,6 +193,12 @@ export interface AppSettings {
   /** Int in the schema (K4); stored as a number so no conversion is needed later. */
   lastWorkplaceId: number | null
   theme: ThemeSetting
+  /**
+   * How much screen the widget takes. Changing it resizes the window and
+   * re-clamps its remembered position — see `src/shared/widget-size.ts` for why
+   * the window is not always the same size as the card.
+   */
+  widgetSize: WidgetSize
 }
 
 /**
@@ -253,4 +274,25 @@ export interface FactorialBridge {
   signOut(): Promise<void>
   getSettings(): Promise<AppSettings>
   setSettings(patch: Partial<AppSettings>): Promise<AppSettings>
+  /**
+   * Fires whenever the settings change, from wherever.
+   *
+   * The widget is not the only writer: the tray's "Einstellungen" submenu writes
+   * the same store, and since the widget's own size is now one of those settings
+   * it can no longer read them once at mount and be right afterwards. Returns
+   * its own unsubscribe, like `onSnapshot`.
+   */
+  onSettings(callback: (settings: AppSettings) => void): () => void
+  /**
+   * Lets clicks through the window's transparent margin, or takes them back.
+   *
+   * Only the sizes that grow have such a margin (`hasTransparentMargin`). While
+   * the pointer is anywhere but over the card, the window must not swallow
+   * clicks meant for whatever is behind it — an always-on-top window that eats a
+   * 320 x 137 rectangle of desktop is worse than the big widget ever was.
+   *
+   * The renderer decides, because only the renderer knows where the card
+   * currently is; the main process owns the window and does it.
+   */
+  setWindowInteractive(interactive: boolean): Promise<void>
 }

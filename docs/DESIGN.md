@@ -659,10 +659,91 @@ Fenster schließen blendet aus statt zu beenden; beendet wird nur über das Tray
 
 - Autostart beim Login (Standard: an, `app.setLoginItemSettings`)
 - Always-on-Top an/aus
+- Größe: Standard (Vorgabe) / Kompakt / Minimal
 - Erscheinungsbild: Systemvorgabe (Standard) / Hell / Dunkel
 - Abmelden (Partition-Cookies löschen)
 
 Persistiert als JSON in `app.getPath('userData')`.
+
+### Größe
+
+Drei Größen, keine drei Skins derselben Anordnung — jede lässt weg, was die
+nächstkleinere nicht mehr trägt:
+
+| | Karte | Fläche | Was fehlt |
+|---|---|---|---|
+| Standard | 340 × 224 | 76.160 px² | — |
+| Kompakt | 300 × 126 | 37.800 px² | Arbeitsort-Selector |
+| Minimal | 156 × 44 | 6.864 px² | alle Aktionen; Karte klappt auf |
+
+Gespart wird über die **Höhe**. Die Breite braucht die Zahl: „10:23:45" misst bei
+42 px 178 px — daran ist der frühere Fortschrittsring gescheitert. Die Höhe ging
+dagegen fast vollständig für Dinge drauf, die nicht die Zeit sind.
+
+Die Maße stehen in `src/shared/widget-size.ts`, zusammen mit der Rechnung, die
+daraus die Fenstergröße macht.
+
+**Kompakt verliert etwas Konkretes:** ohne Selector zeigt das Widget bei
+laufender Schicht nicht mehr deren tatsächlichen Arbeitsort. Genau dieser Fehler
+wurde weiter oben behoben („Der Selector zeigt bei offener Schicht deren echten
+Arbeitsort"). In Kompakt ist die Angabe nicht falsch, sondern abwesend — das ist
+der Unterschied, der sie vertretbar macht.
+
+#### Fenster ≠ Karte
+
+Für Minimal ist das Fenster **größer als die sichtbare Karte** und drumherum
+durchsichtig. Der Grund ist die Animation: eine `BrowserWindow`-Größe ändert nur
+der Main-Prozess mit `setSize()`, Frame für Frame über die IPC-Grenze, und dort
+interpoliert nichts. Eine Feder wäre da ohnehin unmöglich — ihr Überschwinger
+bräuchte Fenstergrößen jenseits des Ziels.
+
+Also bleibt das Fenster stehen und nur das `div` darin wächst, als
+CSS-Transition auf dem Compositor. Das Fenster hält den Platz vor, in den der
+Überschwinger geht: 13 % über die Zielgröße, also 320 × 137 statt 300 × 126.
+Ohne diesen Spielraum wird die Spitze abgeschnitten und die Feder ist lautlos
+weg.
+
+Der Preis ist der unsichtbare Rand. Er würde Klicks schlucken, die dem Desktop
+dahinter galten — bei einem Fenster, das immer im Vordergrund liegt. Deshalb
+macht der Main-Prozess das Fenster durchlässig (`setIgnoreMouseEvents(true,
+{ forward: true })`), und der Renderer fordert die Klicks zurück, sobald der
+Zeiger über der Karte ist. `forward: true` ist dabei das, was die Sache
+umkehrbar macht: nur weil das durchlässige Fenster weiterhin Mausbewegungen
+bekommt, merkt der Renderer die Ankunft überhaupt.
+
+#### Aufklappen
+
+Minimal hat keine Aktionen. Ein 20-px-Knopf neben der Zahl klappt die Karte auf
+die Kompakt-Größe auf; das Tray-Menü bietet Ein-/Ausstempeln, Pause und
+Fortsetzen ohnehin durchgehend an.
+
+**Der Knopf ist erzwungen, nicht gewählt.** `-webkit-app-region: drag` schluckt
+Mausereignisse vollständig — eine Karte, die man verschieben kann, kann man
+nicht anklicken. Verschieben wiegt bei einem schwebenden Fenster schwerer, also
+bleibt die Karte Drag-Region und bekommt einen eigenen Knopf. Die 8 px Breite,
+die Minimal über den Inhalt hinaus misst, sind genau das.
+
+Die verborgenen Zeilen bleiben die ganze Zeit im DOM — sonst gäbe es nichts
+einzublenden — sind eingeklappt aber `inert` und `aria-hidden`. Ohne das läuft
+die Tabulatortaste in ein unsichtbares „Ausstempeln", und Enter beendet eine
+Schicht, von der auf dem Bildschirm nichts zu sehen ist.
+
+#### Die Feder
+
+Zwei Kurven, absichtlich verschieden (`--spring-out`, `--spring-back` in
+`styles.css`): ein gedämpfter Schwinger, in 33 Stützstellen als `linear()`
+ausgerechnet.
+
+Eine Feder schwingt in **beide** Richtungen über. Nach draußen heißt das größer
+als die Zielgröße — das ist der Schwung. Zurück heißt es kleiner als die
+**Ruhegröße**, und die kennt das Auge bereits; derselbe Effekt liest sich dort
+als Zucken statt als Leben. Bei Dämpfung 0,55 auf dem Rückweg tauchte die Karte
+auf 130 × 34 px durch und `overflow: hidden` schnitt die Zahl an.
+
+Deshalb: 0,55 hinaus (520 ms), 0,56 zurück über kürzere 420 ms. Der Rückweg
+landet damit bei rund 34 px — knapp über den 33 px, die die eingeklappte Zahl
+braucht. Die Deckkraft federt nie mit: ein Überschwinger unter 0 oder über 1
+wird abgeschnitten, und der Schnitt liest sich als Hänger.
 
 ### Erscheinungsbild
 

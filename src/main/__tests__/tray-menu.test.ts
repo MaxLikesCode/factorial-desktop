@@ -47,6 +47,7 @@ const settings: AppSettings = {
   lastLocationType: 'office',
   lastWorkplaceId: null,
   theme: 'system',
+  widgetSize: 'standard',
 }
 
 function clockedIn(since: Date): AppSnapshot['state'] {
@@ -70,6 +71,7 @@ function noopActions(): TrayActions {
     setOpenAtLogin: vi.fn(),
     setAlwaysOnTop: vi.fn(),
     setTheme: vi.fn(),
+    setWidgetSize: vi.fn(),
     quit: vi.fn(),
   }
 }
@@ -360,6 +362,33 @@ describe('buildTrayMenu', () => {
       )
       expect(itemAt(off, 'Autostart').checked).toBe(false)
       expect(itemAt(off, 'Immer im Vordergrund').checked).toBe(false)
+    })
+
+    it('offers the size as three radios that name their own pixels', () => {
+      const entries = submenuOf(itemAt(menu(base), 'Einstellungen'))
+      const sizes = submenuOf(itemAt(entries, 'Größe'))
+
+      // The measurements are the point of the setting: "Kompakt" alone does not
+      // say whether that is a nudge or a halving.
+      expect(sizes.map((entry) => entry.label)).toEqual([
+        'Standard  340 × 224',
+        'Kompakt  300 × 126',
+        'Minimal  156 × 44',
+      ])
+      for (const entry of sizes) expect(entry.type).toBe('radio')
+      expect(sizes.map((entry) => entry.checked)).toEqual([true, false, false])
+    })
+
+    it('writes the size it names, not the radio item’s own state', () => {
+      const actions = noopActions()
+      const sizes = submenuOf(
+        itemAt(submenuOf(itemAt(menu(base, { actions }), 'Einstellungen')), 'Größe'),
+      )
+
+      fire(sizes[2])
+      expect(actions.setWidgetSize).toHaveBeenCalledWith('minimal')
+      fire(sizes[0])
+      expect(actions.setWidgetSize).toHaveBeenCalledWith('standard')
     })
 
     it('offers the appearance as three radios, with the stored one marked', () => {

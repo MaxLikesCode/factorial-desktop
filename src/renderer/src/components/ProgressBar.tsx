@@ -4,6 +4,8 @@ interface Props {
   /** 0..1. Out of range or non-finite values are clamped — see `fillWidth`. */
   progress: number
   tone: 'idle' | 'active' | 'paused'
+  /** Height utility; the card's density decides how thick the bar is. */
+  className?: string
 }
 
 const TONE: Record<Props['tone'], string> = {
@@ -37,7 +39,7 @@ function fillWidth(progress: number): string {
  * (`10:23:45` at a readable size simply does not fit inside a ring this card
  * has room for).
  */
-export function ProgressBar({ progress, tone }: Props): React.JSX.Element {
+export function ProgressBar({ progress, tone, className = 'h-1.5' }: Props): React.JSX.Element {
   /**
    * The bar fills itself in, once per launch.
    *
@@ -56,7 +58,7 @@ export function ProgressBar({ progress, tone }: Props): React.JSX.Element {
   }, [])
 
   return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+    <div className={`${className} w-full overflow-hidden rounded-full bg-muted`}>
       <div
         data-slot="progress-bar-fill"
         // `background-color` joins the transition: the tone carries the whole

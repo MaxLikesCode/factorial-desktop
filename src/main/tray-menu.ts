@@ -24,6 +24,7 @@
 import type { MenuItemConstructorOptions } from 'electron'
 import { describeActionError, describeActionFailure, describeStaleReason } from '@shared/errors'
 import type { AppSettings, AppSnapshot, ThemeSetting } from '@shared/ipc-contract'
+import { WIDGET_LAYOUTS, type WidgetSize } from '@shared/widget-size'
 import { classifyActionError } from './ipc-handlers'
 
 /** Drives the colour-coded Windows icon; macOS uses one template icon for all. */
@@ -44,6 +45,7 @@ export interface TrayActions {
   setOpenAtLogin: (value: boolean) => void
   setAlwaysOnTop: (value: boolean) => void
   setTheme: (value: ThemeSetting) => void
+  setWidgetSize: (value: WidgetSize) => void
   quit: () => void
 }
 
@@ -242,6 +244,34 @@ function themeSubmenu(settings: AppSettings, actions: TrayActions): MenuItemCons
   }))
 }
 
+/**
+ * The size picker.
+ *
+ * Each row carries its own pixel measurements. That is not decoration: the whole
+ * point of the setting is how much screen the thing takes, and "Kompakt" alone
+ * does not say whether that is a nudge or a halving.
+ *
+ * Radios for the same reason as the appearance above — three states, and a
+ * checkbox cannot say which of three is in force.
+ */
+const SIZE_LABEL: ReadonlyArray<{ value: WidgetSize; label: string }> = [
+  { value: 'standard', label: 'Standard' },
+  { value: 'kompakt', label: 'Kompakt' },
+  { value: 'minimal', label: 'Minimal' },
+]
+
+function sizeSubmenu(settings: AppSettings, actions: TrayActions): MenuItemConstructorOptions[] {
+  return SIZE_LABEL.map(({ value, label }) => {
+    const { width, height } = WIDGET_LAYOUTS[value].card
+    return {
+      label: `${label}  ${width} × ${height}`,
+      type: 'radio',
+      checked: settings.widgetSize === value,
+      click: () => actions.setWidgetSize(value),
+    }
+  })
+}
+
 function settingsSubmenu(
   snapshot: AppSnapshot,
   settings: AppSettings,
@@ -260,6 +290,7 @@ function settingsSubmenu(
       checked: settings.alwaysOnTop,
       click: () => actions.setAlwaysOnTop(!settings.alwaysOnTop),
     },
+    { label: 'Größe', submenu: sizeSubmenu(settings, actions) },
     { label: 'Erscheinungsbild', submenu: themeSubmenu(settings, actions) },
   ]
 

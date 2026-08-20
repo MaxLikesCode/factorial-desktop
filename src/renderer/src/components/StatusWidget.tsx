@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { formatDuration, formatHoursMinutes, formatOvertime } from '@shared/time'
-import type { AppSettings } from '@shared/ipc-contract'
 import { describeActionError, describeStaleReason } from '@renderer/lib/errors'
 import { useAttendance, useTicker } from '@renderer/hooks/useAttendance'
-import { ProgressBar } from './ProgressBar'
+import { useSettings } from '@renderer/hooks/useSettings'
 import { ActionBar } from './ActionBar'
 import { LocationSelect } from './LocationSelect'
+import { MinimalCard } from './MinimalCard'
+import { StatusCard } from './StatusCard'
+import type { WidgetView } from './WidgetView'
 
 /**
  * Placeholder for a time this app does not know yet. It is not `0:00:00` on
@@ -40,36 +42,21 @@ const TONE = {
   break: 'paused',
 } as const
 
-/**
- * The day's worked time, at the size this card is now built around.
- *
- * The seconds are one step down in *contrast*, not in size. At 42 px they tick
- * once a second in the corner of someone's eye for eight hours, and that
- * movement is the one thing about this widget that could become tiring; muting
- * them settles it while every digit stays fully readable. Shrinking them would
- * have bought the same calm by giving up legibility instead.
- *
- * The split is on the last colon, so it works on `UNKNOWN_TIME` too — the dash
- * placeholder gets the same treatment rather than a second code path.
- */
-function Timer({ value }: { value: string }): React.JSX.Element {
-  const cut = value.lastIndexOf(':')
-  return (
-    <span
-      data-slot="worked-timer"
-      className="text-[42px] leading-[1.04] font-semibold tracking-[-0.038em] tabular-nums"
-    >
-      {value.slice(0, cut)}
-      <span className="text-muted-foreground">{value.slice(cut)}</span>
-    </span>
-  )
-}
-
 export function StatusWidget(): React.JSX.Element {
   const snapshot = useAttendance()
   const state = snapshot.state
   const [busy, setBusy] = useState(false)
-  const [settings, setSettings] = useState<AppSettings | null>(null)
+  const settings = useSettings()
+  const size = settings?.widgetSize ?? 'standard'
+  /**
+   * Whether the smallest size is currently showing its actions.
+   *
+   * Keyed off nothing but a click. It deliberately does NOT reset when the
+   * attendance state changes: the card popping shut under someone who opened it
+   * to clock out, because a poll happened to land, would be the worst kind of
+   * surprise in a window that writes to a real time record.
+   */
+  const [expanded, setExpanded] = useState(false)
 
   // Only `in` and `break` carry a start; `since` is what the timer is recomputed
   // from on every tick, and the ticker only runs while there is one.
@@ -78,12 +65,6 @@ export function StatusWidget(): React.JSX.Element {
   // `Math.max(0, …)` guards a clock that jumped backwards (NTP correction, a
   // resume from standby): a negative segment would render as a shrinking timer.
   const segmentMs = since === null ? 0 : Math.max(0, tick - since.getTime())
-
-  useEffect(() => {
-    // A failure here is not worth a toast — the widget stays usable, the
-    // location select just stays disabled until the next mount.
-    void window.factorial.getSettings().then(setSettings, () => {})
-  }, [])
 
   /**
    * Worked milliseconds today, or `null` while the state is not known.
@@ -175,9 +156,14 @@ export function StatusWidget(): React.JSX.Element {
     state.kind === 'in' || state.kind === 'break' ? state.locationType : null
   const displayedLocation = shiftLocation ?? settings?.lastLocationType ?? 'office'
 
-  /** Remembering the choice is a preference, not part of the clock-in. */
+  /**
+   * Remembering the choice is a preference, not part of the clock-in.
+   *
+   * No local echo any more: the main process broadcasts the stored settings back
+   * and `useSettings` picks them up, so writing one here would only be a second
+   * copy racing the real one.
+   */
   function chooseLocation(value: string): void {
-    setSettings((current) => (current === null ? current : { ...current, lastLocationType: value }))
     void window.factorial.setSettings({ lastLocationType: value }).catch(() => {})
   }
 
@@ -200,103 +186,79 @@ export function StatusWidget(): React.JSX.Element {
     snapshot.incompleteShifts > 0 ? 'Tagessumme unvollständig' : null,
   ].filter((hint): hint is string => hint !== null)
 
+  /** Everything the cards need, already decided. */
+  const view: WidgetView = {
+    label: LABEL[state.kind],
+    dotClass: DOT[state.kind],
+    tone: TONE[state.kind],
+    time: workedMs === null ? UNKNOWN_TIME : formatDuration(workedMs),
+    goalLine,
+    progress,
+    hints,
+    breakLine:
+      state.kind === 'break' ? `${state.breakName} · ${formatDuration(segmentMs)}` : null,
+  }
+
+  const actions = (
+    /*
+      Keyed by state so React remounts the row and replays the entrance. The whole
+      set of buttons changes shape between states — one button becomes two — and
+      swapping that in a single frame is the most abrupt thing this widget does.
+      Enter only: the outgoing buttons are replaced, not dismissed.
+    */
+    <div
+      key={state.kind}
+      className="animate-in fade-in-0 slide-in-from-bottom-1 duration-[180ms] ease-(--ease-out)"
+    >
+      <ActionBar
+        snapshot={snapshot}
+        busy={busy}
+        onClockIn={() =>
+          void run(() =>
+            window.factorial.clockIn({
+              locationType: settings?.lastLocationType ?? 'office',
+              workplaceId: settings?.lastWorkplaceId ?? null,
+            }),
+          )
+        }
+        onClockOut={() => void run(() => window.factorial.clockOut())}
+        onStartBreak={(id) => void run(() => window.factorial.startBreak(id))}
+        onEndBreak={() => void run(() => window.factorial.endBreak())}
+        onSignIn={() => void run(() => window.factorial.signOut())}
+      />
+    </div>
+  )
+
+  /*
+    `minimal` is its own component rather than a third density, because the only
+    size that changes shape needs a layout built for changing shape — absolutely
+    positioned, springing, with a control the others have no use for.
+  */
+  if (size === 'minimal') {
+    return (
+      <MinimalCard
+        view={view}
+        open={expanded}
+        onToggle={() => setExpanded((current) => !current)}
+        actions={actions}
+      />
+    )
+  }
+
   return (
-    <div className="flex h-full flex-col rounded-xl border bg-background/95 p-2.5 backdrop-blur">
-      {/*
-        Left-aligned and full-width, where the old composition stacked everything
-        in a narrow centred column and left roughly 200 px of the card's 340 dark.
-        The timer is the subject because it is the largest thing on the card, not
-        because it sits in the middle of a ring — which is what freed it to be
-        legible at every reading length. „10:23:45" needs 178 px of the 312 here;
-        inside the old ring it had 67.6 px and ran over the stroke on both sides.
-      */}
-      <div
-        className={`drag-region flex flex-1 flex-col justify-center gap-1.5 px-1 transition-[opacity,transform] duration-[220ms] ease-(--ease-out) ${
-          ready ? 'scale-100 opacity-100' : 'scale-[0.98] opacity-0'
-        }`}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <span
-              // The dot and the bar are the only carriers of the state change.
-              // Both transition their colour rather than cutting to it.
-              className={`size-2 shrink-0 rounded-full transition-colors duration-300 ease-(--ease-out) ${DOT[state.kind]}`}
-            />
-            <span className="truncate text-sm font-semibold">{LABEL[state.kind]}</span>
-          </div>
-          {goalLine !== null && (
-            <span className="shrink-0 text-[11.5px] text-muted-foreground tabular-nums">
-              {goalLine}
-            </span>
-          )}
-        </div>
-
-        <Timer value={workedMs === null ? UNKNOWN_TIME : formatDuration(workedMs)} />
-
-        {progress !== null && (
-          <div className="mt-1.5">
-            <ProgressBar progress={progress} tone={TONE[state.kind]} />
-          </div>
-        )}
-
-        {/*
-          One line, not two stacked ones.
-
-          Both hints are advisory and both are rare. On the old ring layout the
-          two of them together added 28 px to a card with 7 px to spare, which
-          pushed the work-location select clean off the bottom edge; this layout
-          has around 40 px of slack and no longer depends on that, but two short
-          warnings side by side still read faster than a stack.
-
-          `stale` is keyed off the flag, never off `lastError !== null`: a
-          successful refresh clears `stale` but keeps `lastError` forever (see
-          the contract's note on `AppSnapshot.lastError`), so the other test
-          would glue this hint to the widget for the rest of the session.
-
-          Fades rather than appearing: these arrive on their own, with no click
-          behind them to explain the change. No slide — a warning should be
-          noticed, not performed.
-        */}
-        {hints.length > 0 && (
-          <p className="animate-in fade-in-0 max-w-full truncate text-[10px] text-muted-foreground duration-[140ms] ease-(--ease-out)">
-            {hints.join(' · ')}
-          </p>
-        )}
-      </div>
-
-      <div className="no-drag flex flex-col items-start gap-2 px-1">
-        {/*
-          Keyed by state so React remounts the row and replays the entrance. The
-          whole set of buttons changes shape between states (one button becomes
-          two), and swapping that in a single frame is the most abrupt thing this
-          widget does — at a handful of times a day it can well afford 180 ms.
-          Enter only: the outgoing buttons are replaced, not dismissed, and
-          holding them around to fade would delay the state the user just asked
-          for.
-        */}
-        <div
-          key={state.kind}
-          className="animate-in fade-in-0 slide-in-from-bottom-1 duration-[180ms] ease-(--ease-out)"
-        >
-          <ActionBar
-            snapshot={snapshot}
-            busy={busy}
-            onClockIn={() =>
-              void run(() =>
-                window.factorial.clockIn({
-                  locationType: settings?.lastLocationType ?? 'office',
-                  workplaceId: settings?.lastWorkplaceId ?? null,
-                }),
-              )
-            }
-            onClockOut={() => void run(() => window.factorial.clockOut())}
-            onStartBreak={(id) => void run(() => window.factorial.startBreak(id))}
-            onEndBreak={() => void run(() => window.factorial.endBreak())}
-            onSignIn={() => void run(() => window.factorial.signOut())}
-          />
-        </div>
-
-        <div className="flex w-full items-center justify-between gap-2 text-xs text-muted-foreground">
+    <StatusCard
+      view={view}
+      density={size}
+      ready={ready}
+      actions={actions}
+      location={
+        /*
+          Only `standard` has the room. In `kompakt` the work location is reached
+          through the tray, where it has always belonged as a preference — the
+          cost being that a running shift's actual location is no longer visible
+          at a glance there.
+        */
+        size === 'standard' ? (
           <LocationSelect
             value={displayedLocation}
             // The location is only sent with a clock-in, so changing it mid-shift
@@ -304,11 +266,8 @@ export function StatusWidget(): React.JSX.Element {
             disabled={busy || settings === null || state.kind !== 'out'}
             onChange={chooseLocation}
           />
-          {state.kind === 'break' && (
-            <span className="truncate tabular-nums">{`${state.breakName} · ${formatDuration(segmentMs)}`}</span>
-          )}
-        </div>
-      </div>
-    </div>
+        ) : null
+      }
+    />
   )
 }

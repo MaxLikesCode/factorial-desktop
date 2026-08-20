@@ -33,11 +33,14 @@ export const TEST_SETTINGS: AppSettings = {
   lastLocationType: 'office',
   lastWorkplaceId: null,
   theme: 'system',
+  widgetSize: 'standard',
 }
 
 export interface FakeBridge extends FactorialBridge {
   /** Pushes a new snapshot to every subscriber, exactly as the main process does. */
   push(snapshot: AppSnapshot): void
+  /** Pushes changed settings the same way the tray's writes reach the widget. */
+  pushSettings(patch: Partial<AppSettings>): void
   readonly listenerCount: number
 }
 
@@ -46,6 +49,7 @@ export function createFakeBridge(
   settings: Partial<AppSettings> = {},
 ): FakeBridge {
   const listeners = new Set<(snapshot: SerialisedSnapshot) => void>()
+  const settingsListeners = new Set<(settings: AppSettings) => void>()
   let current: AppSnapshot = { ...EMPTY_SNAPSHOT, ...initial }
   let currentSettings: AppSettings = { ...TEST_SETTINGS, ...settings }
 
@@ -68,6 +72,17 @@ export function createFakeBridge(
       currentSettings = { ...currentSettings, ...patch }
       return currentSettings
     }),
+    onSettings: (callback) => {
+      settingsListeners.add(callback)
+      return () => {
+        settingsListeners.delete(callback)
+      }
+    },
+    setWindowInteractive: vi.fn(async () => {}),
+    pushSettings(patch) {
+      currentSettings = { ...currentSettings, ...patch }
+      for (const listener of [...settingsListeners]) listener(currentSettings)
+    },
     push(snapshot) {
       current = snapshot
       for (const listener of [...listeners]) listener(serialiseSnapshot(snapshot))

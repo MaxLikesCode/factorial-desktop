@@ -11,7 +11,8 @@
 
 import { app, dialog, nativeTheme, powerMonitor } from 'electron'
 import { join } from 'node:path'
-import type { ThemeSetting } from '@shared/ipc-contract'
+import { IPC, type ThemeSetting } from '@shared/ipc-contract'
+import type { WidgetSize } from '@shared/widget-size'
 import { resolveUserDataPath } from './app-identity'
 import { createAttendanceStore, type ClockInInput } from './attendance'
 import { ensureAuthenticated, openLoginWindow } from './auth'
@@ -23,13 +24,26 @@ import { registerIpc } from './ipc'
 import { applyBrowserUserAgent, clearSession, createNetFetch, getFactorialSession } from './session'
 import { buildLoginItemSettings, createSettings, type Settings } from './settings'
 import { createTray, hasTray } from './tray'
-import { createWidgetWindow, getWidget, setWidgetAlwaysOnTop, showWidget } from './windows'
+import {
+  createWidgetWindow,
+  getWidget,
+  setWidgetAlwaysOnTop,
+  setWidgetInteractive,
+  setWidgetWindowSize,
+  showWidget,
+} from './windows'
 
 /**
  * Makes `alwaysOnTop` take effect the moment it is toggled instead of on the
- * next start (carry-forward from Task 9). The settings store owns persistence
- * and validation and deliberately knows nothing about windows, so the window
- * side effect is layered on here, where the wiring lives.
+ * next start (carry-forward from Task 9), and tells the renderer that anything
+ * changed at all. The settings store owns persistence and validation and
+ * deliberately knows nothing about windows, so both side effects are layered on
+ * here, where the wiring lives.
+ *
+ * The broadcast matters more than it looks. The tray writes this same store, and
+ * the widget's own size is now one of the settings — without a push the widget
+ * would keep drawing the old size in a window the main process had already
+ * resized around it.
  */
 function withWindowEffects(settings: Settings): Settings {
   return {
@@ -37,6 +51,10 @@ function withWindowEffects(settings: Settings): Settings {
     set: (patch) => {
       const next = settings.set(patch)
       setWidgetAlwaysOnTop(next.alwaysOnTop)
+      const widget = getWidget()
+      if (widget && !widget.isDestroyed()) {
+        widget.webContents.send(IPC.settingsChanged, next)
+      }
       return next
     },
   }
@@ -65,6 +83,18 @@ function describeError(error: unknown): string {
  */
 function applyTheme(theme: ThemeSetting): void {
   nativeTheme.themeSource = theme
+}
+
+/**
+ * Resizes the widget window for a newly chosen size.
+ *
+ * Thin on purpose: the window module owns the resize, the position re-clamp and
+ * the click-through mask, because all three are properties of the window and
+ * none of them belong to a settings store that deliberately knows nothing about
+ * Electron.
+ */
+function applyWidgetSize(size: WidgetSize): void {
+  setWidgetWindowSize(size)
 }
 
 function applyLoginItem(openAtLogin: boolean): void {
@@ -110,6 +140,7 @@ async function bootstrap(): Promise<void> {
     filePath: join(app.getPath('userData'), 'settings.json'),
     applyLoginItem,
     applyTheme,
+    applyWidgetSize,
   })
 
   // One wrapped instance for both writers — the widget through IPC and the
@@ -158,6 +189,7 @@ async function bootstrap(): Promise<void> {
   // Before the window exists: the renderer asks for a snapshot as it mounts, and
   // an unanswered `invoke` would reject in its first effect.
   registerIpc({
+    setWindowInteractive: setWidgetInteractive,
     store,
     settings: settingsWithWindowEffects,
     onSignOut: signInAgain,
@@ -174,6 +206,7 @@ async function bootstrap(): Promise<void> {
   const widget = createWidgetWindow({
     positionFile: join(app.getPath('userData'), 'window-position.json'),
     alwaysOnTop: settings.get().alwaysOnTop,
+    widgetSize: settings.get().widgetSize,
   })
 
   // Built before the first read so that a failing refresh still leaves a tray

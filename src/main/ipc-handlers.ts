@@ -39,6 +39,7 @@ import {
   type ClockInInput,
 } from './attendance'
 import { FactorialError } from './factorial/client'
+import { isWidgetSize } from '@shared/widget-size'
 import { isLocationType } from './factorial/types'
 
 type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
@@ -67,6 +68,11 @@ export interface IpcSettings {
 export interface IpcHandlerDeps {
   store: IpcStore
   settings: IpcSettings
+  /**
+   * Lets clicks through the window's transparent margin, or takes them back.
+   * Injected rather than reached for, so these handlers stay free of Electron.
+   */
+  setWindowInteractive: (interactive: boolean) => void
   /** Clears the session cookie and offers a new sign-in. Owned by `index.ts`. */
   onSignOut: () => Promise<void>
 }
@@ -168,10 +174,19 @@ function asSettingsPatch(payload: unknown): Partial<AppSettings> {
   // Whitelisted for the same reason as the store does it: the value ends up as
   // `nativeTheme.themeSource`, which throws on anything outside the three.
   if (typeof raw.theme === 'string' && isThemeSetting(raw.theme)) patch.theme = raw.theme
+  // Same reasoning: an unknown size has no entry in the layout table.
+  if (typeof raw.widgetSize === 'string' && isWidgetSize(raw.widgetSize)) {
+    patch.widgetSize = raw.widgetSize
+  }
   return patch
 }
 
-export function createIpcHandlers({ store, settings, onSignOut }: IpcHandlerDeps): IpcHandlers {
+export function createIpcHandlers({
+  store,
+  settings,
+  onSignOut,
+  setWindowInteractive,
+}: IpcHandlerDeps): IpcHandlers {
   const handlers: IpcHandlers = {
     [IPC.getSnapshot]: async () => serialiseSnapshot(store.getSnapshot()),
     [IPC.clockIn]: async (payload) => {
@@ -196,6 +211,12 @@ export function createIpcHandlers({ store, settings, onSignOut }: IpcHandlerDeps
     },
     [IPC.getSettings]: async () => settings.get(),
     [IPC.setSettings]: async (payload) => settings.set(asSettingsPatch(payload)),
+    // Anything but a literal `true` means "let clicks through". The default has
+    // to be the safe one: a window stuck interactive swallows a rectangle of
+    // somebody's desktop, and nothing on screen would explain why.
+    [IPC.setWindowInteractive]: async (payload) => {
+      setWindowInteractive(payload === true)
+    },
   }
 
   for (const channel of Object.keys(handlers) as InvokeChannel[]) {

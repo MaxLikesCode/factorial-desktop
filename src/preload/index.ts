@@ -2,7 +2,7 @@
  * The only bridge between the renderer and the main process.
  *
  * `contextIsolation` is on and `nodeIntegration` is off, so the renderer has no
- * `require`, no `ipcRenderer` and no Node at all — it gets exactly the ten
+ * `require`, no `ipcRenderer` and no Node at all — it gets exactly the handful of
  * functions below and nothing else. Each one is a thin call: no state, no
  * caching, no interpretation. Anything cleverer would be a second truth next to
  * the store in the main process.
@@ -45,6 +45,17 @@ const bridge: FactorialBridge = {
   signOut: () => ipcRenderer.invoke(IPC.signOut),
   getSettings: () => ipcRenderer.invoke(IPC.getSettings),
   setSettings: (patch: Partial<AppSettings>) => ipcRenderer.invoke(IPC.setSettings, patch),
+
+  onSettings: (callback) => {
+    // Same rule as `onSnapshot`: the event object stays on this side.
+    const handler = (_event: unknown, settings: AppSettings): void => callback(settings)
+    ipcRenderer.on(IPC.settingsChanged, handler)
+    return () => {
+      ipcRenderer.off(IPC.settingsChanged, handler)
+    }
+  },
+  setWindowInteractive: (interactive: boolean) =>
+    ipcRenderer.invoke(IPC.setWindowInteractive, interactive),
 }
 
 contextBridge.exposeInMainWorld('factorial', bridge)

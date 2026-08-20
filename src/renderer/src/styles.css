@@ -60,6 +60,91 @@ body {
 @theme {
     --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
     --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+
+    /*
+     * The two springs the Minimal card grows and shrinks on: a damped
+     * oscillator sampled into `linear()` at 33 points.
+     *
+     * They are deliberately NOT the same, and that asymmetry is the whole
+     * lesson. A spring overshoots its target in both directions. Outward that
+     * means bigger than the open size — the bounce. On the way back it means
+     * smaller than the RESTING size, which the eye already knows, so the same
+     * effect reads there as a twitch rather than as life. Damping 0.55 out
+     * (about 13 % past the target), 0.56 back over a shorter 420 ms, which puts
+     * the dip at roughly 34 px — just clear of the 33 px the collapsed timer
+     * needs before `overflow: hidden` starts cutting into it.
+     *
+     * The window has to be large enough for the outward overshoot or the peak
+     * is clipped and the spring is silently gone. `windowSizeFor` reserves it.
+     */
+    --spring-out: linear(0.000,0.031,0.111,0.224,0.355,0.490,0.622,0.744,0.850,0.938,1.008,1.060,1.096,1.117,1.126,1.125,1.117,1.104,1.088,1.071,1.054,1.038,1.024,1.012,1.002,0.995,0.989,0.986,0.984,0.984,0.985,0.986,1);
+    --spring-back: linear(0.000,0.030,0.107,0.217,0.343,0.475,0.604,0.724,0.829,0.918,0.989,1.043,1.081,1.105,1.117,1.119,1.114,1.104,1.090,1.075,1.059,1.044,1.030,1.018,1.008,1.000,0.994,0.990,0.987,0.986,0.986,0.987,1);
+}
+
+/*
+ * The Minimal card's morph.
+ *
+ * Written here rather than as inline utilities because the springs are
+ * `linear()` easings 200 characters long, and because the two directions need
+ * different transitions on the same properties — which one utility class cannot
+ * express.
+ *
+ * Everything inside that card is absolutely positioned. That keeps the collapsed
+ * layout exact without pulling hidden rows out of flow, and it lets the progress
+ * hairline stay flush to the bottom edge in BOTH sizes: it never moves, it only
+ * gets wider. That single decision is most of why this transition is cheap.
+ */
+.morph-card {
+    /* Closing. Starts a beat after the content has begun leaving, so the card
+       never looks like it is shoving its own contents out of the way. */
+    transition:
+        width 420ms var(--spring-back) 60ms,
+        height 420ms var(--spring-back) 60ms;
+}
+
+.morph-card[data-open='true'] {
+    /* Opening. The card leads and the content follows. */
+    transition:
+        width 520ms var(--spring-out),
+        height 520ms var(--spring-out);
+}
+
+.morph-move {
+    transition:
+        top 420ms var(--spring-back) 60ms,
+        font-size 420ms var(--spring-back) 60ms;
+}
+
+.morph-card[data-open='true'] .morph-move {
+    transition:
+        top 520ms var(--spring-out),
+        font-size 520ms var(--spring-out);
+}
+
+/* Opacity never springs: an overshoot past 0 or 1 only clamps, and the clamp
+   reads as a stall. It leaves fast and arrives late, staggered by row. */
+.morph-late {
+    opacity: 0;
+    transform: translateY(5px);
+    transition:
+        opacity 100ms var(--ease-out),
+        transform 160ms var(--ease-out);
+    pointer-events: none;
+}
+
+.morph-card[data-open='true'] .morph-late {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+    transition:
+        opacity 170ms var(--ease-out) 130ms,
+        transform 320ms var(--spring-out) 130ms;
+}
+
+.morph-card[data-open='true'] .morph-late[data-row='2'] {
+    transition:
+        opacity 170ms var(--ease-out) 180ms,
+        transform 320ms var(--spring-out) 180ms;
 }
 
 /*

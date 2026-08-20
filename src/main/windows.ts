@@ -19,6 +19,7 @@
 
 import { BrowserWindow, app, screen } from 'electron'
 import { join } from 'node:path'
+import { hasTransparentMargin, windowSizeFor, type WidgetSize } from '@shared/widget-size'
 import {
   clampToVisibleArea,
   readPositionStore,
@@ -30,8 +31,24 @@ import {
   type PositionStore,
 } from './window-position'
 
-/** DESIGN.md says "ca. 320×210"; this is that, with room for the action bar. */
-export const WIDGET_SIZE = { width: 340, height: 224 } as const
+/**
+ * The size the window currently is, as a *setting* rather than a constant.
+ *
+ * It is module state because the position logic below needs it on every move,
+ * resize and display change, and threading it through four callbacks would only
+ * spread the same single value around. `createWidgetWindow` sets it before the
+ * window exists; `setWidgetWindowSize` is the only thing that changes it after.
+ *
+ * The window is not always the card: for a size that expands, the window is the
+ * expanded card plus the room its opening spring needs to overshoot into. See
+ * `src/shared/widget-size.ts`.
+ */
+let currentSize: WidgetSize = 'standard'
+
+/** The window's pixel size for whatever size is currently selected. */
+function windowSize(): { width: number; height: number } {
+  return windowSizeFor(currentSize)
+}
 
 // Re-exported so consumers (and PLAN.md's stated interface) can keep importing
 // the placement logic from `./windows` without pulling in Electron themselves.
@@ -84,14 +101,17 @@ function currentDisplays(): DisplayInfo[] {
 export function createWidgetWindow(deps: {
   positionFile: string
   alwaysOnTop: boolean
+  widgetSize: WidgetSize
 }): BrowserWindow {
   hookBeforeQuit()
 
+  currentSize = deps.widgetSize
+
   let store: PositionStore = readPositionStore(deps.positionFile)
-  const { x, y } = resolveWidgetPosition(store, currentDisplays(), WIDGET_SIZE)
+  const { x, y } = resolveWidgetPosition(store, currentDisplays(), windowSize())
 
   const win = new BrowserWindow({
-    ...WIDGET_SIZE,
+    ...windowSize(),
     x,
     y,
     show: false,
@@ -137,7 +157,7 @@ export function createWidgetWindow(deps: {
       writeTimer = null
     }
     if (!pending) return
-    store = recordPosition(store, currentDisplays(), pending, WIDGET_SIZE)
+    store = recordPosition(store, currentDisplays(), pending, windowSize())
     pending = null
     writePositionStore(deps.positionFile, store)
   }
@@ -164,7 +184,7 @@ export function createWidgetWindow(deps: {
     const next = clampToVisibleArea(
       { x: cx, y: cy },
       displays.map((d) => d.bounds),
-      WIDGET_SIZE,
+      windowSize(),
     )
     if (next.x !== cx || next.y !== cy) win.setPosition(next.x, next.y)
   }
@@ -201,6 +221,65 @@ export function createWidgetWindow(deps: {
 
   win.once('ready-to-show', () => win.show())
   return win
+}
+
+/**
+ * Lets clicks through the window's transparent margin, or takes them back.
+ *
+ * Only a size that expands has such a margin. For every other size the window is
+ * exactly the card, so there is nothing to let anything through and the window
+ * stays plainly interactive — calling this with `false` there would make the
+ * widget itself unclickable.
+ *
+ * `forward: true` is what keeps this recoverable: a click-through window still
+ * receives mouse *move* events, which is how the renderer notices the pointer
+ * has arrived over the card and asks for interactivity back. Without it the
+ * window would go through and never come back.
+ *
+ * PLATFORM: `setIgnoreMouseEvents` with forwarding is documented for macOS and
+ * Windows and behaves differently on Linux, which this app does not target.
+ * Verified on neither — see docs/WINDOWS.md.
+ */
+export function setWidgetInteractive(interactive: boolean): void {
+  if (!widget || widget.isDestroyed()) return
+  if (!hasTransparentMargin(currentSize)) {
+    widget.setIgnoreMouseEvents(false)
+    return
+  }
+  widget.setIgnoreMouseEvents(!interactive, { forward: true })
+}
+
+/**
+ * Switches the widget to another size.
+ *
+ * Three things have to happen together, and the order matters. The window is
+ * resized first; then its position is re-clamped, because a window that was
+ * flush against the right or bottom edge of a display is now smaller and its
+ * remembered position may put it partly past that edge — or, growing the other
+ * way, off it entirely. Only then is the mouse mask re-applied: whether the
+ * window has a transparent margin at all is a property of the new size.
+ *
+ * The renderer is told nothing here. It reads the size from its settings
+ * subscription like any other preference, and the card inside animates itself.
+ */
+export function setWidgetWindowSize(size: WidgetSize): void {
+  currentSize = size
+  if (!widget || widget.isDestroyed()) return
+
+  const { width, height } = windowSize()
+  widget.setSize(width, height)
+
+  const { x, y } = widget.getBounds()
+  const next = clampToVisibleArea(
+    { x, y },
+    currentDisplays().map((d) => d.bounds),
+    { width, height },
+  )
+  if (next.x !== x || next.y !== y) widget.setPosition(next.x, next.y)
+
+  // A size without a margin must end up plainly interactive, which is exactly
+  // what `setWidgetInteractive` does for that case whatever it is passed.
+  setWidgetInteractive(true)
 }
 
 export function getWidget(): BrowserWindow | null {

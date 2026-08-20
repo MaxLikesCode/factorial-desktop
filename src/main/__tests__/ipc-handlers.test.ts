@@ -21,6 +21,7 @@ const SETTINGS: AppSettings = {
   lastLocationType: 'office',
   lastWorkplaceId: null,
   theme: 'system',
+  widgetSize: 'standard',
 }
 
 function fakeStore(overrides: Partial<IpcStore> = {}): IpcStore & { listeners: (() => void)[] } {
@@ -50,7 +51,13 @@ function fakeSettings(current: AppSettings = SETTINGS) {
 }
 
 function handlersFor(store: IpcStore, settings = fakeSettings(), onSignOut = vi.fn(async () => {})) {
-  return { handlers: createIpcHandlers({ store, settings, onSignOut }), settings, onSignOut }
+  const setWindowInteractive = vi.fn()
+  return {
+    handlers: createIpcHandlers({ store, settings, onSignOut, setWindowInteractive }),
+    settings,
+    onSignOut,
+    setWindowInteractive,
+  }
 }
 
 /** Every rejection crosses IPC as a string; this is how the renderer reads it. */
@@ -77,6 +84,7 @@ describe('createIpcHandlers', () => {
         IPC.signOut,
         IPC.getSettings,
         IPC.setSettings,
+        IPC.setWindowInteractive,
       ].sort(),
     )
     expect(Object.keys(handlers)).not.toContain(IPC.snapshotChanged)
@@ -277,6 +285,39 @@ describe('settings and session channels', () => {
     const { handlers, settings } = handlersFor(fakeStore())
     await handlers[IPC.setSettings]({ theme: 'midnight' })
     expect(settings.set).toHaveBeenCalledWith({})
+  })
+
+  it('passes a known widget size through', async () => {
+    const { handlers, settings } = handlersFor(fakeStore())
+    await handlers[IPC.setSettings]({ widgetSize: 'kompakt' })
+    expect(settings.set).toHaveBeenCalledWith({ widgetSize: 'kompakt' })
+  })
+
+  it('drops a widget size that has no layout', async () => {
+    const { handlers, settings } = handlersFor(fakeStore())
+    await handlers[IPC.setSettings]({ widgetSize: 'winzig' })
+    expect(settings.set).toHaveBeenCalledWith({})
+  })
+
+  /**
+   * A window stuck interactive swallows a rectangle of somebody's desktop, and
+   * nothing on screen explains why — so anything but a literal `true` has to
+   * mean "let the clicks through".
+   */
+  it('treats every non-true payload as a request to let clicks through', async () => {
+    const { handlers, setWindowInteractive } = handlersFor(fakeStore())
+    for (const payload of [true, false, undefined, null, 'true', 1, {}]) {
+      await handlers[IPC.setWindowInteractive](payload)
+    }
+    expect(setWindowInteractive.mock.calls.map(([value]) => value)).toEqual([
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ])
   })
 
   it('accepts an explicit null workplace, which means "no workplace"', async () => {

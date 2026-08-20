@@ -27,6 +27,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { isThemeSetting, type AppSettings, type ThemeSetting } from '@shared/ipc-contract'
+import { isWidgetSize, type WidgetSize } from '@shared/widget-size'
 import { isLocationType } from './factorial/types'
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -39,6 +40,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   // Follow the OS unless the user says otherwise. A widget that sits on the
   // desktop all day should match what everything around it is doing.
   theme: 'system',
+  // The size that shipped before this was a choice.
+  widgetSize: 'standard',
 }
 
 export interface SettingsDeps {
@@ -47,6 +50,8 @@ export interface SettingsDeps {
   applyLoginItem: (openAtLogin: boolean) => void
   /** Called with the new value whenever `theme` actually changes. */
   applyTheme: (theme: ThemeSetting) => void
+  /** Called with the new value whenever `widgetSize` actually changes. */
+  applyWidgetSize: (size: WidgetSize) => void
 }
 
 /**
@@ -86,10 +91,21 @@ function sanitise(raw: unknown, base: AppSettings): AppSettings {
     // `nativeTheme.themeSource`, which throws on anything outside the three.
     theme:
       typeof r.theme === 'string' && isThemeSetting(r.theme) ? r.theme : base.theme,
+    // Whitelisted like the rest: an unknown size would index the layout table
+    // with nothing and leave the window without a size at all.
+    widgetSize:
+      typeof r.widgetSize === 'string' && isWidgetSize(r.widgetSize)
+        ? r.widgetSize
+        : base.widgetSize,
   }
 }
 
-export function createSettings({ filePath, applyLoginItem, applyTheme }: SettingsDeps): Settings {
+export function createSettings({
+  filePath,
+  applyLoginItem,
+  applyTheme,
+  applyWidgetSize,
+}: SettingsDeps): Settings {
   let current: AppSettings
   try {
     current = sanitise(JSON.parse(readFileSync(filePath, 'utf8')) as unknown, DEFAULT_SETTINGS)
@@ -119,9 +135,11 @@ export function createSettings({ filePath, applyLoginItem, applyTheme }: Setting
       persist(next)
       const loginItemChanged = next.openAtLogin !== current.openAtLogin
       const themeChanged = next.theme !== current.theme
+      const sizeChanged = next.widgetSize !== current.widgetSize
       current = next
       if (loginItemChanged) applyLoginItem(current.openAtLogin)
       if (themeChanged) applyTheme(current.theme)
+      if (sizeChanged) applyWidgetSize(current.widgetSize)
       return { ...current }
     },
   }
