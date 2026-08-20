@@ -23,13 +23,27 @@ mac:
   extendInfo:
     LSUIElement: 1
 
-# PLATFORM: never verified. Icon sizes, NSIS behaviour and the Run-key autostart
-# all need checking on a real Windows machine.
+# PLATFORM: verified on Windows 11 on 2026-08-20 — see docs/WINDOWS.md §4a.
+# The installer builds, installs without admin rights, and the Run-key entry it
+# leads to points at the installed .exe. The icon sizes were never a problem.
 win:
   target:
+    # The installer: a Start-menu entry, an uninstaller, and the path the
+    # autostart entry can safely point at.
     - target: nsis
+      arch: [x64]
+    # And the same app as a single file that runs from wherever it is dropped.
+    # It writes to the same %APPDATA%\factorial-desktop as the installed build,
+    # so a session and its settings survive a switch between the two — but the
+    # autostart entry would point at wherever the file happened to sit, which is
+    # why the installer stays the way to get a login item worth having.
+    - target: portable
       arch: [x64]
 nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
+portable:
+  # Without this the file is called "Factorial Desktop 0.1.0.exe" and the
+  # version travels into every shortcut somebody makes of it.
+  artifactName: ${productName}.${ext}

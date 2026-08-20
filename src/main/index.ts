@@ -107,6 +107,9 @@ function applyLoginItem(openAtLogin: boolean): void {
       openAtLogin,
       platform: process.platform,
       execPath: process.execPath,
+      // Set by electron-builder's portable target only; undefined everywhere
+      // else, which is exactly the condition the function branches on.
+      portableExecutable: process.env.PORTABLE_EXECUTABLE_FILE,
     }),
   )
 }

@@ -46,6 +46,7 @@ type BuilderConfig = {
   }
   win: { target: BuilderTarget[] }
   nsis: Record<string, boolean>
+  portable: Record<string, string>
 }
 
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as PackageJson
@@ -126,10 +127,22 @@ describe('electron-builder.yml', () => {
   })
 
   it('configures an NSIS installer for Windows', () => {
-    expect(config.win.target).toEqual([{ target: 'nsis', arch: ['x64'] }])
+    expect(config.win.target).toContainEqual({ target: 'nsis', arch: ['x64'] })
     expect(config.nsis['oneClick']).toBe(false)
     expect(config.nsis['perMachine']).toBe(false)
     expect(config.nsis['allowToChangeInstallationDirectory']).toBe(true)
+  })
+
+  /**
+   * The installer is what an autostart entry can point at; the portable file is
+   * what somebody downloads to try the thing without installing anything. Both
+   * are asserted because dropping either one is a silent loss — the build still
+   * succeeds, and only whoever goes looking for the missing artefact finds out.
+   */
+  it('also ships Windows as a single portable file, named without the version', () => {
+    expect(config.win.target).toContainEqual({ target: 'portable', arch: ['x64'] })
+    // Otherwise every shortcut anybody makes carries 0.1.0 in its name.
+    expect(config.portable['artifactName']).toBe('${productName}.${ext}')
   })
 })
 

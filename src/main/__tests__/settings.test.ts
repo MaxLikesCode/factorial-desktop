@@ -281,6 +281,52 @@ describe('buildLoginItemSettings', () => {
     })
   })
 
+  /**
+   * The portable build unpacks itself into a fresh %TEMP% directory and runs
+   * from there, so process.execPath names a file that stops existing when the
+   * app closes and is called something else on the next launch. An autostart
+   * entry pointing there looks configured and does nothing — measured on
+   * Windows before this branch existed. electron-builder puts the real file in
+   * PORTABLE_EXECUTABLE_FILE.
+   */
+  it('prefers the portable file over the temp copy it is running from', () => {
+    expect(
+      buildLoginItemSettings({
+        openAtLogin: true,
+        platform: 'win32',
+        execPath: 'C:\\Users\\max\\AppData\\Local\\Temp\\3IC03IX\\Factorial Desktop.exe',
+        portableExecutable: 'D:\\Tools\\Factorial Desktop.exe',
+      }),
+    ).toEqual({
+      openAtLogin: true,
+      path: 'D:\\Tools\\Factorial Desktop.exe',
+      args: [],
+    })
+  })
+
+  it('falls back to execPath when there is no portable file', () => {
+    const installed = 'C:\\Users\\max\\AppData\\Local\\Programs\\Factorial Desktop\\Factorial Desktop.exe'
+    expect(
+      buildLoginItemSettings({
+        openAtLogin: true,
+        platform: 'win32',
+        execPath: installed,
+        portableExecutable: undefined,
+      }),
+    ).toEqual({ openAtLogin: true, path: installed, args: [] })
+  })
+
+  it('ignores the portable file on macOS, which registers the bundle itself', () => {
+    expect(
+      buildLoginItemSettings({
+        openAtLogin: true,
+        platform: 'darwin',
+        execPath: '/Applications/Factorial Desktop.app/Contents/MacOS/Factorial Desktop',
+        portableExecutable: '/somewhere/else',
+      }),
+    ).toEqual({ openAtLogin: true })
+  })
+
   it('carries the off state through on both platforms', () => {
     expect(
       buildLoginItemSettings({ openAtLogin: false, platform: 'win32', execPath: 'x.exe' }),

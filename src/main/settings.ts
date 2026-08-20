@@ -155,6 +155,11 @@ export interface LoginItemInput {
   platform: NodeJS.Platform
   /** `process.execPath` at the call site — passed in so both branches are testable. */
   execPath: string
+  /**
+   * `process.env.PORTABLE_EXECUTABLE_FILE`, or undefined when this is not the
+   * portable build. See the note in `buildLoginItemSettings`.
+   */
+  portableExecutable?: string | undefined
 }
 
 /**
@@ -166,13 +171,26 @@ export function buildLoginItemSettings({
   openAtLogin,
   platform,
   execPath,
+  portableExecutable,
 }: LoginItemInput): LoginItemSettings {
   // PLATFORM: Windows autostart is a Run-key entry that names an executable.
   // Without an explicit `path` Electron registers whatever is running — in dev
   // that is `electron.exe`, and for a packaged app the recorded target must be
   // the installed .exe, not the launcher that happened to start it (DESIGN.md,
-  // "Windows-Übergabe", row "Autostart"). Untested: no Windows machine here.
-  if (platform === 'win32') return { openAtLogin, path: execPath, args: [] }
+  // "Windows-Übergabe", row "Autostart"). Verified on Windows: the installed
+  // build registers its own path under Programs\Factorial Desktop.
+  //
+  // PLATFORM: the portable build needs the extra step. It unpacks itself into a
+  // fresh %TEMP% directory and runs from there, so `execPath` is a path that
+  // stops existing when the app closes and is named differently on the next
+  // launch — measured, not guessed: it registered
+  // %TEMP%\3IC03IX05LJIid8kYPVrzHXReRz\Factorial Desktop.exe. An autostart
+  // entry pointing there is worse than none, because it looks set up and does
+  // nothing. electron-builder puts the real file's path in
+  // PORTABLE_EXECUTABLE_FILE, so that wins where it exists.
+  if (platform === 'win32') {
+    return { openAtLogin, path: portableExecutable ?? execPath, args: [] }
+  }
 
   // PLATFORM: macOS registers the .app bundle itself via the Service Management
   // API; a `path` here would point at the helper binary inside the bundle and
