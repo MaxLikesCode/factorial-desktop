@@ -139,12 +139,15 @@ jobs:
             release/*.dmg
             release/*.zip
           fail_on_unmatched_files: false
-          # Visible, but marked for what it is — the real-API path is still
-          # untested (docs/WINDOWS.md §4a). Promote it by hand once that changes.
-          prerelease: true
+          # A plain release. What is and is not tested belongs in the notes,
+          # which people read, rather than in a flag that only says "not final"
+          # without saying about what — see the body below and docs/WINDOWS.md.
           generate_release_notes: true
           body: |
-            Unsignierte Builds.
+            Unsignierte Builds. Auf Windows 11 gebaut, installiert und
+            gestartet; der Durchstich gegen die echte Zeiterfassung
+            (Ein- und Ausstempeln) ist ungetestet — siehe `docs/WINDOWS.md`,
+            Abschnitt 4a.
 
             - **Windows:** `Factorial-Desktop-Setup-<version>.exe` installiert
               (Startmenü, Deinstaller, Autostart über das Tray-Menü);
