@@ -546,8 +546,10 @@ Drag-Region. Position wird pro Monitor gemerkt.
   - aus → **Einstempeln**
   - ein → **Pause** (Dropdown mit Pausentypen) + **Ausstempeln**
   - Pause → **Fortsetzen** + **Ausstempeln**
-- Fußzeile: Arbeitsort-Selector (Büro / Mobiles Arbeiten / Dienstreise), bei
-  aktiver Pause zusätzlich der Pausenname
+- Fußzeile: Arbeitsort-Selector (Büro / Mobiles Arbeiten / Dienstreise). Nur in
+  „Standard"; wo sie nichts zu zeigen hat, wird sie gar nicht erst gerendert —
+  eine leere Zeile ist trotzdem eine Zeile, und in „Kompakt" waren das 24 px,
+  die die Karte nicht hat
 
 > **Der Ring ist einem Balken gewichen — aus Platzgründen, nicht aus Geschmack.**
 > Der Ring maß 88 px bei 6 px Strich, also 67,6 px lichte Weite innen. „2:00:14"
@@ -581,6 +583,29 @@ Drag-Region. Position wird pro Monitor gemerkt.
 > `work_from_home` heißt dort **„Mobiles Arbeiten"** (am echten Konto bestätigt),
 > nicht „Homeoffice" — wer Widget und Weboberfläche nebeneinander legt, soll
 > nicht erst übersetzen müssen.
+
+### Während einer Pause zeigt der Timer die Pause
+
+Die große Zahl ist in der Pause die **Dauer der Pause**, nicht die Tagessumme.
+Der Punkt und der Balken sind amber, die Statuszeile nennt die Pause beim Namen
+(„Pause · Mittagspause"), und die Tagessumme rückt nach oben neben den Status
+(„Gearbeitet 07:23").
+
+Vorher stand dort die Tagessumme — die während einer Pause stillsteht. Eine
+große Zahl, die sich nicht mehr bewegt, liest sich als hängengebliebene App,
+nicht als unterbrochene Schicht; die Pausendauer war in eine Fußzeile verbannt,
+die so leise war, dass niemand die beiden verband.
+
+**Der Tray macht das seit jeher so** (`primaryMs` in `tray-menu.ts`, mit dem
+Kommentar „showing it counting up would be a lie"). Das Widget war die einzige
+Oberfläche, die widersprach.
+
+Das Wort „Pause" steht vor dem Namen und nicht nur der Name da: der amber Punkt
+sagt bereits „pausiert", aber eine Pause namens „Arztbesuch" ließe damit die
+Farbe als einzigen Träger dieser Information zurück, und Farbe darf nie der
+einzige Träger sein.
+
+Auf „Fortsetzen" übernimmt die Tagessumme die Zahl wieder und läuft weiter.
 
 **Farbcodierung:** grün = eingestempelt, amber = Pause, neutral = ausgestempelt.
 

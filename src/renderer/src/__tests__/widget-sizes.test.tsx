@@ -70,6 +70,21 @@ describe('the three sizes', () => {
     }
   })
 
+  /**
+   * The overflow the footer row caused. A card with a fixed height and an empty
+   * 16 px row plus its 8 px gap had 24 px less room than its content needed, so
+   * the content pushed the row out through the bottom edge — in every state, not
+   * only the one that put text in it.
+   */
+  it('renders no footer row in a size that has nothing to put in it', async () => {
+    await mount('standard')
+    expect(document.querySelector('[data-slot="card-footer"]')).toBeTruthy()
+    cleanup()
+
+    await mount('kompakt')
+    expect(document.querySelector('[data-slot="card-footer"]')).toBeNull()
+  })
+
   it('follows a size change pushed from the tray, without a remount', async () => {
     const bridge = await mount('standard')
     expect(screen.getByText('Büro')).toBeTruthy()

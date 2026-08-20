@@ -121,11 +121,19 @@ export function StatusWidget(): React.JSX.Element {
    * „Verbleibende Zeit 00:00" rather than a „+0:00" that looks like a bug.
    */
   const goalLine =
-    overtimeMinutes === null
-      ? null
-      : Math.round(overtimeMinutes) > 0
-        ? `Soll erfüllt · ${formatOvertime(overtimeMinutes)}`
-        : `Verbleibende Zeit ${formatHoursMinutes(-overtimeMinutes)}`
+    // A break hands the timer over to its own duration, so the day's worked time
+    // moves up here — it is the number this app exists for and must not simply
+    // disappear for the length of a lunch. The goal comparison steps aside for
+    // that: it is frozen too, and the less interesting of the two.
+    state.kind === 'break'
+      ? workedMs === null
+        ? null
+        : `Gearbeitet ${formatHoursMinutes(workedMs / 60_000)}`
+      : overtimeMinutes === null
+        ? null
+        : Math.round(overtimeMinutes) > 0
+          ? `Soll erfüllt · ${formatOvertime(overtimeMinutes)}`
+          : `Verbleibende Zeit ${formatHoursMinutes(-overtimeMinutes)}`
 
   async function run(action: () => Promise<void>): Promise<void> {
     setBusy(true)
@@ -188,15 +196,34 @@ export function StatusWidget(): React.JSX.Element {
 
   /** Everything the cards need, already decided. */
   const view: WidgetView = {
-    label: LABEL[state.kind],
+    /**
+     * During a break the label names the break rather than the state, because
+     * the number below it is now that break's clock and the label has to say
+     * what the number is. The word "Pause" stays in front of the name: the amber
+     * dot already says "paused", but a break called "Arztbesuch" would leave
+     * colour as the only carrier of that, and colour cannot be the only carrier.
+     */
+    label: state.kind === 'break' ? `Pause · ${state.breakName}` : LABEL[state.kind],
     dotClass: DOT[state.kind],
     tone: TONE[state.kind],
-    time: workedMs === null ? UNKNOWN_TIME : formatDuration(workedMs),
+    /**
+     * The running break, or the day's worked time.
+     *
+     * `segmentMs` is the break's own elapsed time in this state — the same
+     * number the tray has always shown as its primary reading (`primaryMs` in
+     * `tray-menu.ts`, "showing it counting up would be a lie"). The widget was
+     * the one surface that disagreed, freezing a green-turned-amber day sum
+     * instead, which read as a stopped app rather than as a paused shift.
+     */
+    time:
+      state.kind === 'break'
+        ? formatDuration(segmentMs)
+        : workedMs === null
+          ? UNKNOWN_TIME
+          : formatDuration(workedMs),
     goalLine,
     progress,
     hints,
-    breakLine:
-      state.kind === 'break' ? `${state.breakName} · ${formatDuration(segmentMs)}` : null,
   }
 
   const actions = (

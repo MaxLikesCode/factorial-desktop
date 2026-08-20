@@ -161,7 +161,16 @@ describe('StatusWidget — the three states', () => {
     expect(timer()).toBe('2:01:32')
   })
 
-  it('on break: the worked timer freezes, the break gets its own running time', async () => {
+  /**
+   * The big number is the break's own clock while a break runs.
+   *
+   * It used to be the day's worked time, which stands still during a break — a
+   * large number that has stopped moving reads as a stopped app, not as a paused
+   * shift, and the break's duration was relegated to a footer line so quiet
+   * nobody connected the two. The tray has shown it this way all along
+   * (`primaryMs` in `tray-menu.ts`); the widget was the surface that disagreed.
+   */
+  it('on break: the timer becomes the break’s own clock', async () => {
     await mount({
       state: {
         kind: 'break',
@@ -172,15 +181,53 @@ describe('StatusWidget — the three states', () => {
         locationType: 'office',
       },
       todayMinutes: 120,
+      expectedMinutes: 480,
     })
 
-    expect(screen.getByText('In einer Pause')).toBeTruthy()
-    // Break time is not worked time: the day total stays at the closed shifts.
-    expect(timer()).toBe('2:00:00')
-    expect(screen.getByText('Mittagspause · 0:12:34')).toBeTruthy()
+    expect(timer()).toBe('0:12:34')
+    // The break is named where the state used to be, because the number below it
+    // is now that break's. "Pause" stays in front: the amber dot says paused,
+    // but a break called "Arztbesuch" would leave colour as the only carrier.
+    expect(screen.getByText('Pause · Mittagspause')).toBeTruthy()
+    // And the day's worked time is not lost — it moves up beside the status.
+    expect(screen.getByText('Gearbeitet 02:00')).toBeTruthy()
+
     expect(screen.getByRole('button', { name: 'Fortsetzen' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Ausstempeln' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Pause' })).toBeNull()
+  })
+
+  it('hands the timer back to the day’s worked time on Fortsetzen', async () => {
+    const bridge = await mount({
+      state: {
+        kind: 'break',
+        shiftId: '2',
+        since: new Date(NOW.getTime() - 754_000),
+        breakId: '19613',
+        breakName: 'Mittagspause',
+        locationType: 'office',
+      },
+      todayMinutes: 120,
+    })
+    expect(timer()).toBe('0:12:34')
+
+    act(() =>
+      bridge.push({
+        ...EMPTY_SNAPSHOT,
+        state: {
+          kind: 'in',
+          shiftId: '2',
+          since: new Date(NOW.getTime() - 30_000),
+          locationType: 'office',
+          workplaceId: null,
+        },
+        todayMinutes: 120,
+      }),
+    )
+
+    // Straight back to the day, running again: 120 closed minutes plus 30 s.
+    expect(timer()).toBe('2:00:30')
+    expect(screen.getByText('Eingestempelt')).toBeTruthy()
   })
 
   it('unknown: shows a placeholder, never a fabricated 0:00:00', async () => {

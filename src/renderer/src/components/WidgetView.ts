@@ -13,7 +13,14 @@ export interface WidgetView {
   /** Tailwind class for the state dot; the cards never map state to colour. */
   dotClass: string
   tone: 'idle' | 'active' | 'paused'
-  /** Pre-formatted; a card never derives a time of its own. */
+  /**
+   * Pre-formatted; a card never derives a time of its own.
+   *
+   * While a break runs this is the BREAK's duration, not the day's worked time.
+   * The day sum stands still during a break, and a big number that has stopped
+   * moving reads as a frozen app rather than as a paused shift — which is
+   * exactly how it read. The tray has always shown it this way.
+   */
   time: string
   /** "Verbleibende Zeit 01:47", "Soll erfüllt · +2:23", or null when there is no goal. */
   goalLine: string | null
@@ -21,6 +28,4 @@ export interface WidgetView {
   progress: number | null
   /** Advisory lines, already joined by the caller's rules. */
   hints: string[]
-  /** "Mittagspause · 0:12:31" while a break runs. */
-  breakLine: string | null
 }

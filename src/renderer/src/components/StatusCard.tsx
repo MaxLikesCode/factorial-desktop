@@ -89,12 +89,23 @@ export function StatusCard({ view, density, ready, actions, location }: Props): 
 
       <div className="no-drag flex flex-col items-start gap-2 px-1">
         {actions}
-        <div className="flex w-full items-center justify-between gap-2 text-xs text-muted-foreground">
-          {location ?? <span />}
-          {view.breakLine !== null && (
-            <span className="truncate tabular-nums">{view.breakLine}</span>
-          )}
-        </div>
+        {/*
+          Rendered only when it has something in it.
+
+          An empty footer row was still a row: 16 px of text line plus its 8 px
+          gap, in a card whose height is fixed. In `kompakt` that was 24 px more
+          than there was, so the content block overflowed and pushed the row
+          clean out through the bottom edge — visibly, since nothing here clips.
+          It was wrong in every state; a break just happened to put text in it.
+        */}
+        {location !== null && (
+          <div
+            data-slot="card-footer"
+            className="flex w-full items-center gap-2 text-xs text-muted-foreground"
+          >
+            {location}
+          </div>
+        )}
       </div>
     </div>
   )
