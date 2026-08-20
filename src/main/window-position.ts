@@ -81,7 +81,7 @@ function overlapArea(topLeft: Point, size: Size, d: DisplayBounds): number {
  * Containment of the top-left corner would be simpler but is wrong at exactly
  * the moment it matters. A window dragged past the left edge of the primary
  * screen has a negative `x` and is inside no display, yet it is plainly still on
- * that screen and only needs nudging back — which is what PLAN.md's own test
+ * that screen and only needs nudging back — which is what the original test
  * "pulls a window back from negative coordinates" asserts. It is also the rule
  * the window managers themselves use to decide which screen a window is on.
  *

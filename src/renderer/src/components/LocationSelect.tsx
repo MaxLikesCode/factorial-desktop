@@ -13,7 +13,7 @@ import { ChevronDownIcon } from 'lucide-react'
  *
  * `office` and `work_from_home` are both confirmed against the live API;
  * `business_trip` comes from the schema enum and is still unverified
- * (`docs/WINDOWS.md` §6).
+ * (`docs/DESIGN.md`).
  */
 export const LOCATIONS = [
   { value: 'office', label: 'Büro' },

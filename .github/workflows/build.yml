@@ -4,7 +4,7 @@
 #
 # - `check` runs on every push and pull request. It is the whole suite plus the
 #   typecheck, on Linux, because none of it needs Electron or a desktop — see
-#   docs/WINDOWS.md §1 on why the tests are written that way. Cheap enough to
+#   the tests are written to need neither. Cheap enough to
 #   run on everything.
 # - `build` produces the actual artefacts. It is gated by an `if` rather than by
 #   the trigger, because the trigger has to stay open for `check` — the two jobs
@@ -80,8 +80,6 @@ jobs:
       # error should fail here rather than three minutes into a packaging run.
       - run: npm run typecheck
 
-      # Includes handoff-docs.test.ts, which fails when docs/WINDOWS.md and the
-      # platform markers in the source have drifted apart.
       - run: npm test
 
   build:
@@ -148,22 +146,22 @@ jobs:
             release/latest*.yml
             release/*.blockmap
           fail_on_unmatched_files: false
-          # A plain release. What is and is not tested belongs in the notes,
-          # which people read, rather than in a flag that only says "not final"
-          # without saying about what — see the body below and docs/WINDOWS.md.
+          # A plain release. What is and is not signed belongs in the notes,
+          # which people read, rather than in a flag nobody sees.
           generate_release_notes: true
           body: |
-            Unsignierte Builds. Auf Windows 11 gebaut, installiert und
-            gestartet; der Durchstich gegen die echte Zeiterfassung
-            (Ein- und Ausstempeln) ist ungetestet — siehe `docs/WINDOWS.md`,
-            Abschnitt 4a.
+            Unsigned builds — the first launch needs one extra step.
 
-            - **Windows:** `Factorial-Desktop-Setup-<version>.exe` installiert
-              (Startmenü, Deinstaller, Autostart über das Tray-Menü);
-              `Factorial-Desktop.exe` läuft ohne Installation. SmartScreen beim
-              ersten Start: „Weitere Informationen" → „Trotzdem ausführen".
-            - **macOS:** `.dmg` oder `.zip`, Apple Silicon. Beim ersten Start
-              Rechtsklick → „Öffnen", sonst weist Gatekeeper die App ab.
+            - **Windows:** `Factorial-Desktop-Setup-<version>.exe` installs for
+              the current user (Start-menu entry, uninstaller, optional
+              start-with-Windows). `Factorial-Desktop.exe` runs without
+              installing. SmartScreen: *More info* → *Run anyway*.
+            - **macOS:** `.dmg` or `.zip`, Apple Silicon. Right-click → *Open*
+              on first launch, or Gatekeeper refuses it.
+
+            The installed build updates itself: it checks for new versions and
+            asks before downloading, and never restarts while a shift is
+            running.
 
       - name: Collect artefacts
         # Only where there is no release to publish to. See the note at the top.

@@ -1,59 +1,47 @@
 # Factorial Desktop — Design
 
-**Datum:** 2026-08-12
-**Status:** Entwurf, freigegeben
+Architecture, and the API reference this app is built on. Where anything else in
+the repository disagrees with this file, this file wins.
 
-## Ziel
+## Goal
 
-Eine Electron-Desktop-App, mit der man sich bei Factorial HR ein- und ausstempeln
-und Pausen starten/beenden kann, ohne den Browser zu öffnen. Frameless
-Floating-Widget, immer im Vordergrund, per Tray ein- und ausblendbar, mit
-Live-Timer im macOS-Menubar.
+An Electron app for clocking in and out of Factorial HR and starting or ending
+breaks, without opening the browser. A frameless floating card, always on top,
+shown and hidden from the tray.
 
-Die App ist so geschnitten, dass später weitere Factorial-Funktionen
-(Projektzeiten, Abwesenheiten) andocken können, ohne Transport oder State-Store
-anzufassen.
+It is cut so that further Factorial features (project time, absences) can be
+added without touching the transport or the state store.
 
-### Nicht-Ziele (v1)
+### Non-goals
 
-- **Kein Offline-Queue.** Ein fehlgeschlagener Stempelvorgang wird nicht später
-  nachgeschoben. Das würde falsche Zeiten in eine Arbeitszeiterfassung schreiben.
-  Die App schlägt sichtbar fehl und lädt den echten Zustand neu.
-- **Kein Code-Signing / keine Notarisierung.** Beim ersten Start auf dem Mac per
-  Rechtsklick → Öffnen freigeben.
-- **Kein Auto-Update.**
-- **Keine Windows-Verifikation.** Der Code bleibt plattformneutral und
-  electron-builder erzeugt ein NSIS-Target, aber getestet wird ausschließlich
-  macOS. Die Windows-Fertigstellung übernimmt ein separater Agent — siehe
-  "Windows-Übergabe".
-- **Keine Benachrichtigungen/Erinnerungen** ("du bist seit 9h eingestempelt").
+- **No offline queue.** A failed clock-in is not replayed later; that would write
+  invented times into a real timesheet. The app fails visibly and reloads the
+  real state.
+- **No code signing or notarisation.** The first launch needs right-click → Open
+  on macOS, *More info → Run anyway* on Windows.
+- **No notifications or reminders** ("you have been clocked in for 9 hours").
 
-## Die Factorial-API
+## The Factorial API
 
-Reverse-engineered am 2026-08-12 aus `app.factorialhr.com` (Interceptor im
-Page-Kontext, echte Klicks auf Einstempeln → Mittagspause → Fortsetzen →
-Ausstempeln) plus Schema-Introspection.
-
-**Am 2026-08-12 vollständig gegen die Live-API nachverifiziert.** Alle vier
-Mutations wurden per direktem `fetch` aus dem Seitenkontext ausgeführt
-(`errors: []`), und `openShift` wurde in jedem der drei Zustände abgefragt. Die
-dabei gefundenen Abweichungen vom ersten Mitschnitt sind unten jeweils als
-**Korrektur** markiert — sie betreffen die Mutation-Signaturen, die
-Zeitrekonstruktion und die Herkunft der Soll-Zeit.
+Reverse-engineered from `app.factorialhr.com` — an interceptor in the page
+context, real clicks through clock-in → lunch → resume → clock-out — plus schema
+introspection, then verified against the live API: all four mutations executed
+with `errors: []`, and `openShift` queried in each of the three states.
 
 ### Transport
 
-- **Ein Endpoint:** `POST https://api.factorialhr.com/graphql?<OperationName>`
-  Der Query-String ist kosmetisch (Logging); maßgeblich ist `operationName` im Body.
+- **One endpoint:** `POST https://api.factorialhr.com/graphql?<OperationName>`.
+  The query string is cosmetic (for logging); `operationName` in the body is what
+  counts.
 - **Body:** `{ operationName, variables, query }`
-- **Header:** nur `content-type: application/json`.
-- **Auth: ausschließlich Session-Cookie.** Kein CSRF-Token, kein Bearer, keine
-  Custom-Header. Verifiziert mit einem nackten `fetch` — HTTP 200.
-- Das Session-Cookie ist **HttpOnly** und damit für JavaScript unsichtbar. Ein
-  "Access-Token zum Rauskopieren" existiert nicht.
-- **Introspection ist aktiviert** — das Schema kann für Codegen gezogen werden.
+- **Headers:** `content-type: application/json`, nothing else.
+- **Auth is the session cookie alone.** No CSRF token, no bearer, no custom
+  headers — verified with a bare `fetch` returning HTTP 200.
+- The session cookie is **HttpOnly** and therefore invisible to JavaScript. There
+  is no "access token to copy out".
+- **Introspection is enabled**, so the schema can be pulled for codegen.
 
-### Identität
+### Identity
 
 ```graphql
 query Me {
@@ -65,16 +53,14 @@ query Me {
 }
 ```
 
-Antwort: `{ email, employee: { id: 1111111, fullName }, company: { id: 2222222, name } }`
+Returns `{ email, employee: { id, fullName }, company: { id, name } }`. This
+query doubles as the **session check**: if it succeeds, you are signed in.
 
-Diese Query ist gleichzeitig der **Session-Check**: geht sie durch, ist man
-eingeloggt.
+> **Type inconsistency:** `apiCore` returns `employee.id` as an **Int**, the
+> mutations expect `ID` (a string), and `attendance.employee(id:)` insists on
+> **Int!**. The conversion has to happen explicitly, in one place.
 
-> **Achtung Typ-Inkonsistenz:** `apiCore` liefert `employee.id` als **Int**, die
-> Mutations erwarten `ID` (String), und `attendance.employee(id:)` verlangt
-> zwingend **Int!**. Die Konvertierung muss explizit an einer Stelle passieren.
-
-### Aktueller Zustand
+### Current state
 
 ```graphql
 query Status($id: Int!) {
@@ -86,11 +72,11 @@ query Status($id: Int!) {
 }
 ```
 
-`clockInOffset` ist für die Timer-Rekonstruktion zwingend — siehe „Fallstrick 2".
-`workplaceId` liefert nebenbei den zuletzt benutzten Arbeitsplatz (beobachtet:
-`3333333`) und taugt als Default fürs nächste Einstempeln.
+`clockInOffset` is required for reconstructing the timer — see pitfall 2.
+`workplaceId` also yields the last workplace used, which serves as the default
+for the next clock-in.
 
-Die Tagesliste der abgeschlossenen Shifts (für die Ist-Summe) kommt aus:
+Today's finished shifts, for the worked total:
 
 ```graphql
 attendanceShiftsConnection(startOn: $d, endOn: $d) { nodes {
@@ -99,7 +85,7 @@ attendanceShiftsConnection(startOn: $d, endOn: $d) { nodes {
 } }
 ```
 
-### Pausentypen
+### Break types
 
 ```graphql
 query BreakConfigurations {
@@ -109,9 +95,9 @@ query BreakConfigurations {
 }
 ```
 
-**`active: true` ist nicht optional.** Factorial behält stillgelegte
-Konfigurationen und liefert sie ungefiltert neben den aktuellen aus — mit
-denselben Namen. Ohne Filter (Stand 2026-08-12, echtes Konto):
+**`active: true` is not optional.** Factorial keeps retired configurations and
+serves them next to the current ones — under the same names. Unfiltered, from a
+real account:
 
 | ID | Name | `archived` | `paid` |
 |---|---|---|---|
@@ -121,60 +107,53 @@ denselben Namen. Ohne Filter (Stand 2026-08-12, echtes Konto):
 | 21217 | Verdienstausfall | `false` | `true` |
 | 21836 | Arztbesuch | `false` | `true` |
 
-Im Menü stünden „Verdienstausfall" und „Arztbesuch" damit doppelt, ohne
-sichtbaren Unterschied — und wer den falschen erwischt, bucht seine Pause gegen
-eine stillgelegte Konfiguration mit dem **falschen `paid`-Flag** in eine echte
-Arbeitszeiterfassung. Das ist keine Kosmetik.
+The menu would list "Verdienstausfall" and "Arztbesuch" twice with no visible
+difference, and picking the wrong one books the break against a retired
+configuration with the **wrong `paid` flag** — into a real timesheet. Not
+cosmetic.
 
-> **`active: false` heißt nicht „nur archivierte", sondern „nicht filtern"** —
-> es liefert alle fünf zurück. Zum Ansehen der archivierten Einträge taugt es
-> nicht.
+> **`active: false` does not mean "archived only", it means "do not filter"** and
+> returns all five. It is no use for inspecting the archived ones.
 
-`operations.ts` filtert trotzdem zusätzlich clientseitig über `archived`, und
-behandelt alles außer einem expliziten `false` als archiviert. Doppelt gemoppelt
-mit Absicht: sollte `active` je seine Bedeutung ändern, hält die zweite Prüfung.
+`operations.ts` filters client-side on `archived` as well, treating anything but
+an explicit `false` as archived. Deliberately redundant: if `active` ever changes
+meaning, the second check holds.
 
-> **Nicht verwechseln:** `attendance.breakConfigurationsConnection` existiert
-> ebenfalls, liefert aber andere IDs und durchgehend `name: null`. Für die
-> Pausenauswahl ist ausschließlich `timeSettings` richtig.
+> **Do not confuse it with** `attendance.breakConfigurationsConnection`, which
+> also exists but returns different IDs and `name: null` throughout. Only
+> `timeSettings` is right for the break picker.
 
 ### Mutations
 
-Alle vier liegen unter `attendanceMutations`. Die Signaturen unten stammen aus
-der Schema-Introspection und wurden am 2026-08-12 mit einem vollständigen
-Live-Durchlauf (Ein → Pause → Fortsetzen → Aus, alle vier `errors: []`)
-gegengeprüft.
+All four live under `attendanceMutations`. **`now` is the only required
+argument** — ISO8601 **with the local offset**, e.g. `2026-08-12T01:18:23+02:00`.
 
-**`now` ist das einzige Pflichtargument** — ISO8601 **mit lokalem Offset**,
-z.B. `2026-08-12T01:18:23+02:00`.
+> `date`, `startOn` and `endOn` are **not** arguments of these mutations. They
+> appear in the web client only as declared GraphQL variables of the document and
+> belong to fields fetched in the same request. The schema rejects them.
 
-> **Korrektur gegenüber dem Mitschnitt:** `date`, `startOn` und `endOn` sind
-> **keine** Argumente dieser Mutations. Sie tauchten im Web-Client nur als
-> deklarierte GraphQL-Variablen des Dokuments auf und gehören zu Feldern, die im
-> selben Request nachgeladen werden. Mitschicken lässt das Schema sie nicht.
-
-| Operation | Mutation-Feld | Akzeptierte Argumente (Auswahl) |
+| Operation | Mutation field | Accepted arguments (selection) |
 |---|---|---|
 | ClockIn | `clockInAttendanceShift` | `locationType`, `workplaceId: Int`, `clockInWorkAreaId: Int`, `timeSettingsBreakConfigurationId: Int`, `workable`, `referenceDate`, `observations`, `source` |
 | BreakStart | `breakStartAttendanceShift` | `timeSettingsBreakConfigurationId: Int`, **`systemCreated: Boolean!`**, `observations`, `source` |
 | BreakEnd | `breakEndAttendanceShift` | `locationType`, **`systemCreated: Boolean!`**, `projectTaskId`, `projectWorkerId`, `subprojectId`, `source` |
 | ClockOut | `clockOutAttendanceShift` | `clockOutWorkAreaId: Int`, `workable`, `observations`, `source` |
 
-> **`breakStartAttendanceShift` akzeptiert kein `locationType`** — `breakEnd` und
-> `clockIn` dagegen schon. Ein mitgeschicktes `locationType` lässt die
-> BreakStart-Mutation mit `undefinedArgument` fehlschlagen.
+> **`breakStartAttendanceShift` accepts no `locationType`** — `breakEnd` and
+> `clockIn` do. Sending one makes BreakStart fail with `undefinedArgument`.
 
-Es existieren zusätzlich `breakStartAttendanceBreakShift` /
-`breakEndAttendanceBreakShift`. Die werden **nicht** verwendet — der Web-Client
-nutzt die `…AttendanceShift`-Variante, und nur die ist verifiziert.
+`breakStartAttendanceBreakShift` / `breakEndAttendanceBreakShift` also exist and
+are **not** used: the web client uses the `…AttendanceShift` variants, and only
+those are verified.
 
 **Enums:**
 
 - `AttendanceEnumsShiftSourceEnum`: `desktop`, `mobile`, `face_recognition`,
-  `qr_code`, `mobile_geolocation`, `shared_device`, `api`, `system`, `one_assistant`
+  `qr_code`, `mobile_geolocation`, `shared_device`, `api`, `system`,
+  `one_assistant`
 - `AttendanceShiftLocationTypeEnum`: `office`, `business_trip`, `work_from_home`
 
-Verifizierte Aufrufe:
+Verified calls:
 
 ```graphql
 clockInAttendanceShift(now: $now, source: desktop, locationType: office)
@@ -184,11 +163,11 @@ breakEndAttendanceShift(now: $now, source: desktop, systemCreated: false)
 clockOutAttendanceShift(now: $now, source: desktop)
 ```
 
-Jede Mutation gibt `{ errors, shift }` zurück — der neue Shift kommt also direkt
-mit und muss nicht nachgeladen werden.
+Each returns `{ errors, shift }`, so the new shift comes back with the response
+and does not need a follow-up query.
 
-**`errors` ist `[MutationError!]!`, eine Union** und braucht Inline-Fragmente.
-Ein blankes `errors` ist ein Syntaxfehler:
+**`errors` is `[MutationError!]!`, a union**, and needs inline fragments. A bare
+`errors` is a syntax error:
 
 ```graphql
 errors {
@@ -198,518 +177,438 @@ errors {
 }
 ```
 
-### Zwei Fallstricke
+### Four pitfalls
 
-**1. Fehler kommen in-band mit HTTP 200.** Erfolg heißt
-`data.attendanceMutations.<op>.errors` ist leer. Der HTTP-Status allein sagt
-nichts aus.
+**1. Errors arrive in-band with HTTP 200.** Success means
+`data.attendanceMutations.<op>.errors` is empty. The HTTP status says nothing.
 
-**2. Kein Zeitstempel der API ist ein gültiger absoluter Zeitpunkt.** Das ist der
-gefährlichste Fallstrick der ganzen Integration.
+**2. No timestamp from this API is a valid absolute instant.** This is the most
+dangerous thing in the whole integration.
 
-`openShift.clockIn` liefert `"2000-01-01T00:11:12Z"` — korrekte Uhrzeit,
-Platzhalter-Datum.
+`openShift.clockIn` returns `"2000-01-01T00:11:12Z"` — correct time of day,
+placeholder date.
 
-`shift.clockInWithSeconds` sieht auf den ersten Blick brauchbar aus, ist es aber
-nicht. Verifiziert an einem realen Datensatz:
+`shift.clockInWithSeconds` looks usable and is not. Against a real record:
 
 | | |
 |---|---|
-| Tatsächlich eingestempelt | `2026-08-12 00:11:12` lokal (Europe/Berlin, +02:00) |
-| Also als UTC-Instant | `2026-08-11T22:11:12Z` |
-| Was die API liefert | `2026-08-11T00:11:12+00:00` |
+| Actually clocked in | `2026-08-12 00:11:12` local (Europe/Berlin, +02:00) |
+| So as a UTC instant | `2026-08-11T22:11:12Z` |
+| What the API returns | `2026-08-11T00:11:12+00:00` |
 
-Factorial kombiniert die **UTC-Datumskomponente** (11. Aug., da 22:11 UTC) mit der
-**lokalen Uhrzeit** (00:11:12) und deklariert das Ergebnis als `+00:00`. Als
-Instant gelesen liegt der Wert 22 Stunden daneben.
+Factorial combines the **UTC date component** (the 11th, since it is 22:11 UTC)
+with the **local time of day** (00:11:12) and declares the result `+00:00`. Read
+as an instant, that is 22 hours out.
 
-**Korrekte Rekonstruktion:** lokales Kalenderdatum aus `shift.date`,
-Uhrzeit-Komponente aus `clockInWithSeconds`, **Zonen-Offset aus `clockInOffset`**.
+**The correct reconstruction:** local calendar date from `shift.date`, time of
+day from `clockInWithSeconds`, **zone offset from `clockInOffset`**. That last
+field is separate and carries the real local offset, so neither the running
+machine's timezone nor any "if it looks like the future, subtract a day"
+heuristic is needed.
 
-`clockInOffset` ist ein eigenes Feld und liefert den echten lokalen Offset
-(`"+02:00"`). Damit braucht es weder die Zeitzone der laufenden Maschine noch die
-frühere „liegt der Wert in der Zukunft, zieh einen Tag ab"-Heuristik — die entfällt
-ersatzlos.
+Cross-checked against a real record — `AttendanceShift.createdAt` is the only
+genuine UTC instant in the schema and serves as the control:
 
-Gegengeprobt an einem realen Record: `AttendanceShift.createdAt` ist der einzige
-**echte** UTC-Instant im ganzen Schema und dient als Kontrolle.
-
-| Feld | Wert |
+| Field | Value |
 |---|---|
 | `clockInWithSeconds` | `2026-08-11T09:49:05+00:00` |
 | `clockInOffset` | `+02:00` |
 | `shift.date` | `2026-08-11` |
-| rekonstruiert | `2026-08-11T09:49:05+02:00` = `07:49:05Z` |
-| `createdAt` (Kontrolle) | `2026-08-11T07:49:05Z` ✓ |
+| reconstructed | `2026-08-11T09:49:05+02:00` = `07:49:05Z` |
+| `createdAt` (control) | `2026-08-11T07:49:05Z` ✓ |
 
-Der `+00:00`-Offset und die Datumskomponente von `clockIn*` sind **immer** zu
-ignorieren.
+The `+00:00` offset and the date component of any `clockIn*` field are **always**
+to be ignored.
 
-**Für den offenen Shift gilt dieselbe Regel mit anderen Feldnamen.**
-`AttendanceOpenShift` ist ein **anderer Typ** als `AttendanceShift` und kennt
-weder `clockInWithSeconds` noch `minutes`. Verifizierte Form während einer
-laufenden Schicht:
+The same rule applies to the open shift under different field names.
+`AttendanceOpenShift` is a **different type** from `AttendanceShift` and has
+neither `clockInWithSeconds` nor `minutes`:
 
 ```jsonc
 { "id": 543343386, "date": "2026-08-12",
-  "clockIn": "2000-01-01T01:18:23Z",   // Sentinel-Datum, lokale Uhrzeit, mit Sekunden
+  "clockIn": "2000-01-01T01:18:23Z",   // sentinel date, local time, with seconds
   "clockInOffset": "+02:00", "clockOut": null,
   "locationType": "office", "workplaceId": 3333333,
   "workable": true, "status": "opened", "referenceDate": "2026-08-12",
   "timeSettingsBreakConfiguration": null }
 ```
 
-Also: `openShift.date` + Uhrzeit aus `openShift.clockIn` + `openShift.clockInOffset`.
-Dieselbe Funktion, andere Feldnamen — sie muss beide Formen bedienen.
+So: `openShift.date` + time from `openShift.clockIn` + `openShift.clockInOffset`.
+One function, both shapes — `reconstructInstant` in `shared/time.ts`, duplicated
+nowhere.
 
-**3. `clockOut` gibt es nur in Minutenauflösung.** Ein `clockOutWithSeconds`
-existiert nicht — das Schema kennt das Feld nicht.
+**3. `clockOut` has minute resolution only.** There is no
+`clockOutWithSeconds`; the schema does not have the field.
 
-**4. Eine Pause splittet den Shift in mehrere Records.** Ein Durchlauf
-Einstempeln → Pause → Fortsetzen → Ausstempeln erzeugte drei Einträge mit
-eigenen IDs, alle mit demselben `date`. Die Tagessumme ist also die Summe über
-`minutes` aller Shifts des Tages plus die laufende Zeit des offenen Shifts —
-nicht das Delta eines einzelnen Records.
+**4. A break splits the shift into several records.** One pass of clock-in →
+break → resume → clock-out produced three records with their own IDs and the same
+`date`. The day's total is therefore the sum over `minutes` of the day's records
+plus the running time of the open shift — not the delta of a single record.
 
-## Architektur
+## Architecture
 
-### Entscheidung: Main-Prozess besitzt Netzwerk und State
+### The main process owns the network and the state
 
-Der Renderer ist reine UI und spricht nur über IPC.
+The renderer is pure UI and speaks only over IPC. In descending order of how
+binding the reason is:
 
-**Begründung, in absteigender Härte:**
+1. **CORS.** The renderer has no permitted origin against
+   `api.factorialhr.com`; the browser blocks those requests. A fetch from the
+   main process is not subject to CORS and attaches the partition's cookies
+   automatically. It is the only thing that works.
+2. **One truth.** The tray needs the timer state in the main process anyway. A
+   second state in the renderer would be a permanent source of divergence.
+3. **Isolation.** The session cookie stays out of any renderer context.
 
-1. **CORS.** Der Renderer hat gegenüber `api.factorialhr.com` keinen erlaubten
-   Origin; Requests von dort werden vom Browser blockiert. `net.request` im
-   Main-Prozess unterliegt keiner CORS-Prüfung und hängt die Cookies der
-   Session-Partition automatisch an. Das ist der einzige Weg, der funktioniert.
-2. **Eine Wahrheit.** Das Tray braucht den Timer-State ohnehin im Main. Ein
-   zweiter State im Renderer wäre eine dauerhafte Divergenzquelle.
-3. **Isolation.** Das Session-Cookie bleibt außerhalb jedes Renderer-Kontexts.
+*Rejected alternative:* the renderer talking to the API directly. It fails on
+CORS and could only be forced with a custom protocol handler or by disabling
+`webSecurity` — trading a security property for nothing, since IPC is needed
+regardless.
 
-### Verworfene Alternative
-
-*Renderer spricht direkt mit der API.* Scheitert an CORS. Ließe sich nur mit
-einem Custom-Protocol-Handler oder abgeschaltetem `webSecurity` erzwingen —
-beides tauscht ein Sicherheitsmerkmal gegen nichts ein, da IPC hier ohnehin
-gebraucht wird.
-
-### Modulstruktur
+### Modules
 
 ```
 main/
-  session.ts        persist:factorial-Partition, Cookie-Lebenszyklus
-  auth.ts           Login-Fenster, Session-Validierung
+  session.ts          persist:factorial partition, cookie lifecycle, user agent
+  auth.ts             login window
+  auth-flow.ts        the login sequence, Electron-free
   factorial/
-    client.ts       GraphQL-Transport über net.request
-    operations.ts   die 8 Operations + Typen
-  attendance.ts     State-Store: Ableitung, Polling, optimistische Updates
-  tray.ts           Icon, Live-Timer, Kontextmenü
-  windows.ts        Widget-, Login-, Settings-Fenster
-  settings.ts       persistierte Einstellungen
-  ipc.ts            typisierter IPC-Vertrag
-preload/index.ts    contextBridge
-renderer/           React + Tailwind v4 + shadcn/ui (Nova)
+    client.ts         GraphQL transport
+    operations.ts     the operations and their types
+  attendance.ts       state store: derivation, polling, optimistic updates
+  tray.ts             icon, tooltip, context menu
+  tray-menu.ts        what the menu says, Electron-free
+  windows.ts          the widget window
+  window-position.ts  where the window may go, Electron-free
+  settings.ts         persisted settings, Electron-free
+  updater.ts          update checks and prompts
+  update-policy.ts    when an update may happen, Electron-free
+  ipc.ts              channel registration
+  ipc-handlers.ts     what each channel does, Electron-free
+preload/index.ts      contextBridge — ten functions, nothing else
+shared/               contract, time reconstruction, state derivation, errors
+renderer/             React, Tailwind v4, shadcn/ui (Nova)
 ```
 
-**Grenzen:**
+**Boundaries:**
 
-- `factorial/operations.ts` ist die **einzige** Stelle, die Factorial-Semantik
-  kennt. Ein neues Feature heißt: neue Operation hier, neues Panel im Renderer.
-- `factorial/client.ts` kennt nur GraphQL-über-HTTP, nichts über Attendance.
-- `attendance.ts` kennt keine Fenster und kein Tray — es publiziert Zustand,
-  Konsumenten abonnieren.
+- `factorial/operations.ts` is the **only** place that knows Factorial's
+  semantics. A new feature means a new operation here and a new panel in the
+  renderer.
+- `factorial/client.ts` knows GraphQL-over-HTTP and nothing about attendance.
+- `attendance.ts` knows neither windows nor tray — it publishes state and
+  consumers subscribe.
+- Every module marked *Electron-free* above is that way on purpose: it takes what
+  it needs as arguments and is unit tested without an Electron runtime.
 
 ## Auth
 
-1. Beim Start `session.fromPartition('persist:factorial')` holen.
-2. `Me`-Query über den Main-Client absetzen.
-3. Erfolg → `employeeId` und `companyId` cachen, App startet normal.
-4. 401 oder leere Antwort → Login-`BrowserWindow` auf `https://id.factorialhr.com`
-   in derselben Partition öffnen.
-5. **Auf Navigation warten, nicht pollen.** Sobald das Login-Fenster auf einem
-   Factorial-Host landet, der *nicht* der Login-Host ist, einmal `Me` abfragen.
-   Geht sie durch: Fenster schließen und normal weiterlaufen.
+1. Get `session.fromPartition('persist:factorial')` at startup.
+2. Run the `Me` query through the main-process client.
+3. Success → cache `employeeId`, carry on.
+4. 401 or an empty answer → open a login `BrowserWindow` on
+   `https://id.factorialhr.com` in the same partition.
+5. **Wait for navigation, do not poll.** Once the login window lands on a
+   Factorial host that is *not* the login host, query `Me` once. If it succeeds,
+   close the window and continue.
 
-> **Während der Anmeldung stellt die App keine einzige API-Anfrage.** Das ist
-> keine Optimierung, sondern eine Korrektur.
+> **The app makes no API request at all while signing in.** That is a correction,
+> not an optimisation.
 >
-> Die erste Fassung fragte `Me` alle 1,5 Sekunden ab, solange das Login-Fenster
-> offen war. Factorial lehnte daraufhin **jeden** Code ab — den per E-Mail
-> geschickten OTP genauso wie den TOTP aus der Authenticator-App, beide mit
-> „Ungültiger Code". Ein TOTP wird serverseitig aus Code, Secret und Uhrzeit
-> geprüft; kein Client kann einen richtigen Code falsch machen. Wenn also beide
-> Arten gleichzeitig scheitern, war nie der Code das Problem, sondern die
-> Prüfanfrage fand ihre laufende Anmeldung nicht mehr.
+> The first version polled `Me` every 1.5 seconds while the login window was
+> open. Factorial then rejected **every** code — the emailed OTP and the TOTP from
+> the authenticator app alike, both with "invalid code". A TOTP is checked
+> server-side from code, secret and clock; no client can get a correct code wrong.
+> When both kinds fail at once, the code was never the problem — the verification
+> request could no longer find its in-flight sign-in.
 >
-> Ein Strom unauthentifizierter `Me`-Aufrufe im Sekundentakt, mit einem
-> halbfertigen Auth-Cookie, gegen eine API hinter Cloudflare — das macht kein
-> Browser, und es ist das Naheliegendste, was man entfernen kann.
+> A stream of unauthenticated `Me` calls once a second, carrying a half-finished
+> auth cookie, against an API behind Cloudflare: no browser does that, and it is
+> the most obvious thing to remove.
 >
-> Das Prädikat dafür (`indicatesSignedIn` in `login-target.ts`) ist **positiv**
-> formuliert: es sagt nur bei einem Factorial-Host außerhalb des Login-Hosts ja.
-> Ein negatives „ist das noch der Login?" würde bei jedem unbekannten Umweg —
-> SSO-Hop, `about:blank`, kaputte URL — mit nein antworten und genau dann eine
-> Anfrage auslösen.
+> The predicate (`indicatesSignedIn` in `login-target.ts`) is phrased
+> **positively**: it says yes only for a Factorial host outside the login host. A
+> negative "is this still the login?" would answer yes on every unexpected detour
+> — an SSO hop, `about:blank`, a malformed URL — and fire a request exactly then.
 >
-> Preis dieser Entscheidung: ändert Factorial das Ziel nach der Anmeldung, bleibt
-> das Login-Fenster offen stehen. Das ist sichtbar und leicht zu finden — und
-> allemal besser als eine Anmeldung, die grundsätzlich nicht durchgehen kann.
+> The price: if Factorial changes where it lands after sign-in, the login window
+> stays open. That is visible and easy to find, and far better than a sign-in that
+> cannot succeed at all.
 
-Die App **liest das Cookie nie aus und speichert keinen Token**. Chromium hält es
-in der Partition, `net.request` schickt es mit. Logout = Cookies der Partition
-löschen.
+The app **never reads the cookie and stores no token.** Chromium keeps it in the
+partition. Signing out means clearing the partition's cookies.
 
-### Sitzung am Leben halten
+### Keeping the session alive
 
-Die Anmeldung hinterlässt drei Cookies. Aus einem echten Jar gelesen:
+Signing in leaves three cookies:
 
-| Cookie | HttpOnly | Laufzeit |
+| Cookie | HttpOnly | Lifetime |
 |---|---|---|
-| `_factorial_id` | ja | **2 Stunden** |
-| `_factorial_id_refresh` | ja | 7 Monate |
-| `_factorial_id_data` | nein | 7 Monate |
+| `_factorial_id` | yes | **2 hours** |
+| `_factorial_id_refresh` | yes | 7 months |
+| `_factorial_id_data` | no | 7 months |
 
-Das Cookie, auf dem die App reitet, ist also **absichtlich kurzlebig**. Angemeldet
-zu bleiben heißt, den langlebigen Refresh-Cookie gegen einen frischen
-Access-Cookie zu tauschen — genau das macht ein Browser-Tab im Hintergrund, und
-genau deshalb bleibt Chrome den ganzen Tag eingeloggt.
+The cookie the app rides on is **deliberately short-lived**. Staying signed in
+means trading the long-lived refresh cookie for a fresh access cookie — which is
+what a browser tab does in the background, and why Chrome stays signed in all
+day.
 
-Ohne diesen Tausch fiel die App etwa alle zwei Stunden aus der Sitzung und
-verlangte eine vollständige Neuanmeldung samt 2FA, als wäre die Sitzung
-widerrufen worden.
+Without that trade the app fell out of the session about every two hours and
+demanded a full re-authentication including 2FA, as if the session had been
+revoked.
 
-Der Tausch ist **ein nackter POST** — kein Body, keine Header, kein CSRF-Token,
-nur der Cookie, den die Partition ohnehin hält:
+The trade is **a bare POST** — no body, no headers, no CSRF token, just the
+cookie the partition already holds:
 
 ```
 POST https://id.factorialhr.com/api/auth/refresh
-→ 401 { "success": false,
-        "error": { "code": "invalid_refresh_token",
-                   "message": "Ihre Sitzung ist abgelaufen. …" } }
 ```
 
-**Reaktiv statt auf Timer.** Eine 401 ist das einzige verlässliche Signal, dass
-der Token verbraucht ist. Eine Uhr müsste den Ablauf raten, würde über Standby
-driften — und müsste die 401 für die Fälle trotzdem behandeln, in denen sie
-falsch geraten hat.
+**Reactive, not on a timer.** A 401 is the only reliable signal that the token is
+spent. A clock would have to guess the expiry, would drift across standby, and
+would still need to handle the 401 for the times it guessed wrong.
 
-Ablauf: 401 → einmal erneuern → **einmal** wiederholen. Ist auch die Wiederholung
-nicht autorisiert, wird diese Antwort unverändert durchgereicht und die App tut,
-was sie vorher tat — Sitzung als abgelaufen melden und Anmeldung anbieten. Eine
-abgelaufene Sitzung darf niemals zu einer Schleife gegen ein HR-System werden.
+The sequence is: 401 → refresh once → retry **once**. If the retry is also
+unauthorised, that answer is passed through unchanged and the app does what it
+did before — report the session as expired and offer to sign in. An expired
+session must never become a loop against an HR system.
 
-Gleichzeitige 401 teilen sich **eine** Erneuerung: der Store feuert seine zwei
-Queries zusammen, und zwei konkurrierende Tauschvorgänge sind der Weg, einen
-rotierenden Refresh-Token selbst ungültig zu machen.
+Concurrent 401s share **one** refresh: the store fires its queries together, and
+two competing trades are how you invalidate a rotating refresh token yourself.
 
-> **Widerspricht das „Mutations werden nie automatisch wiederholt"?** Nein, und
-> der Unterschied ist wichtig. Die Regel zielt auf *fachliche* Fehlschläge — der
-> Server hat die Anfrage geprüft und abgelehnt, oder die Antwort kam nie an. Ein
-> Wiederholen erfindet dort Zeit.
+> **Does that contradict "mutations are never retried automatically"?** No, and
+> the difference matters. That rule is about *domain* failures — the server
+> considered the request and refused it, or the answer never arrived. Retrying
+> there invents time.
 >
-> Eine 401 kommt nie bis zum Resolver: die Auth-Schicht weist sie vorher ab, es
-> wurde nichts geschrieben, es gibt nichts zu duplizieren. Und die Wiederholung
-> ist **byte-identisch** — jede Mutation trägt ihr eigenes `now`, der zweite
-> Versuch schreibt also den Zeitstempel des *ursprünglichen Klicks*. Nicht zu
-> wiederholen wäre die ungenauere Variante: der Nutzer klickt ein paar Sekunden
-> später erneut und erfasst dann diesen späteren Moment.
+> A 401 never reaches the resolver: the auth layer refuses it first, nothing was
+> written, there is nothing to duplicate. And the retry is **byte-identical** —
+> every mutation carries its own `now`, so the second attempt writes the timestamp
+> of the *original click*. Not retrying would be the less accurate option: the
+> user clicks again a few seconds later and records that later moment instead.
 
-Das Login-Fenster läuft mit `contextIsolation: true`, `nodeIntegration: false`
-und **ohne Preload** — es lädt eine fremde Website.
+The login window runs with `contextIsolation: true`, `nodeIntegration: false` and
+**no preload** — it loads somebody else's website.
 
-### Cloudflare und der User-Agent
+### Cloudflare and the user agent
 
-**Vor `api.factorialhr.com` steht Cloudflare.** Nachgewiesen am 2026-08-12 an
-einem Cookie-Jar eines erfolgreichen Logins: dort liegt ein `cf_clearance`-Cookie
-auf `.api.factorialhr.com`. In einer Partition, in der die Anmeldung scheiterte,
-lag stattdessen nur `_factorial_id_auth_error`.
+**Cloudflare sits in front of `api.factorialhr.com`.** Shown by a cookie jar from
+a successful login: it holds a `cf_clearance` cookie on `.api.factorialhr.com`. A
+partition where sign-in had failed held `_factorial_id_auth_error` instead.
 
-Das ist der Grund für ein Symptom, das sonst unerklärlich ist: die Anmeldung
-lehnt **jeden** Code ab — den per E-Mail geschickten OTP genauso wie den
-MFA-Code aus der Authenticator-App — mit „Ungültiger Code". Wenn beide Arten
-gleichzeitig falsch sind, war nie der Code das Problem, sondern die
-Verifikationsanfrage wird abgewiesen, bevor der Code überhaupt geprüft wird.
+That explains a symptom that is otherwise inexplicable: sign-in rejects **every**
+code, emailed OTP and authenticator alike, with "invalid code". When both kinds
+are wrong at once, the code was never the problem — the verification request is
+refused before the code is checked at all.
 
-Electrons Standard-User-Agent trägt den Build offen im String:
+Electron's default user agent carries the build in the string:
 
 ```
 Mozilla/5.0 (Macintosh; ...) ... Chrome/150.0.7871.224 Electron/43.4.0 Safari/537.36
 ```
 
-Deshalb entfernt `applyBrowserUserAgent()` in `session.ts` das
-`Electron/<version>`-Token — siehe `@shared/user-agent`. Übrig bleibt der String,
-den Chromium für seine eigene Engine gebaut hat; die Chrome-Version und die
-Plattform darin sind echt, nur die Build-Variante fällt weg.
+So `applyBrowserUserAgent()` in `session.ts` strips the `Electron/<version>`
+token. What is left is the string Chromium built for its own engine; the Chrome
+version and the platform in it are real, only the build flavour is gone.
 
-Gesetzt wird das auf der **ganzen Partition**, nicht nur auf dem Login-Fenster.
-Fenster und spätere API-Calls teilen sich diese Session, und einem Server für
-eine Session zwei verschiedene User-Agents zu schicken ist genau die Art von
-Widerspruch, die eine Session ungültig macht.
+It is set on the **whole partition**, not just the login window. Windows and later
+API calls share this session, and sending a server two different user agents for
+one session is exactly the kind of contradiction that invalidates it.
 
-> **Beim Debuggen einer kaputten Anmeldung immer zuerst die Partition leeren.**
-> Ein `_factorial_id_auth_error` aus einem gescheiterten Versuch überlebt den
-> Neustart und kann den nächsten Versuch mit verunreinigen.
->
-> ```
-> rm -rf ~/Library/Application\ Support/factorial-desktop/Partitions/factorial
-> ```
->
-> Für einen Blick in den Jar reicht `sqlite3 <partition>/Cookies "select
-> host_key, name from cookies"` — **ohne** die Wertespalte, die enthält die
-> Session.
+> **When debugging a broken sign-in, empty the partition first.** A
+> `_factorial_id_auth_error` from a failed attempt survives a restart and can
+> contaminate the next one. To look inside the jar,
+> `sqlite3 <partition>/Cookies "select host_key, name from cookies"` — **without**
+> the value column, which is the session.
 
-## Zustandsmodell
+## State model
 
-Drei Zustände, vollständig aus `openShift` abgeleitet — kein parallel gepflegtes Flag:
+Three states, derived entirely from `openShift` — no flag maintained alongside:
 
-| `openShift` | `timeSettingsBreakConfiguration` | `workable` | Zustand |
+| `openShift` | `timeSettingsBreakConfiguration` | `workable` | State |
 |---|---|---|---|
-| `null` | — | — | **aus** |
-| gesetzt | `null` | `true` | **eingestempelt** |
-| gesetzt | gesetzt | `false` | **in Pause** |
+| `null` | — | — | **out** |
+| set | `null` | `true` | **clocked in** |
+| set | set | `false` | **on a break** |
 
-Dazu die Meta-Zustände `unknown` (vor dem ersten Laden) und `unauthenticated`.
+Plus the meta-states `unknown` (before the first load) and `unauthenticated`.
 
-Am 2026-08-12 live durchgespielt und bestätigt. `workable` korreliert
-vollständig mit dem Pausenzustand, ist aber **redundant** — maßgeblich bleibt
-`timeSettingsBreakConfiguration`, sonst gäbe es zwei Wahrheiten.
+Confirmed live. `workable` correlates completely with the break state but is
+**redundant** — `timeSettingsBreakConfiguration` decides, or there would be two
+truths.
 
-> **Das Factorial-Web-Widget ist keine verlässliche Referenz.** Beobachtet:
-> Das Dashboard zeigte „In einer Pause" samt *Fortsetzen*-Button, auch nach
-> Hard-Reload — während `openShift` `null` war, der zuletzt angelegte Shift
-> geschlossen und der Stundenzettel `0h 00m` auswies. Der Client-Cache von
-> Factorial hängt nach schnellen Zustandswechseln. **Die API ist die Wahrheit.**
-> Unsere App wird in solchen Fällen bewusst vom Web-Widget abweichen; das ist
-> kein Bug auf unserer Seite und darf nicht „passend" gemacht werden.
+> **Factorial's own web widget is not a reliable reference.** Observed: the
+> dashboard showed "on a break" with a *Resume* button, even after a hard reload,
+> while `openShift` was `null`, the last shift was closed and the timesheet read
+> `0h 00m`. Factorial's client cache lags after quick state changes. **The API is
+> the truth.** This app will deliberately disagree with the web widget in such
+> cases; that is not a bug here and must not be "fixed" to match.
 
 ### Synchronisation
 
-Neu geladen wird bei:
+Reloaded on: **every mutation** (the response carries the new shift and is
+adopted directly), **every 60 s** in the background, **window focus** and **tray
+open**, and **`powerMonitor` resume** after standby — without that last one the
+timer shows nonsense after a laptop lid has been closed.
 
-- **jeder Mutation** — die Antwort enthält den neuen Shift, wird direkt übernommen
-- **alle 60 s** im Hintergrund
-- **Fensterfokus** und **Tray-Öffnen**
-- **`powerMonitor`-Resume** nach Standby — ohne das zeigt der Timer nach dem
-  Zuklappen des MacBooks Unsinn
+### Optimistic updates
 
-### Optimistische Updates
+A click shows the target state immediately and disables the button. On an error
+it rolls back, shows a toast, and reloads the real state.
 
-Beim Klick wird der Zielzustand sofort angezeigt und der Button gesperrt.
-Kommt ein Fehler zurück, wird zurückgerollt, ein Toast gezeigt und der echte
-Zustand neu geladen.
+### Time calculation
 
-### Zeitberechnung
+The timer does **not** count up by itself. On every tick it recomputes the
+difference to a reconstructed start instant, so it cannot drift and it survives
+standby.
 
-Der Timer zählt **nicht** selbst hoch. Bei jedem Tick wird die Differenz zu einem
-rekonstruierten Startzeitpunkt neu gerechnet. Damit driftet er nicht und
-übersteht Standby.
+The start instant follows the rule from pitfall 2, in one function
+(`reconstructInstant`), used everywhere.
 
-Der Startzeitpunkt wird nach der Regel aus "Fallstrick 2" gebildet: lokales
-Kalenderdatum plus Uhrzeit-Komponente des API-Zeitstempels plus Zonen-Offset aus
-`clockInOffset`. Für den abgeschlossenen Shift sind das `shift.date` +
-`clockInWithSeconds` + `clockInOffset`, für den offenen `openShift.date` +
-`openShift.clockIn` + `openShift.clockInOffset` — `AttendanceOpenShift` kennt
-weder `clockInWithSeconds` noch `minutes`. Die frühere „Tagesrücksprung, falls
-das Ergebnis in der Zukunft liegt"-Heuristik entfällt ersatzlos: der Offset kommt
-mit den Daten, also wird nichts geraten und weder die aktuelle Uhr noch die
-Zeitzone der Maschine geht ein. Diese Rekonstruktion liegt in **einer** Funktion
-in `time.ts` (`reconstructInstant(localDate, apiTimestamp, offset)`) und wird
-nirgends dupliziert.
+The day's total is the sum over `minutes` of today's **work** records plus the
+running time of the open shift.
 
-Die Tagessumme ist die Summe über `minutes` der heutigen **Arbeits**-Records plus
-die laufende Zeit des offenen Shifts.
-
-> **Pausen splitten den Shift in mehrere Records — und einer dieser Records IST
-> die Pause.** Eine Pause zu starten schließt den Arbeits-Record und öffnet einen
-> Pausen-Record; genau deshalb kann `openShift.timeSettingsBreakConfiguration`
-> den Zustand überhaupt erkennen. Für die Tagessumme heißt das: beide Sorten
-> kommen in derselben Liste an und müssen auseinandergehalten werden.
+> **Breaks split the shift into several records — and one of those records IS the
+> break.** Starting a break closes the work record and opens a break record;
+> that is exactly why `openShift.timeSettingsBreakConfiguration` can identify the
+> state at all. For the day's total it means both kinds arrive in the same list
+> and have to be told apart.
 >
-> Die erste Fassung holte nur `id date minutes` und hatte damit nichts, woran sie
-> das hätte tun können — jede Pause zählte als Arbeitszeit. Am echten Konto
-> gemeldet: 7:56 im Widget für einen Tag, den Factorial mit 7:23 führte, also
-> genau die 33 Minuten Pause. Auf einem Widget, an dem man abliest, wann man
-> Feierabend machen kann, schickt das Leute zu früh nach Hause.
+> The first version fetched only `id date minutes` and so had nothing to tell them
+> apart with — every break counted as work. Reported from a real account: 7:56 in
+> the widget for a day Factorial recorded as 7:23, exactly the 33 minutes of
+> break. On a widget people read to decide when to go home, that sends them home
+> early.
 >
-> Ausgeschlossen wird über **beide** Signale des Records: `workable === false`
-> oder ein gesetztes `timeSettingsBreakConfiguration`. Das sind keine zwei
-> Wahrheiten über eine Frage, sondern eine Frage, zweimal gestellt — die
-> Korrelation ist für den *offenen* Shift live bestätigt, für einen
-> *geschlossenen* Record aber keines von beiden, und deshalb wird beiden
-> geglaubt. Fehlen beide, verhält sich die Summe wie vorher.
+> Breaks are excluded on **both** signals of the record: `workable === false` or a
+> set `timeSettingsBreakConfiguration`. Not two truths about one question, but one
+> question asked twice — the correlation is confirmed live for the *open* shift
+> and for neither on a *closed* record, so both are believed. If both are absent,
+> the total behaves as before.
 >
-> Die Schieflage ist Absicht: eine unerkannte Pause bläht den Tag auf und
-> schickt jemanden zu früh heim, ein fälschlich als Pause gelesener
-> Arbeits-Record untertreibt ihn und kostet nichts als einen zweiten Blick in
-> Factorial.
->
-> Ein Pausen-Record ohne `minutes` macht den Tag **nicht** unvollständig: ob
-> Factorial eine Pause schon summiert hat, sagt nichts darüber aus, wie
-> vollständig die *Arbeits*zeit ist.
+> The asymmetry is intentional: an unrecognised break inflates the day and sends
+> somebody home early, while a work record misread as a break understates it and
+> costs nothing but a second look at Factorial.
 
-## Fehlerbehandlung
+## Error handling
 
-| Fall | Verhalten |
+| Case | Behaviour |
 |---|---|
-| `errors[]` nicht leer | Toast mit der Server-Message, Rollback, Reload |
-| HTTP 401 | Zustand `unauthenticated`, Login-Fenster anbieten |
-| Netzwerkfehler | Toast "keine Verbindung", Rollback, Reload. **Kein stiller Retry der Mutation** |
-| Polling schlägt fehl | still ignorieren, letzter bekannter Zustand bleibt sichtbar, dezenter Stale-Indikator |
+| `errors[]` non-empty | Toast with the server's message, roll back, reload |
+| HTTP 401 | State `unauthenticated`, offer the login window |
+| Network error | Toast "no connection", roll back, reload. **No silent retry of the mutation** |
+| Polling fails | Ignored quietly; the last known state stays visible with a discreet stale indicator |
 
-Eine fehlgeschlagene Mutation wird nie als Erfolg dargestellt.
+A failed mutation is never presented as a success.
+
+German user-facing text for a failure comes from **one** table, in
+`shared/errors.ts`. The renderer and the tray both use it; neither opens a second
+one.
 
 ## UI
 
-**Widget:** ca. 320×210, frameless, `alwaysOnTop`, transparent abgerundet, eigene
-Drag-Region. Position wird pro Monitor gemerkt.
+One card, two states:
 
-**Aufbau** — linksbündig über die volle Kartenbreite:
+| | Size | Contents |
+|---|---|---|
+| collapsed | 156 × 44 | dot · number · day bar |
+| expanded | 300 × 162 | + status · remaining · buttons · work location · break total |
 
-- Kopfzeile: farbiger Punkt + Status (*Ausgestempelt* / *Eingestempelt* /
-  *In einer Pause*), rechts daneben die Soll-Zeile
-- Darunter der Timer, 42 px; die Sekunden eine Kontraststufe leiser
-- Darunter der Tagesbalken (6 px) über die volle Breite: grün gearbeitet, amber
-  Pause, transparent was noch fehlt — in der Reihenfolge, in der es passiert ist
-- Buttons je nach Zustand:
-  - aus → **Einstempeln**
-  - ein → **Pause** (Dropdown mit Pausentypen) + **Ausstempeln**
-  - Pause → **Fortsetzen** + **Ausstempeln**
-- Fußzeile: Arbeitsort-Selector (Büro / Mobiles Arbeiten / Dienstreise) und
-  rechts die Pausensumme des Tages — beides nur im aufgeklappten Zustand
+**The expanded state is a moment of acting, not a view to sit in.** You open it to
+press Pause or clock out, and it closes again. That is why it shows everything at
+once instead of making anyone open it twice — and why it is not remembered: the
+collapsed state is the one the day is spent in.
 
-> **Der Ring ist einem Balken gewichen — aus Platzgründen, nicht aus Geschmack.**
-> Der Ring maß 88 px bei 6 px Strich, also 67,6 px lichte Weite innen. „2:00:14"
-> braucht bei 18 px rund 62 px und klebte damit schon am Strich; „10:23:45"
-> braucht rund 73 px und lief beidseitig darüber hinaus. Die Zahl kleiner zu
-> setzen hätte die Lesbarkeit gekostet, den Ring größer zu ziehen den
-> Arbeitsort-Selector über die Unterkante gedrückt — die Karte hatte 6 px Luft.
->
-> Der Balken löst beides auf einmal: er läuft über die volle Breite, gibt die
-> Mitte der Karte für den Timer frei (42 px statt 18) und löst den Tag bei
-> 320 px etwa viermal feiner auf, als es der Umfang eines 88-px-Rings konnte.
-> Preis: das Widget sieht dem Factorial-Web-Widget nicht mehr ähnlich.
->
-> **Die Sekunden tragen weniger Kontrast als der Rest der Zahl.** Bei 42 px
-> tickt diese Bewegung den ganzen Tag im Augenwinkel mit — deutlich präsenter
-> als bei 18 px. Gedämpft statt verkleinert: die Unruhe verschwindet, jede
-> Ziffer bleibt voll lesbar.
+There used to be three fixed sizes with a setting in the tray. The middle one
+showed nothing the expanded card does not, and could not carry the break total
+without overflowing; the largest spread 37 px of air it did not need. What is left
+is one card with no setting at all: 300 × 162 against the former 340 × 224, **36 %
+less area for the same content**.
 
-> **Der Selector zeigt bei offener Schicht deren echten Arbeitsort, nicht die
-> gespeicherte Voreinstellung.** Die Voreinstellung sagt nur, was das *nächste*
-> Einstempeln benutzen würde — beides fällt auseinander, sobald jemand über das
-> Web oder das Handy einstempelt. Die erste Fassung zeigte „Büro" für eine
-> Schicht, die auf „Mobiles Arbeiten" lief: eine Absicht als Tatsache dargestellt.
-> Nur wenn die API zur offenen Schicht keinen Ort liefert, greift die
-> Voreinstellung als Rückfall — dann gibt es nichts Wahreres zu zeigen.
->
-> Deshalb trägt auch der Pausenzustand den `locationType` mit: eine Pause wählt
-> keinen neuen Ort, sie erbt den der unterbrochenen Schicht.
->
-> **Die Beschriftungen sind Factorials eigene Wörter**, keine eigene Übersetzung.
-> `work_from_home` heißt dort **„Mobiles Arbeiten"** (am echten Konto bestätigt),
-> nicht „Homeoffice" — wer Widget und Weboberfläche nebeneinander legt, soll
-> nicht erst übersetzen müssen.
+Row positions live in `widget-size.ts`, not as numbers in the component —
+geometry that nothing checks will drift. The footer sat 3 px above the day bar for
+a while and looked like it rested on it: the work-location selector is 24 px tall,
+not the 16 of a line of text, so the row ends 8 px lower than it looks in the
+source. `widget-size.test.ts` does that arithmetic now.
 
-### Der Balken zeichnet den Tag, nicht einen Bruchteil
+Expanding happens via the chevron next to the number or a double click on the
+card. The hint line ("no connection") sits in the gap the composition leaves
+between number and buttons and therefore costs no height.
 
-Der Balken zeigt den **Tagesverlauf**: Arbeitsabschnitte grün, Pausen amber, der
-Rest bis zum frühestmöglichen Feierabend transparent — in echter zeitlicher
-Reihenfolge.
+### The bar draws the day, not a fraction
 
-Vorher war es gearbeitete Zeit gegen das Soll. Auf dieser Achse hat eine Pause
-**keine Breite**, denn sie ist genau die Zeit, die dort nicht zählt: ein Tag mit
-Pause sah aus wie ein Tag ohne. Das ist ein Problem, wenn das Gesetz eine Pause
-vorschreibt und diese App das ist, wo man nachschaut.
+The bar shows the **course of the day**: work green, breaks amber, the rest until
+the earliest possible end of day transparent — in the order things actually
+happened.
 
-**Die Spanne ist Soll plus Pausen**, denn eine Pause schiebt den Feierabend um
-ihre eigene Länge nach hinten. Läuft der Tag darüber hinaus — Überstunden, Soll
-längst erfüllt — ist die Spanne schlicht alles Geschehene, der Balken füllt sich
-und hört auf, statt überzulaufen. Was man beim Lesen wissen sollte: eine längere
-Pause streckt den ganzen Balken, weil sie die Ziellinie wirklich verschiebt.
+It used to be worked time against the target. On that axis a break has **no
+width**, because it is precisely the time that does not count there: a day with a
+break looked like a day without one. That is a problem when the law requires a
+break and this app is where people look.
 
-Nur Längen und Reihenfolge, nie Uhrzeiten. Zwei Records mit einer Lücke
-dazwischen (aus- und wieder eingestempelt, ohne Pause zu nehmen) zeichnen
-aneinander — das Widget beantwortet „wie viel gearbeitet, wie viel pausiert",
-es rekonstruiert keinen Stundenzettel.
+**The span is target plus breaks**, because a break pushes the end of the day back
+by its own length. When the day runs past that — overtime, target long met — the
+span is simply everything that happened: the bar fills and stops rather than
+overflowing. Worth knowing while reading it: a longer break stretches the whole
+bar, because it really does move the finish line.
 
-`attendanceShiftsConnection` sichert **keine Reihenfolge** zu, also sortiert der
-Store nach `clockInWithSeconds` + `clockInOffset` über `reconstructInstant`. Ein
-Record, dessen Start sich nicht lesen lässt, behält seine Länge und geht ans
-Ende: sein Beitrag zur Summe stimmt so oder so, nur seine Position ist geraten,
-und das Tagesende ist die Vermutung, die am wenigsten stört.
+Lengths and order only, never clock times. Two records with a gap between them
+(clocked out and back in without taking a break) are drawn adjacent — the widget
+answers "how much worked, how much paused", it does not reconstruct a timesheet.
 
-**Amber bleibt amber**, auch wenn die Pause längst vorbei ist und wieder
-gearbeitet wird. Es ist überall sonst in der App die Pausenfarbe; eine, die nach
-Ende der Pause wechselt, wäre eine zweite Vokabel für dieselbe Sache.
+`attendanceShiftsConnection` guarantees **no order**, so the store sorts by
+`clockInWithSeconds` + `clockInOffset` through `reconstructInstant`. A record
+whose start cannot be read keeps its length and goes last: its contribution to the
+total is right either way, only its position is a guess, and the end of the day is
+the guess that disturbs least.
 
-### Die Pausensumme
+**Amber stays amber**, even once the break is over and work has resumed. It is the
+break colour everywhere else in the app; one that changed after the break ended
+would be a second word for the same thing.
 
-Rechts in der Fußzeile steht „Pause HH:MM" — die Ecke, die frei wurde, als die
-laufende Pausenzeit nach oben in den Timer wanderte. Sie kostet damit **keine
-Höhe**, was der einzige Grund ist, warum eine zweite Zahl dort überhaupt
-tragbar ist.
+### During a break the timer shows the break
 
-Im Tray-Menü steht dieselbe Angabe als eigene Zeile direkt unter der
-Statuszeile. Eigene Zeile und kein weiterer Zusatz an der Statuszeile: die trägt
-schon Zustand, Zeit, Pausenname und Aktualität, und die eine Zahl, für die
-jemand dieses Menü öffnet, sollte nicht das fünfte Element einer Reihe sein.
+The large number is the **duration of the break**, not the day's total. The dot
+and the bar are amber, the status line names the break ("Pause · Mittagspause"),
+and the day's total moves up next to the status ("Gearbeitet 07:23").
 
-An einem Tag ohne Pause steht dort **nichts** statt „0:00" — eine Null wäre
-jeden Vormittag eine Erinnerung, um die niemand gebeten hat.
+It used to be the day's total — which stands still during a break. A large number
+that has stopped moving reads as a hung app, not as an interrupted shift; the
+break duration was exiled to a footer so quiet that nobody connected the two.
 
-> **Keine gesetzliche Schwelle eingebaut.** Nach ArbZG §4 hängt die Mindestpause
-> an der Arbeitszeit (über 6 h → 30 min, über 9 h → 45 min), Tarif- und
-> Betriebsvereinbarungen weichen ab, andere Länder ohnehin. Eine Schwelle fest
-> zu verdrahten hieße, dass diese App eine Rechtsaussage macht — auf einer
-> Oberfläche, die an eine echte Zeiterfassung schreibt. Sie zeigt die Zahl; die
-> Bewertung bleibt beim Menschen.
+**The tray has always done it this way** (`primaryMs` in `tray-menu.ts`, with the
+comment "showing it counting up would be a lie"). The widget was the only surface
+that disagreed.
 
-### Während einer Pause zeigt der Timer die Pause
+The word "Pause" precedes the name rather than the name standing alone: the amber
+dot already says paused, but a break called "Arztbesuch" would leave colour as the
+only carrier of that information, and colour must never be the only carrier.
 
-Die große Zahl ist in der Pause die **Dauer der Pause**, nicht die Tagessumme.
-Der Punkt und der Balken sind amber, die Statuszeile nennt die Pause beim Namen
-(„Pause · Mittagspause"), und die Tagessumme rückt nach oben neben den Status
-(„Gearbeitet 07:23").
+On resume the day's total takes the number back and keeps running.
 
-Vorher stand dort die Tagessumme — die während einer Pause stillsteht. Eine
-große Zahl, die sich nicht mehr bewegt, liest sich als hängengebliebene App,
-nicht als unterbrochene Schicht; die Pausendauer war in eine Fußzeile verbannt,
-die so leise war, dass niemand die beiden verband.
+### The break total
 
-**Der Tray macht das seit jeher so** (`primaryMs` in `tray-menu.ts`, mit dem
-Kommentar „showing it counting up would be a lie"). Das Widget war die einzige
-Oberfläche, die widersprach.
+The footer's right-hand corner reads "Pause HH:MM" — the corner that came free
+when the running break time moved up into the timer. It therefore costs **no
+height**, which is the only reason a second number is bearable there.
 
-Das Wort „Pause" steht vor dem Namen und nicht nur der Name da: der amber Punkt
-sagt bereits „pausiert", aber eine Pause namens „Arztbesuch" ließe damit die
-Farbe als einzigen Träger dieser Information zurück, und Farbe darf nie der
-einzige Träger sein.
+The tray menu shows the same figure as its own line directly under the status
+line. Its own line, and no further addition to the status line: that one already
+carries state, time, break name and freshness, and the one number somebody opens
+this menu for should not be the fifth element of a row.
 
-Auf „Fortsetzen" übernimmt die Tagessumme die Zahl wieder und läuft weiter.
+On a day without a break it shows **nothing** rather than "0:00" — a zero would be
+a reminder every morning that nobody asked for.
 
-**Farbcodierung:** grün = eingestempelt, amber = Pause, neutral = ausgestempelt.
+> **No statutory threshold is built in.** Under German ArbZG §4 the minimum break
+> depends on hours worked (over 6 h → 30 min, over 9 h → 45 min); collective and
+> works agreements differ, other countries more so. Hard-wiring a threshold would
+> mean this app makes a legal statement — on a surface that writes to a real
+> timesheet. It shows the number; the judgement stays with the person.
 
-**Stack:** React + TypeScript, Tailwind v4, shadcn/ui im **Nova**-Stil. Genutzte
-Komponenten: Button, Tooltip, Badge, Sonner.
+### Target time
 
-> **Pausentyp und Arbeitsort öffnen ein NATIVES Menü, kein Dropdown im DOM.**
-> In einem Fenster von 321 × 179 wird ein im Dokument gezeichnetes Menü
-> abgeschnitten — die Pausenliste brach nach zwei Einträgen ab, der Rest lag
-> hinter einer Scrollleiste. Keine Fenstergröße repariert das: die Liste ist so
-> lang, wie ein Arbeitgeber sie konfiguriert hat, und die Fenstergröße liegt
-> durch die Animation fest. Ein natives Menü ist ein Fenster der Plattform: es
-> wird vom Bildschirm begrenzt statt von unserem Fenster und klappt in
-> Randnähe von selbst um. Der Renderer schickt Zeilen und einen Ankerpunkt in
-> Fensterkoordinaten, der Main-Prozess öffnet das Menü und antwortet mit der
-> Wahl — oder mit `null`, wenn weggeklickt wurde.
-
-Der Arbeitsort merkt sich die letzte Wahl und wird beim Einstempeln als
-`locationType` + `workplaceId` mitgeschickt.
-
-### Soll-Zeit und Fortschrittsbalken — geklärt
-
-Die Tages-Soll-Zeit kommt aus `attendanceEstimatedTimes`:
+The day's target comes from `attendanceEstimatedTimes`:
 
 ```graphql
 query EstimatedTime($id: Int!, $d: ISO8601Date!) {
@@ -722,7 +621,7 @@ query EstimatedTime($id: Int!, $d: ISO8601Date!) {
 }
 ```
 
-Reale Antwort für den 2026-08-12:
+A real answer:
 
 ```jsonc
 { "date": "2026-08-12", "expectedMinutes": 480, "minutes": 480,
@@ -730,470 +629,225 @@ Reale Antwort für den 2026-08-12:
   "contractMinutes": 720, "timeUnit": "minute", "source": "contract_hours" }
 ```
 
-`expectedMinutes: 480` ist die „Verbleibende Zeit 08:00" des Web-Widgets,
-gegengeprüft mit dem Stundenzettel („0h 00m / 8h 00m" für den 12.8.).
+`expectedMinutes: 480` is the web widget's "remaining 08:00", cross-checked
+against the timesheet.
 
-**Nicht `contractMinutes` verwenden** — das sind 720 und meint etwas anderes.
-**Nicht `minutes` aus dieser Query als Ist-Zeit verwenden** — der Wert stand bei
-0 gearbeiteten Minuten ebenfalls auf 480. Die Ist-Zeit wird weiterhin aus der
-Summe über `shift.minutes` des Tages plus laufender Zeit gebildet.
+**Do not use `contractMinutes`** — that is 720 and means something else. **Do not
+use `minutes` from this query as time worked** — it also read 480 with zero
+minutes worked. Time worked stays the sum over `shift.minutes` plus running time.
 
-An freien Tagen bzw. bei Abwesenheit ist mit `expectedMinutes: 0` oder einem
-leeren `nodes`-Array zu rechnen; dann entfällt der Soll-Vergleich und die Karte
-zeigt reine Ist-Zeit.
+On days off or during absence, expect `expectedMinutes: 0` or an empty `nodes`
+array; the target comparison then falls away and the card shows plain time worked.
 
-**Der Balken entfällt dann ganz, er wird nicht leer gezeichnet.** Ein leerer
-Balken ist nicht neutral — er behauptet „0 % von etwas", und dieses Etwas gibt
-es an einem Tag ohne Soll nicht. Dieselbe Regel, aus der auch der Timer vor der
-ersten Antwort ein Strich ist und keine 0:00:00. Das gilt genauso vor dem ersten
-Snapshot: ohne bekannte Ist-Zeit gibt es nichts, wovon der Balken ein Bruchteil
-wäre.
+**The bar disappears in that case rather than being drawn empty.** An empty bar is
+not neutral — it claims "0 % of something", and on a day without a target that
+something does not exist. Same rule as the timer being a dash rather than 0:00:00
+before the first answer.
 
-**Über dem Soll wechselt die Zeile von „Verbleibende Zeit 00:00" zu
-„Soll erfüllt · +H:MM".** Die alte Angabe stimmte, nannte aber das
-Uninteressante: nicht, dass nichts mehr übrig ist, sondern wie viel schon
-darüber. Der Wechsel hängt an den *gerundeten* Überminuten, damit die Zeile nie
-im Widerspruch zu dem steht, was sie druckt — eine Zehntelminute über dem Soll
-zeigt weiterhin „Verbleibende Zeit 00:00" statt ein „+0:00", das wie ein Fehler
-aussieht.
+**Past the target the line changes from "Verbleibende Zeit 00:00" to "Soll erfüllt
+· +H:MM".** The old wording was true but named the uninteresting part: not that
+nothing is left, but how much is already beyond. The switch keys off the *rounded*
+overtime so the line never contradicts what it prints — a tenth of a minute over
+still shows "00:00" rather than a "+0:00" that looks like a bug.
 
-## Tray
+### Work location
 
-**macOS:** Template-Icon (passt sich Light/Dark an) plus `tray.setTitle()` mit dem
-laufenden Timer im Menubar.
+The selector shows the **open shift's actual location**, not the stored
+preference. The preference only says what the *next* clock-in would use, and the
+two come apart as soon as somebody clocks in from the web or the phone. The first
+version showed "Büro" for a shift running as "Mobiles Arbeiten": an intention
+presented as a fact. The preference is the fallback only when the API gives no
+location for the open shift — then there is nothing truer to show.
 
-**Windows:** `setTitle` existiert dort nicht. Stattdessen farbcodiertes Icon +
-Tooltip mit der Zeit; im Kontextmenü steht die Zeit als erster, deaktivierter
-Eintrag. **Der Live-Timer im Menubar bleibt ein macOS-Feature.**
+This is also why the break state carries `locationType`: a break does not pick a
+new location, it inherits the interrupted shift's.
 
-**Kontextmenü:** Ein-/Ausstempeln, Pause (Untermenü mit den Typen) bzw.
-Fortsetzen, Fenster zeigen/verstecken, Einstellungen, Beenden. Die Aktionen
-funktionieren, ohne das Fenster zu öffnen.
+**The labels are Factorial's own words**, not a translation of ours.
+`work_from_home` is **"Mobiles Arbeiten"** there, not "Homeoffice" — anyone
+putting widget and web side by side should not have to translate first.
 
-Fenster schließen blendet aus statt zu beenden; beendet wird nur über das Tray.
+> **Break type and work location open a NATIVE menu, not a DOM dropdown.** In a
+> 321 × 179 window a menu drawn in the document gets clipped — the break list cut
+> off after two entries with the rest behind a scrollbar. No window size fixes
+> that: the list is as long as an employer configured it, and the window size is
+> fixed by the animation. A native menu is a window of the platform: bounded by
+> the screen rather than by ours, and it flips near an edge by itself. The
+> renderer sends rows and an anchor in window coordinates, the main process opens
+> the menu and answers with the choice — or `null` if it was dismissed.
 
-## Einstellungen
+### Window ≠ card
 
-- Autostart beim Login (Standard: an, `app.setLoginItemSettings`)
-- Always-on-Top an/aus
-- Aufklappen: Nach rechts (Vorgabe) / Nach links
-- Erscheinungsbild: Systemvorgabe (Standard) / Hell / Dunkel
-- Abmelden (Partition-Cookies löschen)
+The window is **larger than the visible card** and transparent around it. The
+reason is the animation: only the main process can change a `BrowserWindow`'s
+size, frame by frame across the IPC boundary, with nothing interpolating in
+between.
 
-Persistiert als JSON in `app.getPath('userData')`.
+So the window stays put and only the `div` inside it grows, as a CSS transition on
+the compositor. The remainder is headroom for the card to grow into.
 
-### Zwei Zustände, keine Größen
+The price is the invisible margin. It would swallow clicks meant for the desktop
+behind — on a window that is always on top. So the main process makes the window
+click-through (`setIgnoreMouseEvents(true, { forward: true })`) and the renderer
+asks for clicks back once the pointer is over the card.
 
-Eine Karte, zwei Zustände:
+> **On Windows that forwarding does not arrive.** Measured against a bare
+> transparent window: 29 `mousemove` while interactive, **0** while forwarding,
+> focused or not. Without a substitute the card goes click-through once and never
+> comes back — a widget nobody can operate. So on Windows the main process samples
+> the cursor every 32 ms while the window is click-through and pushes the position
+> to the renderer, which decides exactly as it does from a real move.
 
-| | | |
-|---|---|---|
-| eingeklappt | 156 × 44 | Punkt · Zahl · Tagesbalken |
-| aufgeklappt | 300 × 162 | + Status · Restzeit · Buttons · Arbeitsort · Pausensumme |
+### Motion
 
-**Der aufgeklappte Zustand ist kein Anblick, sondern ein Handlungsmoment.** Man
-klappt auf, um Pause zu drücken oder auszustempeln, und es schließt sich wieder.
-Deshalb zeigt er alles auf einmal, statt jemanden zweimal aufklappen zu lassen —
-und deshalb wird er auch nicht gemerkt: der eingeklappte Zustand ist der, in dem
-der Tag verbracht wird.
+The card grows and shrinks on `--ease-out`, the same curve as everything else.
+Open, 520 ms; close, 420 ms — arriving may take its time, leaving should not keep
+anyone waiting.
 
-Vorher waren es drei feste Größen mit einer Einstellung im Tray. Die mittlere
-(„Kompakt“) zeigte nachweislich nichts, was die aufgeklappte Karte nicht auch
-zeigt — sie konnte die Pausensumme nicht einmal tragen, ohne überzulaufen. Und
-die größte verteilte 37 px Luft, die sie nicht brauchte. Übrig bleibt eine Karte
-ganz ohne Einstellung: 300 × 162 gegen die früheren 340 × 224, also **36 %
-weniger Fläche bei gleichem Inhalt**.
+It used to be a sampled damped oscillation, 41 `linear()` stops per direction,
+overshooting and settling back. It was retuned twice and got louder both times
+**without anyone touching it**: the overshoot is a fraction of the distance
+travelled, and the card grew. The same 12.6 % that threw it 10 px past the target
+when it expanded to 126 px threw it 15 px past when it expanded to 162 px.
 
-Die Zeilenpositionen stehen in `widget-size.ts`, nicht als Zahlen in der
-Komponente — Geometrie, die nichts prüft, driftet. Die Fußzeile saß eine Weile
-3 px über dem Tagesbalken und wirkte, als läge sie darauf: der
-Arbeitsort-Selector ist 24 px hoch, nicht die 16 einer Textzeile, also endet die
-Zeile 8 px tiefer, als sie im Quelltext aussieht. `widget-size.test.ts` rechnet
-das jetzt nach.
+Without the overshoot, nothing is left that `--ease-out` did not already do. Gone
+with the springs: 400 characters of generated easing, the headroom the window had
+to reserve for a peak, and the standing coupling between *how big the card is* and
+*how loudly it moves*.
 
-Aufgeklappt wird über den Pfeil neben der Zahl oder per Doppelklick auf die
-Karte. Die Hinweiszeile („Keine Verbindung“) sitzt in der Lücke, die die
-Komposition ohnehin zwischen Zahl und Buttons lässt, und kostet damit keine
-Höhe.
+### Appearance
 
-#### Fenster ≠ Karte
+The stored value is put on `nativeTheme.themeSource` — that is the entire
+mechanism. Chromium reports it to every renderer of this app as
+`prefers-color-scheme`, and `styles.css` defines its dark tokens under exactly
+that media query. There is therefore **no** theme state in React, no provider and
+no IPC channel for it: nothing that could fall out of step with the setting.
 
-Das Fenster ist **größer als die sichtbare Karte** und drumherum durchsichtig.
-Der Grund ist die Animation: eine `BrowserWindow`-Größe ändert nur der
-Main-Prozess mit `setSize()`, Frame für Frame über die IPC-Grenze, und dort
-interpoliert nichts. Eine Feder wäre da ohnehin unmöglich — ihr Überschwinger
-bräuchte Fenstergrößen jenseits des Ziels.
+`ThemeSetting`'s three values are exactly `themeSource`'s three, so the wiring
+needs no translation table — and both the settings store and the IPC layer check
+the value against the whitelist, because `themeSource` throws on anything else and
+a hand-edited settings file must not stop the next start.
 
-Also bleibt das Fenster stehen und nur das `div` darin wächst, als
-CSS-Transition auf dem Compositor. Es hält den Platz vor, in den der
-Überschwinger geht: 13 % über die Zielgröße, also **321 × 179** für eine Karte,
-die bei 300 × 162 zur Ruhe kommt — die Federspitze plus zwei Pixel.
+> **The dark theme used to be unreachable.** `styles.css` had shadcn's default
+> `@custom-variant dark (&:is(.dark *))` and put its tokens under `.dark` — a class
+> nobody ever set. `next-themes` was installed but only `sonner.tsx` imported it,
+> and there was no `ThemeProvider`. The dark colours were all there and were never
+> rendered. Moving to the media query fixes it at the root: the class needed
+> somebody to set it, the media query needs nobody.
 
-> **Die zwei Pixel sind kein Sicherheitsaufschlag ins Blaue.** Genau die Spitze
-> zu reservieren ließ 0,13 px Luft, und Subpixel-Rundung nimmt sich die. Was sie
-> sich nahm, war der Tagesbalken: der sitzt an der untersten Kante der Karte,
-> verschwand auf dem vollsten Punkt des Gummiband-Effekts und kam beim
-> Einschwingen zurück. Ohne diesen Spielraum wird die Spitze
-abgeschnitten und die Feder ist lautlos weg.
+**Colour coding:** green clocked in, amber on a break, neutral clocked out.
 
-Der Preis ist der unsichtbare Rand. Er würde Klicks schlucken, die dem Desktop
-dahinter galten — bei einem Fenster, das immer im Vordergrund liegt. Deshalb
-macht der Main-Prozess das Fenster durchlässig (`setIgnoreMouseEvents(true,
-{ forward: true })`), und der Renderer fordert die Klicks zurück, sobald der
-Zeiger über der Karte ist.
-
-#### Keine Feder
-
-Die Karte wächst und schrumpft auf `--ease-out`, derselben Kurve wie alles andere
-in der App. Auf, 520 ms; zu, 420 ms — ankommen darf sich Zeit nehmen, gehen soll
-niemanden warten lassen.
-
-Vorher war es eine abgetastete gedämpfte Schwingung, 41 `linear()`-Stützstellen
-je Richtung, die über das Ziel hinausschoss und zurückpendelte. Sie wurde zweimal
-nachjustiert und wurde beide Male lauter, **ohne dass jemand daran drehte**: der
-Überschwinger ist ein Anteil der zurückgelegten Strecke, und die Karte wuchs.
-Dieselben 12,6 %, die sie 10 px über das Ziel warfen, als sie auf 126 px
-aufklappte, warfen sie 15 px darüber, als sie auf 162 px aufklappte.
-
-Ohne den Ausschlag bleibt nichts übrig, was `--ease-out` nicht schon täte. Mit
-den Federn gingen: 400 Zeichen erzeugte Easing, der Spielraum, den das Fenster
-für eine Spitze vorhalten musste, die Rechnung, die den Unterschuss des Rückwegs
-von der eingeklappten Zahl freihielt — und die stehende Kopplung zwischen
-*wie groß die Karte ist* und *wie laut sie sich bewegt*.
-
-### Während einer Pause zeigt der Timer die Pause
-
-Die große Zahl ist in der Pause die **Dauer der Pause**, nicht die Tagessumme.
-Der Punkt und der Balken sind amber, die Statuszeile nennt die Pause beim Namen
-(„Pause · Mittagspause"), und die Tagessumme rückt nach oben neben den Status
-(„Gearbeitet 07:23").
-
-Vorher stand dort die Tagessumme — die während einer Pause stillsteht. Eine
-große Zahl, die sich nicht mehr bewegt, liest sich als hängengebliebene App,
-nicht als unterbrochene Schicht; die Pausendauer war in eine Fußzeile verbannt,
-die so leise war, dass niemand die beiden verband.
-
-**Der Tray macht das seit jeher so** (`primaryMs` in `tray-menu.ts`, mit dem
-Kommentar „showing it counting up would be a lie"). Das Widget war die einzige
-Oberfläche, die widersprach.
-
-Das Wort „Pause" steht vor dem Namen und nicht nur der Name da: der amber Punkt
-sagt bereits „pausiert", aber eine Pause namens „Arztbesuch" ließe damit die
-Farbe als einzigen Träger dieser Information zurück, und Farbe darf nie der
-einzige Träger sein.
-
-Auf „Fortsetzen" übernimmt die Tagessumme die Zahl wieder und läuft weiter.
-
-**Farbcodierung:** grün = eingestempelt, amber = Pause, neutral = ausgestempelt.
-
-**Stack:** React + TypeScript, Tailwind v4, shadcn/ui im **Nova**-Stil. Genutzte
-Komponenten: Button, Tooltip, Badge, Sonner.
-
-> **Pausentyp und Arbeitsort öffnen ein NATIVES Menü, kein Dropdown im DOM.**
-> In einem Fenster von 321 × 179 wird ein im Dokument gezeichnetes Menü
-> abgeschnitten — die Pausenliste brach nach zwei Einträgen ab, der Rest lag
-> hinter einer Scrollleiste. Keine Fenstergröße repariert das: die Liste ist so
-> lang, wie ein Arbeitgeber sie konfiguriert hat, und die Fenstergröße liegt
-> durch die Animation fest. Ein natives Menü ist ein Fenster der Plattform: es
-> wird vom Bildschirm begrenzt statt von unserem Fenster und klappt in
-> Randnähe von selbst um. Der Renderer schickt Zeilen und einen Ankerpunkt in
-> Fensterkoordinaten, der Main-Prozess öffnet das Menü und antwortet mit der
-> Wahl — oder mit `null`, wenn weggeklickt wurde.
-
-Der Arbeitsort merkt sich die letzte Wahl und wird beim Einstempeln als
-`locationType` + `workplaceId` mitgeschickt.
-
-### Soll-Zeit und Fortschrittsbalken — geklärt
-
-Die Tages-Soll-Zeit kommt aus `attendanceEstimatedTimes`:
-
-```graphql
-query EstimatedTime($id: Int!, $d: ISO8601Date!) {
-  attendance { employee(id: $id) {
-    attendanceEstimatedTimesConnection(startOn: $d, endOn: $d) { nodes {
-      date expectedMinutes minutes regularMinutes
-      overtimeMinutes absencesMinutes contractMinutes source
-    } }
-  } }
-}
-```
-
-Reale Antwort für den 2026-08-12:
-
-```jsonc
-{ "date": "2026-08-12", "expectedMinutes": 480, "minutes": 480,
-  "regularMinutes": 480, "overtimeMinutes": 0, "absencesMinutes": 0,
-  "contractMinutes": 720, "timeUnit": "minute", "source": "contract_hours" }
-```
-
-`expectedMinutes: 480` ist die „Verbleibende Zeit 08:00" des Web-Widgets,
-gegengeprüft mit dem Stundenzettel („0h 00m / 8h 00m" für den 12.8.).
-
-**Nicht `contractMinutes` verwenden** — das sind 720 und meint etwas anderes.
-**Nicht `minutes` aus dieser Query als Ist-Zeit verwenden** — der Wert stand bei
-0 gearbeiteten Minuten ebenfalls auf 480. Die Ist-Zeit wird weiterhin aus der
-Summe über `shift.minutes` des Tages plus laufender Zeit gebildet.
-
-An freien Tagen bzw. bei Abwesenheit ist mit `expectedMinutes: 0` oder einem
-leeren `nodes`-Array zu rechnen; dann entfällt der Soll-Vergleich und die Karte
-zeigt reine Ist-Zeit.
-
-**Der Balken entfällt dann ganz, er wird nicht leer gezeichnet.** Ein leerer
-Balken ist nicht neutral — er behauptet „0 % von etwas", und dieses Etwas gibt
-es an einem Tag ohne Soll nicht. Dieselbe Regel, aus der auch der Timer vor der
-ersten Antwort ein Strich ist und keine 0:00:00. Das gilt genauso vor dem ersten
-Snapshot: ohne bekannte Ist-Zeit gibt es nichts, wovon der Balken ein Bruchteil
-wäre.
-
-**Über dem Soll wechselt die Zeile von „Verbleibende Zeit 00:00" zu
-„Soll erfüllt · +H:MM".** Die alte Angabe stimmte, nannte aber das
-Uninteressante: nicht, dass nichts mehr übrig ist, sondern wie viel schon
-darüber. Der Wechsel hängt an den *gerundeten* Überminuten, damit die Zeile nie
-im Widerspruch zu dem steht, was sie druckt — eine Zehntelminute über dem Soll
-zeigt weiterhin „Verbleibende Zeit 00:00" statt ein „+0:00", das wie ein Fehler
-aussieht.
+**Stack:** React and TypeScript, Tailwind v4, shadcn/ui in the **Nova** style.
 
 ## Tray
 
-**macOS:** Template-Icon (passt sich Light/Dark an) plus `tray.setTitle()` mit dem
-laufenden Timer im Menubar.
+The tray is where the app lives — there is no taskbar button and no dock icon, and
+closing the widget only hides it.
 
-**Windows:** `setTitle` existiert dort nicht. Stattdessen farbcodiertes Icon +
-Tooltip mit der Zeit; im Kontextmenü steht die Zeit als erster, deaktivierter
-Eintrag. **Der Live-Timer im Menubar bleibt ein macOS-Feature.**
+**macOS:** a template icon (adapting to light and dark) plus `tray.setTitle()`
+with the running timer in the menu bar.
 
-**Kontextmenü:** Ein-/Ausstempeln, Pause (Untermenü mit den Typen) bzw.
-Fortsetzen, Fenster zeigen/verstecken, Einstellungen, Beenden. Die Aktionen
-funktionieren, ohne das Fenster zu öffnen.
+**Windows:** `setTitle` does not exist there. Instead a colour-coded icon, a
+tooltip with the time, and the time as the first, disabled entry of the context
+menu. **The live timer in the menu bar stays a macOS feature.**
 
-Fenster schließen blendet aus statt zu beenden; beendet wird nur über das Tray.
+**Context menu:** clock in and out, break (submenu of types) or resume, show or
+hide the window, refresh, settings, quit. The actions work without opening the
+window.
 
-## Einstellungen
+## Settings
 
-- Autostart beim Login (Standard: an, `app.setLoginItemSettings`)
-- Always-on-Top an/aus
-- Aufklappen: Nach rechts (Vorgabe) / Nach links
-- Erscheinungsbild: Systemvorgabe (Standard) / Hell / Dunkel
-- Abmelden (Partition-Cookies löschen)
+- Start at login (default on)
+- Always on top
+- Expand direction: right (default) or left
+- Appearance: system (default), light, dark
+- Check for updates
+- Sign out (clears the partition's cookies)
 
-Persistiert als JSON in `app.getPath('userData')`.
+Persisted as JSON in `app.getPath('userData')`. The tray submenu is the only
+settings surface; the card is 300 px wide and shows time, not configuration.
 
-### Zwei Zustände, keine Größen
+## Updates
 
-Eine Karte, zwei Zustände:
+`electron-updater` against the GitHub releases of this repository. Three rules,
+expressed as testable arithmetic in `update-policy.ts`:
 
-| | | |
-|---|---|---|
-| eingeklappt | 156 × 44 | Punkt · Zahl · Tagesbalken |
-| aufgeklappt | 300 × 162 | + Status · Restzeit · Buttons · Arbeitsort · Pausensumme |
+1. **Nothing downloads unasked.** `autoDownload` is off.
+2. **Nothing restarts a running shift.** A restart mid-shift is a timer that stops
+   being watched, which is the failure this app exists to avoid. The prompt is
+   gated on the attendance state, and `unknown` counts as a running shift — not
+   yet knowing is not the same as knowing nobody is clocked in. While clocked in
+   the update is staged and applied on the next quit.
+3. **Nothing pretends.** The portable Windows build cannot replace itself: it
+   unpacks to `%TEMP%` on every start and the file the user keeps is elsewhere. It
+   checks anyway and offers the download page.
 
-**Der aufgeklappte Zustand ist kein Anblick, sondern ein Handlungsmoment.** Man
-klappt auf, um Pause zu drücken oder auszustempeln, und es schließt sich wieder.
-Deshalb zeigt er alles auf einmal, statt jemanden zweimal aufklappen zu lassen —
-und deshalb wird er auch nicht gemerkt: der eingeklappte Zustand ist der, in dem
-der Tag verbracht wird.
+Two build-configuration pieces are easy to get wrong. `publish:` in
+`electron-builder.yml` is not an upload target — it is what makes `app-update.yml`
+exist inside the package, and without it there is no feed at all. And `latest.yml`
+has to be among the release assets, because that file *is* the feed.
 
-Vorher waren es drei feste Größen mit einer Einstellung im Tray. Die mittlere
-(„Kompakt“) zeigte nachweislich nichts, was die aufgeklappte Karte nicht auch
-zeigt — sie konnte die Pausensumme nicht einmal tragen, ohne überzulaufen. Und
-die größte verteilte 37 px Luft, die sie nicht brauchte. Übrig bleibt eine Karte
-ganz ohne Einstellung: 300 × 162 gegen die früheren 340 × 224, also **36 %
-weniger Fläche bei gleichem Inhalt**.
+`verifyUpdateCodeSignature` is off on Windows: electron-updater compares the
+download's signature against the running app's, and these builds are unsigned, so
+the check can only fail. It should be turned back on the day there is a
+certificate.
 
-Die Zeilenpositionen stehen in `widget-size.ts`, nicht als Zahlen in der
-Komponente — Geometrie, die nichts prüft, driftet. Die Fußzeile saß eine Weile
-3 px über dem Tagesbalken und wirkte, als läge sie darauf: der
-Arbeitsort-Selector ist 24 px hoch, nicht die 16 einer Textzeile, also endet die
-Zeile 8 px tiefer, als sie im Quelltext aussieht. `widget-size.test.ts` rechnet
-das jetzt nach.
+## Platform differences
 
-Aufgeklappt wird über den Pfeil neben der Zahl oder per Doppelklick auf die
-Karte. Die Hinweiszeile („Keine Verbindung“) sitzt in der Lücke, die die
-Komposition ohnehin zwischen Zahl und Buttons lässt, und kostet damit keine
-Höhe.
+The app runs on macOS and Windows from one codebase. Every place that behaves
+differently carries a `PLATFORM:` comment, so `grep -rn "PLATFORM:" src/` finds
+them all. The substantive ones:
 
-#### Fenster ≠ Karte
+| Topic | Difference |
+|---|---|
+| Tray title | `tray.setTitle()` is macOS-only; Windows uses tooltip, colour-coded icon and a disabled menu entry |
+| Tray icon | macOS: monochrome template PNG, tinted by the system. Windows: coloured `.ico` at 16/32/48 px |
+| Tray visibility | Windows 11 hides new tray icons behind the overflow chevron until the user drags one out |
+| Click-through | `setIgnoreMouseEvents(… { forward: true })` delivers no mouse moves on Windows; a cursor poll in the main process stands in |
+| Transparency | macOS draws rounded corners and a soft shadow itself; Windows needs a fully transparent background colour |
+| Full screen | `visibleOnFullScreen` is macOS-only; on Windows `alwaysOnTop` alone carries it |
+| Autostart | macOS uses the Service Management API without a path; Windows writes a Run-key entry that **must** name the executable — and for the portable build that path comes from `PORTABLE_EXECUTABLE_FILE`, not `execPath`, which points into `%TEMP%` |
+| Single instance | Required on Windows: without the lock every launch starts another full instance with its own tray icon |
+| Window position | Multi-monitor with mixed DPI behaves differently; stored positions are validated against the attached displays on start and on every display change |
+| Packaging | DMG + ZIP against NSIS installer + portable exe |
 
-Das Fenster ist **größer als die sichtbare Karte** und drumherum durchsichtig.
-Der Grund ist die Animation: eine `BrowserWindow`-Größe ändert nur der
-Main-Prozess mit `setSize()`, Frame für Frame über die IPC-Grenze, und dort
-interpoliert nichts. Eine Feder wäre da ohnehin unmöglich — ihr Überschwinger
-bräuchte Fenstergrößen jenseits des Ziels.
-
-Also bleibt das Fenster stehen und nur das `div` darin wächst, als
-CSS-Transition auf dem Compositor. Es hält den Platz vor, in den der
-Überschwinger geht: 13 % über die Zielgröße, also **321 × 179** für eine Karte,
-die bei 300 × 162 zur Ruhe kommt — die Federspitze plus zwei Pixel.
-
-> **Die zwei Pixel sind kein Sicherheitsaufschlag ins Blaue.** Genau die Spitze
-> zu reservieren ließ 0,13 px Luft, und Subpixel-Rundung nimmt sich die. Was sie
-> sich nahm, war der Tagesbalken: der sitzt an der untersten Kante der Karte,
-> verschwand auf dem vollsten Punkt des Gummiband-Effekts und kam beim
-> Einschwingen zurück. Ohne diesen Spielraum wird die Spitze
-abgeschnitten und die Feder ist lautlos weg.
-
-Der Preis ist der unsichtbare Rand. Er würde Klicks schlucken, die dem Desktop
-dahinter galten — bei einem Fenster, das immer im Vordergrund liegt. Deshalb
-macht der Main-Prozess das Fenster durchlässig (`setIgnoreMouseEvents(true,
-{ forward: true })`), und der Renderer fordert die Klicks zurück, sobald der
-Zeiger über der Karte ist.
-
-#### Die Feder
-
-Zwei Kurven, absichtlich verschieden (`--spring-out`, `--spring-back` in
-`styles.css`): ein gedämpfter Schwinger, in 33 Stützstellen als `linear()`
-ausgerechnet.
-
-Eine Feder schwingt in **beide** Richtungen über. Nach draußen heißt das größer
-als die Zielgröße — das ist der Schwung. Zurück heißt es kleiner als die
-**Ruhegröße**, und die kennt das Auge bereits; derselbe Effekt liest sich dort
-als Zucken statt als Leben. Bei Dämpfung 0,55 auf dem Rückweg tauchte die Karte
-auf 130 × 34 px durch und `overflow: hidden` schnitt die Zahl an.
-
-Deshalb: 12,6 % hinaus (520 ms), nur 8,0 % zurück über kürzere 420 ms. Die 8 %
-sind keine Geschmacksfrage — die Karte legt zwischen ihren Zuständen 118 px
-zurück, und unter der eingeklappten Zahl bleiben 11,1 px, bevor
-`overflow: hidden` sie anschneidet: 9,4 % des Wegs. Als die Karte nur 82 px
-wuchs, passten dort noch 12 %. Jedes Mal, wenn die aufgeklappte Karte seither
-gewachsen ist, hat sie dieser Zahl Platz weggenommen, und der Rückweg musste
-Schwung dafür abgeben. Die Obergrenze ist Arithmetik, keine Vorliebe. Die Deckkraft federt nie mit: ein Überschwinger unter 0 oder über 1
-wird abgeschnitten, und der Schnitt liest sich als Hänger.
-
-### Erscheinungsbild
-
-Der gespeicherte Wert wird auf `nativeTheme.themeSource` gelegt — das ist der
-ganze Mechanismus. Chromium meldet ihn jedem Renderer dieser App als
-`prefers-color-scheme`, und `styles.css` definiert seine dunklen Tokens unter
-genau dieser Media Query. Es gibt deshalb **keinen** Theme-State in React, keinen
-Provider und keinen IPC-Kanal dafür: nichts, was mit der Einstellung ausser Takt
-geraten könnte.
-
-Die drei Werte von `ThemeSetting` sind genau die drei von `themeSource`, deshalb
-braucht die Verdrahtung keine Übersetzungstabelle — und deshalb prüfen sowohl
-der Settings-Store als auch die IPC-Schicht den Wert gegen die Whitelist:
-`themeSource` wirft bei allem anderen, und eine von Hand editierte
-Einstellungsdatei darf den nächsten Start nicht verhindern.
-
-> **Vorher war das dunkle Design unerreichbar.** `styles.css` hatte die
-> shadcn-Voreinstellung `@custom-variant dark (&:is(.dark *))` und legte seine
-> Tokens unter `.dark` ab — eine Klasse, die niemand je gesetzt hat. `next-themes`
-> war installiert, aber nur `sonner.tsx` importierte es, und einen `ThemeProvider`
-> gab es nicht. Die dunklen Farben standen vollständig da und wurden nie
-> gerendert. Der Wechsel auf die Media Query behebt das an der Wurzel: die
-> Klasse musste jemand setzen, die Media Query muss niemand setzen.
-
-`themeSource` startet in jedem Prozess bei `'system'`, deshalb wendet `index.ts`
-den gespeicherten Wert einmal beim Start an — genau wie beim Login-Item. Der
-Store meldet nur *Änderungen*, und ein Start ist keine.
+The platform-dependent decisions are written to take their inputs as arguments
+rather than reading `process.platform` themselves. That is what makes the Windows
+branches testable from a Mac and vice versa.
 
 ## Testing
 
-Vitest auf die Stellen, an denen Fehler teuer sind:
+Vitest, on the places where being wrong is expensive:
 
-- Zustandsableitung aus allen `openShift`-Varianten inklusive der Grenzfälle
-- Zeitberechnung, explizit gegen das Sentinel-Datum `2000-01-01`
-- Parsing von GraphQL-Antworten: leere `errors`, gefüllte `errors`, HTTP 200 mit
-  Fehlern, 401
-- Der Client läuft gegen Fixtures aus den echten aufgezeichneten Responses
+- State derivation from every `openShift` shape, including the edge cases
+- Time reconstruction, explicitly against the sentinel date `2000-01-01`
+- Parsing GraphQL answers: empty `errors`, filled `errors`, HTTP 200 with errors,
+  401
+- The client against fixtures recorded from real responses
+- The widget's five states, rendered
+- The platform-dependent decisions, both branches
 
-Kein E2E-Login-Test — fremde Website mit 2FA.
+No end-to-end login test — somebody else's website with 2FA.
 
-## Build
+The suite needs no Electron runtime, which is why it runs on any machine and in
+CI on Linux.
 
-`electron-vite` für Dev und Build, `electron-builder` fürs Packaging.
+## Build and release
 
-- **macOS:** DMG + ZIP, arm64 (unsigniert)
-- **Windows:** NSIS-Target konfiguriert, aber nicht verifiziert
+`electron-vite` for dev and build, `electron-builder` for packaging.
 
-## Windows-Übergabe
+- **macOS:** DMG + ZIP, arm64, unsigned
+- **Windows:** NSIS installer + portable exe, x64, unsigned
 
-Die Windows-Fertigstellung übernimmt ein eigener Agent auf einer Windows-Maschine,
-**ohne Zugriff auf diesen Gesprächsverlauf**. Der gesamte Kontext muss deshalb im
-Repository liegen. Das ist ein harter Deliverable dieser Implementierung, kein
-Nice-to-have.
+Tagging `v*` builds both platforms in CI and attaches the artefacts to a GitHub
+release. The platforms build one after another so that the second adds to the
+release the first created.
 
-### Deliverable: `docs/WINDOWS.md`
+## Extensibility
 
-Wird während der Implementierung geschrieben, nicht nachträglich — jede
-plattformabhängige Entscheidung wird festgehalten, wenn sie getroffen wird.
-Inhalt:
+The cut is meant to let further Factorial features dock on:
 
-**1. Einstieg ohne Vorwissen**
-Was die App tut, wie sie aufgebaut ist, Verweis auf dieses Design-Doc, wie man
-Dev-Modus und Build startet, wo die Einstiegspunkte liegen.
+- A new operation in `factorial/operations.ts`
+- Its own store next to `attendance.ts`, if the state is independent
+- A new panel in the renderer
 
-**2. Vollständige Liste aller plattformabhängigen Stellen**
-Jede Verzweigung nach `process.platform` mit Datei, Zeile, Begründung und was auf
-Windows zu prüfen ist. Diese Liste ist maschinell nachvollziehbar zu halten: jede
-solche Stelle bekommt im Code einen `// PLATFORM:` Kommentar, damit ein `grep`
-sie alle findet und nichts stillschweigend verloren geht.
-
-**3. Die bekannten Windows-Themen im Detail**
-
-| Thema | Was auf Windows anders ist |
-|---|---|
-| Tray-Titel | `tray.setTitle()` ist macOS-only. Windows braucht Tooltip + farbcodiertes Icon + Zeit als deaktivierten Menüeintrag |
-| Tray-Icon | macOS: Template-PNG @1x/@2x, monochrom. Windows: `.ico` mit 16/32/48 px, farbig, DPI-abhängig |
-| Frameless & Transparenz | Keine macOS-Vibrancy. Abgerundete Ecken, Schatten und Resize-Verhalten unterscheiden sich; `thickFrame` und `transparent` interagieren anders |
-| Always-on-Top | Die Level-Namen sind plattformspezifisch; macOS-Panel-Level existieren so nicht |
-| Autostart | macOS `setLoginItemSettings` vs. Windows Registry-Run-Key. Im gepackten Zustand müssen `path` und `args` explizit gesetzt werden |
-| Single-Instance | Auf Windows zwingend `requestSingleInstanceLock()` plus `second-instance`-Handler, sonst startet die App mehrfach |
-| Fensterposition | Multi-Monitor mit gemischten DPI-Skalierungen verhält sich anders; gespeicherte Positionen müssen gegen aktuelle Displays validiert werden |
-| Schließen-Verhalten | Erwartungshaltung "X schließt die App" ist auf Windows stärker als auf macOS |
-| Packaging | NSIS statt DMG, andere Artefaktnamen, `appId`, Installer-Optionen |
-
-**4. Was auf macOS verifiziert wurde und was nicht**
-Explizite Trennung: was nachweislich läuft, was nur kompiliert, was
-ungetesteter Code ist. Keine impliziten Erfolgsbehauptungen.
-
-**5. Wie man die Factorial-API selbst weiter erforscht**
-Die Methode, mit der diese Spec entstanden ist, reproduzierbar dokumentiert.
-
-Die **Introspection ist der schnellere Weg** und sollte der erste Griff sein:
-In einer eingeloggten Session genügt ein direkter `fetch` aus dem Seitenkontext,
-weil die API `credentials: 'include'` cross-origin akzeptiert.
-
-```js
-const gql = async (query, variables = {}, op = 'X') =>
-  (await fetch('https://api.factorialhr.com/graphql?' + op, {
-    method: 'POST', credentials: 'include',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ operationName: op, variables, query }),
-  })).json()
-
-// Felder eines Typs auflisten:
-await gql(`query T($n:String!){ __type(name:$n){ fields {
-  name args { name } type { kind name ofType { kind name } } } } }`,
-  { n: 'AttendanceEmployee' }, 'T')
-```
-
-So wurden `attendanceEstimatedTimes.expectedMinutes`, `clockInOffset` und die
-korrigierten Mutation-Signaturen gefunden — ohne jeden Interceptor.
-
-**Zum Mitschneiden echter Requests:** `window.fetch` zu patchen bringt bei
-Factorial **nichts**, auch nicht im Main World. Die App hält eine Referenz auf
-`fetch`, die vor jedem nachträglichen Patch aufgelöst wurde; ein installierter
-Wrapper fängt null Requests. Wer echte Requests sehen muss, patcht vor dem
-Laden der App-Bundles oder nutzt die DevTools direkt. Für Feld-Discovery ist das
-aber gar nicht nötig — Introspection reicht.
-
-**6. Offene Punkte und Verdachtsmomente**
-Alles, was beim Bauen auffiel, aber nicht auf macOS entschieden werden konnte.
-
-### Regel für die Implementierung
-
-Windows-Code wird **mitgeschrieben, nicht wegabstrahiert**. Wo eine Verzweigung
-nötig ist, kommt sie sofort rein, mit `// PLATFORM:` markiert und in
-`docs/WINDOWS.md` vermerkt — auch wenn der Zweig hier nicht getestet werden kann.
-Ein leerer Windows-Pfad, der später "noch gebaut werden muss", ist schlechter als
-ein plausibler ungetesteter, weil er im Code unsichtbar ist.
-
-## Erweiterbarkeit
-
-Der Schnitt ist darauf ausgelegt, dass weitere Factorial-Features andocken:
-
-- Neue Operation in `factorial/operations.ts`
-- Eigener Store neben `attendance.ts`, falls der Zustand unabhängig ist
-- Neues Panel im Renderer
-
-Transport, Auth und Fensterverwaltung bleiben unverändert.
+Transport, auth and window management stay as they are.

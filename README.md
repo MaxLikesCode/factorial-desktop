@@ -1,97 +1,113 @@
 # Factorial Desktop
 
-![Das Widget auf dem Desktop: eingestempelt seit 8:43:11, Soll erfüllt mit +0:43, darunter Pause und Ausstempeln](docs/images/header.png)
+![The widget on the desktop: clocked in since 8:43:11, target met with +0:43, Pause and Clock out below](docs/images/header.png)
 
-Schwebendes Widget mit Tray-Icon für die Zeiterfassung in Factorial HR.
-Ein- und Ausstempeln, Pause und Fortsetzen — ohne den Browser zu öffnen.
+A small floating widget and a tray icon for tracking time in Factorial HR. Clock
+in, take a break, resume, clock out — without opening the browser.
 
-> **Stand:** entwickelt und verifiziert auf macOS (Darwin 25.5, Electron 43).
-> Am 2026-08-20 lief die erste Inbetriebnahme auf Windows 11: `npm test`,
-> `npm run package:win` und die gepackte App sind dort durch, Tray-Icon,
-> Widget und der IPC-Pfad ebenfalls — und ein Windows-Fehler kam dabei heraus
-> und wurde behoben (Mausbewegungen werden an ein klickdurchlässiges Fenster
-> nicht weitergeleitet, das Widget blieb dadurch unbedienbar). **Nicht**
-> gelaufen ist der Durchstich gegen die echte API: Ein- und Ausstempeln
-> schreibt in eine echte Arbeitszeiterfassung und ist Sache eines Menschen.
-> Wer auf Windows weiterarbeitet, liest zuerst `docs/WINDOWS.md`, Abschnitt 4a;
-> dort steht Stelle für Stelle, was belegt ist und was nur behauptet wäre.
+The card sits on top of whatever you are working on and shows the day at a
+glance: how long you have worked, how much is left, and where the breaks were.
+Click it to open the full card, click again to collapse it.
 
-## Start
+## Download
 
-    npm install
-    npm run dev
+Grab the latest build from the [releases page](https://github.com/MaxLikesCode/factorial-desktop/releases/latest).
 
-Beim ersten Start öffnet sich Factorials eigenes Login in einem eigenen Fenster.
-Danach bleibt die Sitzung in einer persistenten Electron-Session-Partition
-(`persist:factorial`) erhalten; ein zweiter Start kommt ohne Anmeldung aus.
+| Platform | File | Notes |
+|---|---|---|
+| **Windows** | `Factorial-Desktop-Setup-<version>.exe` | Installs for your user only — no admin rights needed. Adds a Start-menu entry and can start with Windows. This is the one to pick. |
+| **Windows** | `Factorial-Desktop.exe` | Runs from anywhere without installing. Handy for a USB stick or a locked-down machine. |
+| **macOS** | `Factorial-Desktop-<version>-arm64.dmg` | Apple Silicon. |
 
-Die App hat bewusst **kein** Dock- bzw. Taskleisten-Icon (gepackt über
-`LSUIElement`, unter Windows über `skipTaskbar`). Sichtbar ist sie als
-Tray-Icon; das Tray-Menü ist zugleich die einzige Oberfläche für die
-Einstellungen (Autostart, Immer im Vordergrund, Abmelden). Das Schließen des
-Widgets blendet es nur aus — beendet wird über „Beenden" im Tray.
+The builds are not code-signed, so the first launch needs one extra step:
 
-## Befehle
+- **Windows:** SmartScreen shows a blue box. Click *More info* → *Run anyway*.
+- **macOS:** right-click the app → *Open*, then confirm. A double-click alone
+  gets refused by Gatekeeper.
 
-| Befehl | Zweck |
+## Using it
+
+**Signing in.** The first launch opens Factorial's own login page in a window —
+the app never sees your password, and two-factor works exactly as it does in the
+browser. The session is kept, so the next launch goes straight to the widget.
+
+**The tray icon is where the app lives.** It has no taskbar button and no dock
+icon on purpose: closing the widget only hides it. The icon's colour is the
+state at a glance — grey clocked out, green clocked in, amber on a break — and
+hovering shows the running time without opening anything.
+
+> **Windows tip:** new tray icons are hidden behind the `^` chevron by default.
+> Drag it onto the taskbar once and it stays there.
+
+**The tray menu** is the way to everything: clock in and out, pick a break type,
+show or hide the widget, and *Einstellungen* for start-with-system, always-on-top,
+which way the card opens, light or dark, and checking for updates.
+
+**Updates.** The installed build checks for a new version half a minute after
+launch and every six hours after that, and always asks before downloading
+anything. If a shift is running it will not restart — the update is applied the
+next time you quit. The portable build cannot replace itself, so it points at the
+download page instead.
+
+**One thing worth knowing:** this writes to your real timesheet. The app never
+guesses a time — when it loses contact with Factorial it shows the last known
+state and says so, rather than inventing something that looks plausible.
+
+The interface is in German, matching Factorial's own.
+
+## Development
+
+Node 22 or newer.
+
+```
+npm install
+npm run dev
+```
+
+| Command | Purpose |
 |---|---|
-| `npm run dev` | Entwicklungsmodus (electron-vite, Main + Preload + Renderer mit HMR) |
-| `npm test` | Unit-Tests (Vitest, ohne Electron-Laufzeit) |
-| `npm run test:watch` | dieselben Tests im Watch-Modus |
-| `npm run typecheck` | TypeScript prüfen (Main/Preload/Shared **und** Renderer) |
-| `npm run build` | Typecheck + Build nach `out/` |
-| `npm run package:mac` | macOS-Build, DMG + ZIP arm64, **unsigniert** (Erststart per Rechtsklick → Öffnen) |
-| `npm run package:win` | Windows-Build: NSIS-Installer **und** portable `.exe`, x64, unsigniert (SmartScreen: „Weitere Informationen" → „Trotzdem ausführen") |
+| `npm run dev` | Dev mode with hot reload (electron-vite) |
+| `npm test` | Unit tests (Vitest, no Electron runtime needed) |
+| `npm run test:watch` | The same tests, watching |
+| `npm run typecheck` | TypeScript across main, preload, shared and renderer |
+| `npm run build` | Typecheck, then build to `out/` |
+| `npm run package:mac` | macOS: DMG + ZIP, arm64 |
+| `npm run package:win` | Windows: NSIS installer + portable exe, x64 |
 
-Beide `package:`-Skripte laufen über `npm run build`, also inklusive Typecheck.
-Die Artefakte landen in `release/` (in `.gitignore`).
+Both `package:` scripts run `npm run build` first, so a type error stops them
+before electron-builder starts. Artefacts land in `release/`, which is ignored.
 
-Für Windows entstehen zwei Dateien, und die Wahl zwischen ihnen ist nicht nur
-Geschmack:
+**Architecture in one paragraph.** The main process owns the truth: it talks to
+Factorial's GraphQL API, keeps one attendance store, and pushes snapshots to the
+renderer over a ten-function `contextBridge`. The renderer draws and never
+decides — it has no Node, no `require`, and no way to reach the network. The
+pieces that can be tested without Electron are deliberately kept free of it and
+are, which is why the suite runs anywhere.
 
-- **`Factorial Desktop Setup <version>.exe`** installiert nach
-  `%LOCALAPPDATA%\Programs` (ohne Adminrechte), legt einen Startmenü-Eintrag an
-  und ist die Variante, bei der **Autostart sinnvoll ist** — der Run-Key-Eintrag
-  zeigt dann auf einen Pfad, den es dauerhaft gibt.
-- **`Factorial Desktop.exe`** läuft ohne Installation von überall. Sie entpackt
-  sich beim Start nach `%TEMP%`; Sitzung und Einstellungen teilt sie sich mit
-  der installierten Variante (beide schreiben nach
-  `%APPDATA%\factorial-desktop`), aber der Autostart hängt dann daran, dass die
-  Datei liegen bleibt, wo sie liegt.
+**Tests.** 521 of them, no Electron runtime required. They cover the time
+reconstruction, the store's optimistic updates and rollbacks, the IPC codec, the
+widget's five states, and the platform-dependent decisions — the last of those
+take their inputs as arguments precisely so that, say, the Windows autostart path
+can be checked from a Mac.
 
-**Updates:** Die installierte Fassung sucht selbst nach neuen Versionen — 30 s
-nach dem Start und danach alle sechs Stunden — und fragt, bevor sie etwas lädt.
-Läuft gerade eine Schicht, wird nicht neu gestartet; das Update wird dann beim
-nächsten Beenden angewandt. Von Hand: Tray → „Einstellungen" → „Nach Updates
-suchen …". Die portable `.exe` kann sich nicht selbst ersetzen und verweist
-stattdessen auf die Download-Seite. Details in `docs/WINDOWS.md`, Abschnitt 4b.
+**CI.** `.github/workflows/build.yml` runs tests and typecheck on every push and
+pull request. Tagging `v*` builds both platforms and attaches the files to a
+GitHub release; macOS runners are billed at ten times the Linux rate, so the
+builds do not run on every push.
 
-`.github/workflows/build.yml` baut beides plus die macOS-Artefakte. Tests und
-Typecheck laufen dort bei jedem Push und Pull Request; die Builds bei einem
-`v*`-Tag oder auf Knopfdruck (macOS-Runner sind teuer). Ein Tag erzeugt einen
-Release-Entwurf mit allen Dateien.
+**Releasing.** Bump `version` in `package.json`, commit, then tag:
 
-## Wichtig zu wissen
+```
+git tag -a v0.1.2 -m "..."
+git push origin v0.1.2
+```
 
-Die App schreibt in eine **echte Arbeitszeiterfassung**. Ein falscher Zeitstempel
-ist der teure Fehlerfall, nicht ein hässliches Layout. Zwei Konsequenzen, die
-sich durch den Code ziehen:
+The release must keep `latest.yml` among its assets — that file is the feed the
+installed app reads to notice a new version.
 
-- Zeiten werden nie geraten. Ist ein Snapshot veraltet, zeigt das Widget die
-  letzte bekannte Zeit **mit Hinweis** statt einer geschätzten.
-- Wer die Aktionen zum ersten Mal durchklickt (Einstempeln → Pause →
-  Fortsetzen → Ausstempeln), erzeugt echte Einträge. Das ist eine Handlung für
-  einen Menschen, nicht für einen Agenten nebenbei.
+## Documentation
 
-## Dokumente
-
-- `docs/DESIGN.md` — Architektur und die vollständige, live verifizierte
-  API-Referenz. Bei Widerspruch gewinnt dieses Dokument.
-- `docs/PLAN.md` — der Umsetzungsplan, Task für Task. Die beiden Blöcke ganz
-  oben („Verifizierte API-Korrekturen K1–K11", „Carry-Forwards aus Tasks 1–5")
-  überschreiben widersprechende Schnipsel weiter unten.
-- `docs/WINDOWS.md` — die Übergabe für die Windows-Portierung: jede
-  plattformabhängige Stelle mit Datei, Zeile, Grund und Prüfschritt, dazu die
-  ehrliche Trennung zwischen „verifiziert", „nur kompiliert" und „ungetestet".
-- `docs/api-discovery.md` — wie die Factorial-API erforscht wurde und wie man
-  fehlende Queries selbst findet.
+- [`docs/DESIGN.md`](docs/DESIGN.md) — architecture and the full API reference,
+  verified against the live API. Where anything disagrees, this wins.
+- [`docs/api-discovery.md`](docs/api-discovery.md) — how the Factorial API was
+  mapped out, and how to find a query nobody has needed yet.

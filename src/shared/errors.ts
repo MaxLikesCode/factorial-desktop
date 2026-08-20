@@ -6,7 +6,7 @@
  * `request timed out after 15000 ms`, and the store refuses a second click with
  * `another action is already in flight`. None of those sentences is for a user,
  * and every one of them could otherwise reach a toast or a tray menu —
- * `docs/WINDOWS.md` §6 flagged exactly that as still open after Task 8.
+ * German text for the user, never the server's own words.
  *
  * The kind, not the text, is what carries meaning: over IPC `encodeActionError`
  * packs it into the message (a custom `Error` property does not survive
@@ -18,7 +18,7 @@
  *
  * **This file lives in `src/shared` since Task 12** — it used to be
  * `src/renderer/src/lib/errors.ts`. The tray runs in the main process, shows the
- * same failures, and must not open a second translation table (`docs/WINDOWS.md`
+ * same failures, and must not open a second translation table (`docs/DESIGN.md`
  * §6). `src/renderer/src/lib/errors.ts` is now a re-export so the renderer's
  * import path and its tests keep working.
  */
@@ -80,7 +80,7 @@ export function describeActionError(error: unknown): string {
  * time record was touched — the file write failed, so the value simply did not
  * stick. It lives here rather than in the tray because this file is where the
  * app's internals stop being English, and there is to be one such place
- * (`docs/WINDOWS.md` §6).
+ * (`docs/DESIGN.md`).
  */
 export const SETTINGS_WRITE_FAILED = 'Einstellung konnte nicht gespeichert werden.'
 

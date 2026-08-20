@@ -56,7 +56,7 @@ let widget: BrowserWindow | null = null
  * Set once the app is really quitting, so the `close` handler stops swallowing
  * the event.
  *
- * PLAN.md used a `globalThis.__quitting` flag written by the tray's quit item.
+ * An earlier draft used a `globalThis.__quitting` flag set by the tray's quit item.
  * `before-quit` fires for *every* route out of the app — the tray item, ⌘Q, a
  * `window-all-closed` quit, an OS shutdown — so listening to it covers cases the
  * flag would have missed, and needs no global.
@@ -367,7 +367,7 @@ function startCursorLoop(): void {
  * PLATFORM: `setIgnoreMouseEvents` with forwarding is documented for macOS and
  * Windows and behaves differently on Linux, which this app does not target.
  * Windows verified — the forwarding does not arrive; macOS still unverified.
- * See docs/WINDOWS.md.
+ * See docs/DESIGN.md.
  */
 export function setWidgetInteractive(interactive: boolean): void {
   if (!widget || widget.isDestroyed()) return

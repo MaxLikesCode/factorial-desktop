@@ -27,7 +27,7 @@
  * the poll loop is sequential — it awaits the previous round before it starts
  * sleeping — so a slow network stretches the interval instead of stacking
  * requests up behind each other. That is why this is a loop and not a
- * `setInterval` (deviation from the PLAN.md snippet, which used one).
+ * `setInterval`, so a slow response cannot stack requests on top of each other.
  */
 
 import { deriveState, FALLBACK_BREAK_NAME, type AttendanceState } from '@shared/attendance-state'
@@ -308,7 +308,7 @@ export function createAttendanceStore({
         ops.fetchTodayShifts(employeeId, today),
         // The target only decorates the ring; the timer has to work without it.
         // So its rejection is neutralised *before* it joins the two hard queries
-        // and can never drag the state down with it. (PLAN.md fetches it in a
+        // and can never drag the state down with it. (Fetching it in a
         // second, sequential `try` after this `Promise.all`. Same guarantee,
         // one round trip fewer, and no extra `await` between the ticket check
         // and the emit below — every added await widens the window in which a

@@ -14,11 +14,11 @@
  *    backwards renders `0:00` rather than a negative.
  * 2. **The tray and the widget must not disagree.** While clocked in the label
  *    is the *day's* worked time — `todayMinutes` plus the running segment —
- *    which is exactly what the widget's ring shows. (PLAN.md's snippet showed
+ *    which is exactly what the widget shows. (An earlier draft showed
  *    the running segment alone; see the note on `trayLabel`.)
  * 3. **No second German table.** A failed tray action is phrased by
  *    `src/shared/errors.ts`, the same module the widget's toast uses
- *    (`docs/WINDOWS.md` §6).
+ *    (`docs/DESIGN.md`).
  */
 
 import type { MenuItemConstructorOptions } from 'electron'
@@ -129,7 +129,7 @@ function primaryMs(snapshot: AppSnapshot, now: Date): number | null {
  * there the same text reaches the user through the tooltip and the first,
  * disabled menu entry (`trayStatusLine`).
  *
- * Two deviations from the PLAN.md snippet, both deliberate:
+ * Two things here are deliberate:
  *
  * - It shows the **day's** worked time while clocked in, not the current
  *   segment, so the menubar and the widget's ring cannot show different numbers
@@ -137,7 +137,7 @@ function primaryMs(snapshot: AppSnapshot, now: Date): number | null {
  * - A break is marked with the word `Pause`, not the plan's `❙❙`. The label also
  *   ends up in a Windows tooltip and menu, where block glyphs render as an emoji
  *   or a replacement box — the reason Task 11 already dropped that glyph from
- *   the widget (`docs/WINDOWS.md` §3).
+ *   the widget (`docs/DESIGN.md`).
  */
 export function trayLabel(snapshot: AppSnapshot, now: Date): string {
   const { state } = snapshot
@@ -413,7 +413,7 @@ export function buildTrayMenu({
     { type: 'separator' },
     // Always present, in every state: closing the widget only hides it and the
     // window is kept out of the taskbar, so this is the only way out of the app
-    // on Windows (docs/WINDOWS.md §4).
+    // on Windows.
     { label: 'Beenden', click: () => actions.quit() },
   )
 

@@ -9,7 +9,7 @@
  */
 
 /**
- * DESIGN.md names `id.factorialhr.com` as the login host (PLAN.md's Task 6
+ * DESIGN.md names `id.factorialhr.com` as the login host (an earlier draft
  * snippet says `app.factorialhr.com`; the design document wins). Both lead to
  * the same form — `app` bounces to `id` when there is no session — but pointing
  * straight at the login host avoids one redirect on the cold path.

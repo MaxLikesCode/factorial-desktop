@@ -15,7 +15,7 @@
  * - **Windows** has no `setTitle`. There the state is carried by a colour-coded
  *   `.ico`, the time by the tooltip, and both by the first, disabled entry of
  *   the context menu. Every one of those branches carries a platform comment
- *   and is listed in `docs/WINDOWS.md` §2.
+ *   and is explained in `docs/DESIGN.md`.
  */
 
 import { Menu, Tray, app, nativeImage, type NativeImage } from 'electron'
@@ -142,7 +142,7 @@ export function createTray(deps: TrayDeps): Tray {
    *
    * The tray can act while the widget is hidden, so the widget's toast is not
    * reachable; the menu itself has to say what went wrong. The text comes from
-   * the shared table — `docs/WINDOWS.md` §6 requires that the tray does not open
+   * the shared table — the tray must not open
    * a second one.
    */
   let lastActionError: string | null = null
@@ -239,7 +239,7 @@ export function createTray(deps: TrayDeps): Tray {
    * Electron has already flipped the clicked checkbox by the time this runs, so
    * a silent failure would leave a tick standing next to a setting that never
    * changed. `Settings.set` persists before it commits, and the write can fail
-   * for real — `docs/WINDOWS.md` §3 records a virus scanner blocking the
+   * for real — a virus scanner can block the
    * `rename` with `EBUSY`. The re-render then restores the old tick and the
    * German sentence says why.
    */

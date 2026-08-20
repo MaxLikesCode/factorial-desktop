@@ -32,7 +32,7 @@ mac:
   extendInfo:
     LSUIElement: 1
 
-# PLATFORM: verified on Windows 11 on 2026-08-20 — see docs/WINDOWS.md §4a.
+# PLATFORM: the signature check exists only on Windows.
 # The installer builds, installs without admin rights, and the Run-key entry it
 # leads to points at the installed .exe. The icon sizes were never a problem.
 win:

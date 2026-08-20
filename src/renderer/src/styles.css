@@ -33,7 +33,7 @@ body {
  * both targets, but Windows applies it to a window that has no native frame at
  * all differently — dragging near the screen edge can trigger Aero Snap, which
  * would resize a window declared `resizable: false`. Untested on Windows; see
- * docs/WINDOWS.md.
+ * docs/DESIGN.md.
  */
 .drag-region {
     -webkit-app-region: drag;

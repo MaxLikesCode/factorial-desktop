@@ -116,7 +116,7 @@ describe('trayLabel', () => {
   })
 
   it('adds the day’s closed shifts, so it matches the widget’s ring', () => {
-    // Deviation from the PLAN.md snippet, which showed the running segment
+    // An earlier draft showed the running segment
     // alone: the widget's ring centre shows the day's worked time, and two
     // surfaces of one app disagreeing about "how long today" is the kind of
     // divergence DESIGN.md's "eine Wahrheit" exists to prevent.
@@ -131,7 +131,7 @@ describe('trayLabel', () => {
   it('marks a break with the German word, not a glyph', () => {
     // The plan used "❙❙". Windows renders such block glyphs as an emoji or a
     // replacement box in tooltips and menus — the same reason Task 11 dropped
-    // it from the widget (docs/WINDOWS.md §3, "Renderer-Fonts und Emoji").
+    // it from the widget: on Windows they render as emoji or as tofu.
     const snapshot: AppSnapshot = { ...base, state: onBreak(new Date(2026, 7, 12, 10, 45, 0)) }
     expect(trayLabel(snapshot, NOW)).toBe('Pause 0:15')
   })
@@ -315,7 +315,7 @@ describe('buildTrayMenu', () => {
   })
 
   it('always keeps a way out of the app', () => {
-    // docs/WINDOWS.md §4: without this entry a Windows user has no way to quit,
+    // Without this entry a Windows user has no way to quit,
     // because closing the widget only hides it and `skipTaskbar` is set.
     const actions = noopActions()
     const items = menu({ ...base, state: { kind: 'unknown' } }, { actions })

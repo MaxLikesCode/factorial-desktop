@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest'
  *
  * What this cannot prove is that electron-builder likes the file — only a real
  * `npm run package:mac` does that, and its result is written down in
- * `docs/WINDOWS.md` §4.
+ * unsigned on both platforms; see docs/DESIGN.md.
  */
 
 // Vitest runs every test with the config's root as the working directory, and
@@ -117,7 +117,7 @@ describe('electron-builder.yml', () => {
       { target: 'dmg', arch: ['arm64'] },
       { target: 'zip', arch: ['arm64'] },
     ])
-    // Unsigned by choice — see docs/WINDOWS.md §4.
+    // Unsigned by choice; see docs/DESIGN.md.
     expect(config.mac.identity).toBeNull()
     expect(config.mac.category).toBe('public.app-category.productivity')
   })
