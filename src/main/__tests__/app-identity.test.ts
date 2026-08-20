@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { resolve, sep } from 'node:path'
 import { USER_DATA_DIRECTORY, resolveUserDataPath } from '../app-identity'
 
 const repoRoot = resolve(__dirname, '../../..')
@@ -8,9 +8,13 @@ const read = (file: string): string => readFileSync(resolve(repoRoot, file), 'ut
 
 describe('resolveUserDataPath', () => {
   it('appends our own directory to the platform application-data path', () => {
-    expect(resolveUserDataPath('/Users/max/Library/Application Support')).toBe(
-      '/Users/max/Library/Application Support/factorial-desktop',
-    )
+    // Separator-normalised: `join` yields backslashes on Windows. What is
+    // asserted is that exactly our directory name gets appended and that
+    // nothing else about the path changes - true on both platforms.
+    const appended = resolveUserDataPath('/Users/max/Library/Application Support')
+      .split(sep)
+      .join('/')
+    expect(appended).toBe('/Users/max/Library/Application Support/factorial-desktop')
   })
 
   it('does the same for a Windows-shaped path', () => {

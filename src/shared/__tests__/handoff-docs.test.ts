@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join, relative, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
@@ -36,7 +36,11 @@ function collectMarkers(): string[] {
   const found: string[] = []
 
   const scanFile = (absolute: string): void => {
-    const rel = relative(ROOT, absolute)
+    // `relative` yields backslashes on Windows and the document quotes POSIX
+    // paths, so without this every row reads as stale there. (No marker comment
+    // on this line by design: test files carry none, and this file must not
+    // match its own scan.)
+    const rel = relative(ROOT, absolute).split(sep).join('/')
     const lines = readFileSync(absolute, 'utf8').split('\n')
     lines.forEach((line, index) => {
       if (line.includes(MARKER)) found.push(`${rel}:${index + 1}`)
