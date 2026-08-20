@@ -9,8 +9,9 @@
  * `window-all-closed` handler at the bottom.
  */
 
-import { app, dialog, powerMonitor } from 'electron'
+import { app, dialog, nativeTheme, powerMonitor } from 'electron'
 import { join } from 'node:path'
+import type { ThemeSetting } from '@shared/ipc-contract'
 import { resolveUserDataPath } from './app-identity'
 import { createAttendanceStore, type ClockInInput } from './attendance'
 import { ensureAuthenticated, openLoginWindow } from './auth'
@@ -50,6 +51,22 @@ function describeError(error: unknown): string {
  * pass is in `buildLoginItemSettings`, which is pure and covers both platforms;
  * this is the one line that actually touches Electron.
  */
+/**
+ * Applies the chosen appearance — the entire renderer-side mechanism.
+ *
+ * Chromium reports `themeSource` to every renderer of this app as
+ * `prefers-color-scheme`, and `styles.css` defines its dark tokens under exactly
+ * that media query. So this one assignment repaints the widget, and there is no
+ * theme prop, no context and no IPC channel that could disagree with it.
+ *
+ * `ThemeSetting`'s three values are `themeSource`'s three values, which is why
+ * this needs no mapping — and why both the settings store and the IPC layer
+ * whitelist the value: `themeSource` throws on anything else.
+ */
+function applyTheme(theme: ThemeSetting): void {
+  nativeTheme.themeSource = theme
+}
+
 function applyLoginItem(openAtLogin: boolean): void {
   app.setLoginItemSettings(
     // PLATFORM: the platform-dependent part of autostart. `process.platform` is
@@ -92,6 +109,7 @@ async function bootstrap(): Promise<void> {
   const settings = createSettings({
     filePath: join(app.getPath('userData'), 'settings.json'),
     applyLoginItem,
+    applyTheme,
   })
 
   // One wrapped instance for both writers — the widget through IPC and the
@@ -105,6 +123,11 @@ async function bootstrap(): Promise<void> {
   // One reconciliation per start settles both. `setLoginItemSettings` is
   // idempotent.
   applyLoginItem(settings.get().openAtLogin)
+
+  // Same reason, shorter story: `themeSource` starts every process at 'system',
+  // so a stored 'dark' has to be re-applied on each launch. The store only
+  // reports changes, and a launch is not one.
+  applyTheme(settings.get().theme)
 
   /**
    * Drops the rejected session cookie and offers Factorial's login page again.

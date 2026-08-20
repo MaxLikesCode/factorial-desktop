@@ -46,6 +46,7 @@ const settings: AppSettings = {
   alwaysOnTop: true,
   lastLocationType: 'office',
   lastWorkplaceId: null,
+  theme: 'system',
 }
 
 function clockedIn(since: Date): AppSnapshot['state'] {
@@ -68,6 +69,7 @@ function noopActions(): TrayActions {
     refresh: vi.fn(),
     setOpenAtLogin: vi.fn(),
     setAlwaysOnTop: vi.fn(),
+    setTheme: vi.fn(),
     quit: vi.fn(),
   }
 }
@@ -358,6 +360,41 @@ describe('buildTrayMenu', () => {
       )
       expect(itemAt(off, 'Autostart').checked).toBe(false)
       expect(itemAt(off, 'Immer im Vordergrund').checked).toBe(false)
+    })
+
+    it('offers the appearance as three radios, with the stored one marked', () => {
+      const entries = submenuOf(itemAt(menu(base), 'Einstellungen'))
+      const theme = submenuOf(itemAt(entries, 'Erscheinungsbild'))
+
+      expect(theme.map((entry) => entry.label)).toEqual(['Systemvorgabe', 'Hell', 'Dunkel'])
+      for (const entry of theme) expect(entry.type).toBe('radio')
+      // The fixture stores 'system'.
+      expect(theme.map((entry) => entry.checked)).toEqual([true, false, false])
+
+      const dark = submenuOf(
+        itemAt(
+          submenuOf(
+            itemAt(menu(base, { settings: { ...settings, theme: 'dark' } }), 'Einstellungen'),
+          ),
+          'Erscheinungsbild',
+        ),
+      )
+      expect(dark.map((entry) => entry.checked)).toEqual([false, false, true])
+    })
+
+    it('writes the value it names, not the radio item’s own state', () => {
+      // Same trap as the checkboxes: Electron sets a radio's `checked` on click
+      // before the handler runs, so reading it back would tell the handler
+      // nothing but "you were clicked".
+      const actions = noopActions()
+      const theme = submenuOf(
+        itemAt(submenuOf(itemAt(menu(base, { actions }), 'Einstellungen')), 'Erscheinungsbild'),
+      )
+
+      fire(theme[2])
+      expect(actions.setTheme).toHaveBeenCalledWith('dark')
+      fire(theme[0])
+      expect(actions.setTheme).toHaveBeenCalledWith('system')
     })
 
     it('writes the opposite of the stored value, not of the menu item’s own state', () => {

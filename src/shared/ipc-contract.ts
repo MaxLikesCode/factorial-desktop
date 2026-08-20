@@ -154,12 +154,30 @@ export function deserialiseSnapshot(snapshot: SerialisedSnapshot): AppSnapshot {
   return { ...snapshot, state: restored }
 }
 
+/**
+ * How the app picks its colour scheme.
+ *
+ * The three values are exactly Electron's `nativeTheme.themeSource`, so the
+ * wiring in `index.ts` is one assignment rather than a translation table — and
+ * `themeSource` is also the whole mechanism: Chromium reports it to the renderer
+ * as `prefers-color-scheme`, which is what the stylesheet keys its dark tokens
+ * off. There is deliberately no theme state in React and no IPC channel for it.
+ */
+export type ThemeSetting = 'system' | 'light' | 'dark'
+
+export const THEME_SETTINGS: readonly ThemeSetting[] = ['system', 'light', 'dark']
+
+export function isThemeSetting(value: string): value is ThemeSetting {
+  return (THEME_SETTINGS as readonly string[]).includes(value)
+}
+
 export interface AppSettings {
   openAtLogin: boolean
   alwaysOnTop: boolean
   lastLocationType: string
   /** Int in the schema (K4); stored as a number so no conversion is needed later. */
   lastWorkplaceId: number | null
+  theme: ThemeSetting
 }
 
 /**

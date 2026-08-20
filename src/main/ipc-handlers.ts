@@ -26,6 +26,7 @@ import {
   encodeActionError,
   serialiseSnapshot,
   type ActionErrorKind,
+  isThemeSetting,
   type AppSettings,
   type AppSnapshot,
   type InvokeChannel,
@@ -164,6 +165,9 @@ function asSettingsPatch(payload: unknown): Partial<AppSettings> {
   } else if (typeof raw.lastWorkplaceId === 'number' && Number.isInteger(raw.lastWorkplaceId)) {
     patch.lastWorkplaceId = raw.lastWorkplaceId
   }
+  // Whitelisted for the same reason as the store does it: the value ends up as
+  // `nativeTheme.themeSource`, which throws on anything outside the three.
+  if (typeof raw.theme === 'string' && isThemeSetting(raw.theme)) patch.theme = raw.theme
   return patch
 }
 

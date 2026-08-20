@@ -26,7 +26,7 @@
 
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import type { AppSettings } from '@shared/ipc-contract'
+import { isThemeSetting, type AppSettings, type ThemeSetting } from '@shared/ipc-contract'
 import { isLocationType } from './factorial/types'
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -36,12 +36,17 @@ export const DEFAULT_SETTINGS: AppSettings = {
   alwaysOnTop: true,
   lastLocationType: 'office',
   lastWorkplaceId: null,
+  // Follow the OS unless the user says otherwise. A widget that sits on the
+  // desktop all day should match what everything around it is doing.
+  theme: 'system',
 }
 
 export interface SettingsDeps {
   filePath: string
   /** Called with the new value whenever `openAtLogin` actually changes. */
   applyLoginItem: (openAtLogin: boolean) => void
+  /** Called with the new value whenever `theme` actually changes. */
+  applyTheme: (theme: ThemeSetting) => void
 }
 
 /**
@@ -77,10 +82,14 @@ function sanitise(raw: unknown, base: AppSettings): AppSettings {
         : typeof r.lastWorkplaceId === 'number' && Number.isInteger(r.lastWorkplaceId)
           ? r.lastWorkplaceId
           : base.lastWorkplaceId,
+    // Whitelisted rather than merely typed: the value is assigned straight to
+    // `nativeTheme.themeSource`, which throws on anything outside the three.
+    theme:
+      typeof r.theme === 'string' && isThemeSetting(r.theme) ? r.theme : base.theme,
   }
 }
 
-export function createSettings({ filePath, applyLoginItem }: SettingsDeps): Settings {
+export function createSettings({ filePath, applyLoginItem, applyTheme }: SettingsDeps): Settings {
   let current: AppSettings
   try {
     current = sanitise(JSON.parse(readFileSync(filePath, 'utf8')) as unknown, DEFAULT_SETTINGS)
@@ -109,8 +118,10 @@ export function createSettings({ filePath, applyLoginItem }: SettingsDeps): Sett
       // must not produce settings that disappear on the next start.
       persist(next)
       const loginItemChanged = next.openAtLogin !== current.openAtLogin
+      const themeChanged = next.theme !== current.theme
       current = next
       if (loginItemChanged) applyLoginItem(current.openAtLogin)
+      if (themeChanged) applyTheme(current.theme)
       return { ...current }
     },
   }

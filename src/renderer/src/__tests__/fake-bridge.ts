@@ -32,6 +32,7 @@ export const TEST_SETTINGS: AppSettings = {
   alwaysOnTop: true,
   lastLocationType: 'office',
   lastWorkplaceId: null,
+  theme: 'system',
 }
 
 export interface FakeBridge extends FactorialBridge {

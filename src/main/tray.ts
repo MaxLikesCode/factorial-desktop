@@ -192,6 +192,7 @@ export function createTray(deps: TrayDeps): Tray {
             },
             setOpenAtLogin: (value) => applySetting({ openAtLogin: value }),
             setAlwaysOnTop: (value) => applySetting({ alwaysOnTop: value }),
+            setTheme: (value) => applySetting({ theme: value }),
             toggleWindow: () => {
               toggleWidget()
               // `isVisible()` decides the menu's wording, so the menu has to be

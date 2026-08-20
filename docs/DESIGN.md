@@ -659,9 +659,37 @@ Fenster schließen blendet aus statt zu beenden; beendet wird nur über das Tray
 
 - Autostart beim Login (Standard: an, `app.setLoginItemSettings`)
 - Always-on-Top an/aus
+- Erscheinungsbild: Systemvorgabe (Standard) / Hell / Dunkel
 - Abmelden (Partition-Cookies löschen)
 
 Persistiert als JSON in `app.getPath('userData')`.
+
+### Erscheinungsbild
+
+Der gespeicherte Wert wird auf `nativeTheme.themeSource` gelegt — das ist der
+ganze Mechanismus. Chromium meldet ihn jedem Renderer dieser App als
+`prefers-color-scheme`, und `styles.css` definiert seine dunklen Tokens unter
+genau dieser Media Query. Es gibt deshalb **keinen** Theme-State in React, keinen
+Provider und keinen IPC-Kanal dafür: nichts, was mit der Einstellung ausser Takt
+geraten könnte.
+
+Die drei Werte von `ThemeSetting` sind genau die drei von `themeSource`, deshalb
+braucht die Verdrahtung keine Übersetzungstabelle — und deshalb prüfen sowohl
+der Settings-Store als auch die IPC-Schicht den Wert gegen die Whitelist:
+`themeSource` wirft bei allem anderen, und eine von Hand editierte
+Einstellungsdatei darf den nächsten Start nicht verhindern.
+
+> **Vorher war das dunkle Design unerreichbar.** `styles.css` hatte die
+> shadcn-Voreinstellung `@custom-variant dark (&:is(.dark *))` und legte seine
+> Tokens unter `.dark` ab — eine Klasse, die niemand je gesetzt hat. `next-themes`
+> war installiert, aber nur `sonner.tsx` importierte es, und einen `ThemeProvider`
+> gab es nicht. Die dunklen Farben standen vollständig da und wurden nie
+> gerendert. Der Wechsel auf die Media Query behebt das an der Wurzel: die
+> Klasse musste jemand setzen, die Media Query muss niemand setzen.
+
+`themeSource` startet in jedem Prozess bei `'system'`, deshalb wendet `index.ts`
+den gespeicherten Wert einmal beim Start an — genau wie beim Login-Item. Der
+Store meldet nur *Änderungen*, und ein Start ist keine.
 
 ## Testing
 

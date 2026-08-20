@@ -23,7 +23,7 @@
 
 import type { MenuItemConstructorOptions } from 'electron'
 import { describeActionError, describeActionFailure, describeStaleReason } from '@shared/errors'
-import type { AppSettings, AppSnapshot } from '@shared/ipc-contract'
+import type { AppSettings, AppSnapshot, ThemeSetting } from '@shared/ipc-contract'
 import { classifyActionError } from './ipc-handlers'
 
 /** Drives the colour-coded Windows icon; macOS uses one template icon for all. */
@@ -43,6 +43,7 @@ export interface TrayActions {
   refresh: () => void
   setOpenAtLogin: (value: boolean) => void
   setAlwaysOnTop: (value: boolean) => void
+  setTheme: (value: ThemeSetting) => void
   quit: () => void
 }
 
@@ -197,7 +198,8 @@ export function trayActionErrorText(error: unknown): string {
  * The "Einstellungen" submenu — the app's only settings surface.
  *
  * DESIGN.md lists three items under "Einstellungen" (Autostart, Always-on-Top,
- * Abmelden) and names the entry in the tray's context menu. Nothing else in the
+ * Abmelden) and names the entry in the tray's context menu; the appearance
+ * picker joins them here for want of anywhere else to put it. Nothing else in the
  * app offers them: the widget has no settings UI, and its "Anmelden" button
  * exists only in the signed-out state, so an authenticated user would otherwise
  * have no way to sign out at all.
@@ -211,6 +213,35 @@ export function trayActionErrorText(error: unknown): string {
  * "Beim Anmelden starten" three lines above "Abmelden" reads as if it were about
  * the same login.
  */
+/**
+ * The appearance picker.
+ *
+ * Radios rather than a single "Dunkles Design" checkbox, because there are three
+ * states and not two: following the OS is a distinct choice from picking dark,
+ * and a checkbox cannot say which of the two is in force. The wording is
+ * macOS's own for the two explicit choices; "Systemvorgabe" is deliberately not
+ * Apple's "Automatisch", which there means switching by time of day rather than
+ * following the system setting.
+ *
+ * Electron sets a radio item's own `checked` flag on click, so — like the two
+ * toggles below — the handler passes the value it wants rather than reading
+ * that flag back.
+ */
+const THEME_LABEL: ReadonlyArray<{ value: ThemeSetting; label: string }> = [
+  { value: 'system', label: 'Systemvorgabe' },
+  { value: 'light', label: 'Hell' },
+  { value: 'dark', label: 'Dunkel' },
+]
+
+function themeSubmenu(settings: AppSettings, actions: TrayActions): MenuItemConstructorOptions[] {
+  return THEME_LABEL.map(({ value, label }) => ({
+    label,
+    type: 'radio',
+    checked: settings.theme === value,
+    click: () => actions.setTheme(value),
+  }))
+}
+
 function settingsSubmenu(
   snapshot: AppSnapshot,
   settings: AppSettings,
@@ -229,6 +260,7 @@ function settingsSubmenu(
       checked: settings.alwaysOnTop,
       click: () => actions.setAlwaysOnTop(!settings.alwaysOnTop),
     },
+    { label: 'Erscheinungsbild', submenu: themeSubmenu(settings, actions) },
   ]
 
   // With no session there is nothing to drop, and the top-level entry already

@@ -20,6 +20,7 @@ const SETTINGS: AppSettings = {
   alwaysOnTop: true,
   lastLocationType: 'office',
   lastWorkplaceId: null,
+  theme: 'system',
 }
 
 function fakeStore(overrides: Partial<IpcStore> = {}): IpcStore & { listeners: (() => void)[] } {
@@ -259,6 +260,23 @@ describe('settings and session channels', () => {
     const { handlers, settings } = handlersFor(fakeStore())
     await handlers[IPC.setSettings]({ lastLocationType: 'work_from_home' })
     expect(settings.set).toHaveBeenCalledWith({ lastLocationType: 'work_from_home' })
+  })
+
+  it('passes a known appearance through', async () => {
+    const { handlers, settings } = handlersFor(fakeStore())
+    await handlers[IPC.setSettings]({ theme: 'dark' })
+    expect(settings.set).toHaveBeenCalledWith({ theme: 'dark' })
+  })
+
+  /**
+   * The value is assigned straight to `nativeTheme.themeSource`, which throws on
+   * anything outside the three — so a bad one must not get past this layer even
+   * though the store whitelists it a second time.
+   */
+  it('drops an appearance that is not one of the three', async () => {
+    const { handlers, settings } = handlersFor(fakeStore())
+    await handlers[IPC.setSettings]({ theme: 'midnight' })
+    expect(settings.set).toHaveBeenCalledWith({})
   })
 
   it('accepts an explicit null workplace, which means "no workplace"', async () => {
