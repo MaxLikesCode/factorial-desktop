@@ -20,6 +20,7 @@
 #   which is not a detail: the first tagged run failed at exactly that quota
 #   with both platforms already built. They also outlive the 30-day retention
 #   an Actions artifact gets, which is what you want from a release anyway.
+#   The platforms build one after another for this to work — see `max-parallel`.
 # - On a **manual run**, there is no release to publish to, so the files go to
 #   Actions artifacts instead. That upload is allowed to fail without failing
 #   the run — a manual run is asking "does it still build", and the answer to
@@ -89,6 +90,15 @@ jobs:
     strategy:
       # One platform failing should not hide whether the other one worked.
       fail-fast: false
+      # One at a time, and only because of the release. A draft release has no
+      # tag yet — it is `untagged-<hash>` until it is published — so two jobs
+      # publishing at once do not find each other's draft and each create their
+      # own. Measured: the first tagged run produced two drafts, one holding
+      # eight assets and one holding a single stray blockmap. Serialised, the
+      # second job finds the draft the first one made. Costs the wall-clock of
+      # the shorter build, which is a few minutes on a tag and nothing on a
+      # manual run.
+      max-parallel: 1
       matrix:
         include:
           - os: macos-latest
@@ -111,9 +121,10 @@ jobs:
       - run: npm ci
 
       - name: Package and publish
-        # `always` on a tag: build, then attach to the draft release. Both
-        # platforms publish into the same release — electron-builder creates it
-        # on the first one and adds to it on the second.
+        # `always` on a tag: build, then attach to the draft release.
+        # electron-builder creates the draft on the first platform to get here
+        # and adds to it on the second — which only holds because `max-parallel`
+        # keeps them from arriving together. See the note there.
         run: npm run ${{ matrix.script }} -- --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
         env:
           # Without this electron-builder hunts the keychain for a signing
