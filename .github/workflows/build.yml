@@ -6,11 +6,12 @@
 #   typecheck, on Linux, because none of it needs Electron or a desktop — see
 #   docs/WINDOWS.md §1 on why the tests are written that way. Cheap enough to
 #   run on everything.
-# - `build` produces the actual artefacts and runs only on a tag or when
-#   somebody asks for it. macOS runners bill at ten times the Linux rate, so
-#   building both platforms on every push to main would spend a free account's
-#   monthly minutes in a couple of days. If you want that anyway, add
-#   `push: branches: [main]` to the trigger below and accept the bill.
+# - `build` produces the actual artefacts. It is gated by an `if` rather than by
+#   the trigger, because the trigger has to stay open for `check` — the two jobs
+#   want different events. macOS runners bill at ten times the Linux rate, so
+#   building both platforms on every push would spend a free account's monthly
+#   minutes in a couple of days. To have that anyway, delete the `if:` on the
+#   build job and accept the bill.
 #
 # Neither platform is code-signed: `identity: null` in electron-builder.yml for
 # macOS, and no certificate for Windows. The artefacts therefore carry the usual
@@ -22,6 +23,7 @@ name: build
 
 on:
   push:
+    branches: [main]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -64,6 +66,9 @@ jobs:
 
   build:
     name: ${{ matrix.name }}
+    # A tag or a deliberate click — not every push and not every pull request.
+    # See the note at the top of the file for what this costs if removed.
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     needs: check
     runs-on: ${{ matrix.os }}
     strategy:
