@@ -90,11 +90,11 @@ describe('electron-builder.yml', () => {
   const config = load(raw) as BuilderConfig
 
   it('identifies the app', () => {
-    // Both carry the -2 / "2": a sibling Factorial client of Max's ships as
-    // com.maxgiess.factorialtimer / "Factorial Timer", and two installed apps
-    // must not share an identity. See src/main/app-identity.ts.
-    expect(config.appId).toBe('com.maxgiess.factorial-desktop-2')
-    expect(config.productName).toBe('Factorial 2')
+    // A retired Factorial client of Max's ships as com.maxgiess.factorialtimer /
+    // "Factorial Timer"; two installed apps must not share an identity. See
+    // src/main/app-identity.ts.
+    expect(config.appId).toBe('com.maxgiess.factorial-desktop')
+    expect(config.productName).toBe('Factorial Desktop')
   })
 
   it('writes artefacts to the ignored release/ directory', () => {

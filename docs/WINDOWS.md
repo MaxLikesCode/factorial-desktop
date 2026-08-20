@@ -203,8 +203,8 @@ Electron dort dieselben Koordinaten liefert — siehe Abschnitt 3, Zeile
 
 Die Persistenz der Einstellungen selbst ist **nicht** plattformabhängig: das
 Format ist JSON, der Ort kommt aus `app.getPath('userData')`
-(`%APPDATA%\factorial-desktop-2\settings.json` bzw.
-`~/Library/Application Support/factorial-desktop-2/settings.json`), und der Pfad
+(`%APPDATA%\factorial-desktop\settings.json` bzw.
+`~/Library/Application Support/factorial-desktop/settings.json`), und der Pfad
 wird mit `node:path` zusammengesetzt. `src/main/settings.ts` importiert absichtlich
 kein Electron — der Dateipfad und der Login-Item-Effekt kommen als Argumente
 herein, deshalb ist der Store gegen ein echtes Temp-Verzeichnis testbar.
@@ -230,9 +230,9 @@ Reihenfolge, in der man sie abarbeitet, steht in Abschnitt 7:
 | Single-Instance | zwingend, siehe oben | `src/main/index.ts` (erledigt, ungetestet) |
 | IPC und Preload | kein Unterschied. Der Pfad zum Preload wird aus `import.meta.dirname` zusammengesetzt, nicht als String gebaut — auf Windows kommen dabei Backslashes heraus, was `BrowserWindow` erwartet | `src/main/index.ts`, `src/preload/index.ts` |
 | Login-Fenster | Frameless/Transparenz spielt hier keine Rolle — das Fenster ist bewusst ein normales Fenster mit Titelleiste. Titel `Bei Factorial anmelden` erscheint auf Windows in der Titelleiste, auf macOS nur im Fenstermenü | `src/main/auth.ts` |
-| Session-Partition | `persist:factorial` liegt unter `%APPDATA%\factorial-desktop-2`; auf macOS unter `~/Library/Application Support/factorial-desktop-2`. Kein Codeunterschied, aber der relevante Ort zum Zurücksetzen | `src/main/session.ts` |
+| Session-Partition | `persist:factorial` liegt unter `%APPDATA%\factorial-desktop`; auf macOS unter `~/Library/Application Support/factorial-desktop`. Kein Codeunterschied, aber der relevante Ort zum Zurücksetzen | `src/main/session.ts` |
 | Autostart | `app.setLoginItemSettings` schreibt auf Windows in den Registry-Run-Key, auf macOS in die Service-Management-Datenbank. Auf Windows **müssen** `path` und `args` gesetzt sein (siehe Tabelle in Abschnitt 2), auf macOS dürfen sie es nicht. `openAsHidden` ist macOS-only und wird bewusst nicht gesetzt — das Widget soll beim Start sichtbar sein. **Auslösbar ist der Schalter nur über das Tray:** Tray-Menü → „Einstellungen" → „Autostart" (Checkbox). Eine andere Oberfläche dafür gibt es in der App nicht | `src/main/settings.ts` (`buildLoginItemSettings`), `src/main/index.ts` (`applyLoginItem`), `src/main/tray-menu.ts` (`settingsSubmenu`) — geschrieben, auf Windows ungetestet |
-| Einstellungsdatei | gleicher Code, anderer Ort: `%APPDATA%\factorial-desktop-2\settings.json`. Geschrieben wird über eine `.tmp`-Datei plus `renameSync`; das ist auf NTFS ebenso atomar wie auf APFS, **aber** ein Virenscanner kann das `rename` kurzzeitig mit `EBUSY` blockieren. Wenn Einstellungen auf Windows sporadisch nicht speichern: hier zuerst nachsehen | `src/main/settings.ts` |
+| Einstellungsdatei | gleicher Code, anderer Ort: `%APPDATA%\factorial-desktop\settings.json`. Geschrieben wird über eine `.tmp`-Datei plus `renameSync`; das ist auf NTFS ebenso atomar wie auf APFS, **aber** ein Virenscanner kann das `rename` kurzzeitig mit `EBUSY` blockieren. Wenn Einstellungen auf Windows sporadisch nicht speichern: hier zuerst nachsehen | `src/main/settings.ts` |
 | Frameless & Transparenz | Keine macOS-Vibrancy, kein automatischer runder Schatten. Ecken und Schatten kommen auf Windows aus dem Renderer bzw. gar nicht. Das Fenster ist `resizable: false`, damit entfällt das abweichende Resize-Verhalten transparenter Fenster | `src/main/windows.ts` (geschrieben, auf Windows ungetestet) |
 | Always-on-Top | `alwaysOnTop` wird beim Erzeugen gesetzt **und** zur Laufzeit über `setWidgetAlwaysOnTop` nachgezogen. Die Level-Namen (`'floating'`, `'screen-saver'`, …) sind plattformspezifisch; hier wird bewusst kein Level angegeben, es gilt der Standard. Umgeschaltet wird über Tray-Menü → „Einstellungen" → „Immer im Vordergrund"; Tray und IPC benutzen **dieselbe** `withWindowEffects`-Instanz, damit der Schalter auf beiden Wegen sofort am lebenden Fenster wirkt | `src/main/windows.ts`, `src/main/index.ts` (`withWindowEffects`), `src/main/tray.ts` |
 | Fensterposition | Multi-Monitor mit gemischten DPI-Skalierungen verhält sich anders. Gespeicherte Positionen werden vor Gebrauch gegen die aktuell angeschlossenen Displays validiert — beim Start **und** bei jedem `display-added`/`display-removed`/`display-metrics-changed`. Gerechnet wird mit `workArea` (ohne Taskleiste), Koordinaten sind in DIP, nicht in physischen Pixeln | `src/main/window-position.ts` (getestet), `src/main/windows.ts` (Verdrahtung) |
@@ -241,7 +241,7 @@ Reihenfolge, in der man sie abarbeitet, steht in Abschnitt 7:
 | Tray-Icon | macOS: `trayTemplate.png` @1x/@2x, monochrom, System färbt. Windows: `tray-{idle,active,paused,alert}.ico`, farbig, je 16/32/48 px. Erzeugt von `resources/make-tray-icons.py` (Pillow), die Dateien sind eingecheckt. **Auf macOS nicht prüfbar**: Electron hat dort keinen ICO-Decoder, deshalb der PNG-Fallback in `iconFor` | `resources/`, `src/main/tray.ts` (ungetestet) |
 | Tray-Menü | Gleiche Einträge auf beiden Plattformen, aber auf Windows ist es der Hauptzugang: Zustand + Zeit (deaktiviert), letzte Fehlermeldung (deaktiviert, deutsch), Ein-/Ausstempeln bzw. Pause-Untermenü/Fortsetzen, Fenster zeigen/ausblenden, Aktualisieren, **Einstellungen** (Untermenü: „Autostart" und „Immer im Vordergrund" als Checkboxen, dazu „Abmelden", solange eine Sitzung besteht), Beenden. Das Untermenü ist die **einzige** Oberfläche für DESIGN.md, Abschnitt „Einstellungen" — das Widget hat keine. Untermenüs mit dynamischen Einträgen (die Pausentypen) sind auf Windows unauffällig, aber das Menü wird bei **jedem** Render neu gebaut — falls es dort beim Öffnen flackert, ist der 15-s-Takt in `RENDER_INTERVAL_MS` die Stellschraube | `src/main/tray.ts`, `src/main/tray-menu.ts` |
 | Standby und Bildschirmsperre | `powerMonitor.on('suspend'/'resume')` ist auf beiden Plattformen vorhanden, feuert auf Windows aber auch bei „Moderner Standby" (S0) anders als beim klassischen S3. Die App stoppt beim Suspend das Polling und lädt beim Resume einmal neu. Bleibt die Uhr nach dem Zuklappen stehen, ist zuerst zu prüfen, ob `resume` überhaupt kam | `src/main/index.ts` (geschrieben, ungetestet) |
-| Positionsdatei | `%APPDATA%\factorial-desktop-2\window-position.json`, gleiche Schreibweise wie bei den Einstellungen (`.tmp` + `rename`). Schreibfehler werden hier bewusst **verschluckt**, weil der Schreibvorgang aus einem `moved`-Handler kommt | `src/main/window-position.ts` |
+| Positionsdatei | `%APPDATA%\factorial-desktop\window-position.json`, gleiche Schreibweise wie bei den Einstellungen (`.tmp` + `rename`). Schreibfehler werden hier bewusst **verschluckt**, weil der Schreibvorgang aus einem `moved`-Handler kommt | `src/main/window-position.ts` |
 | Drag-Region | siehe Abschnitt 2, letzte Zeile. Kurz: Aero Snap, `.no-drag`-Vererbung, `moved`-Frequenz | `src/renderer/src/styles.css` (geschrieben, auf Windows ungetestet) |
 | Schriftart | `@fontsource-variable/geist` wird als WOFF2 mitgebaut und nicht vom System geholt — es gibt also keinen Fallback-Unterschied zwischen macOS und Windows. Was sich unterscheidet, ist das **Rendering**: Windows hinted anders, die Zeilen im Widget können dadurch 1–2 px höher ausfallen. Das Fenster ist `resizable: false` bei 340×224, ein Überlauf würde also abgeschnitten statt zu scrollen | `src/renderer/src/styles.css`, `src/main/windows.ts` (`WIDGET_SIZE`) |
 | Renderer-Fonts und Emoji | Die UI benutzt bewusst **keine** Emoji oder Unicode-Blockzeichen als Icons (der Plan-Schnipsel hatte `❙❙` für „Pause") — auf Windows rendern die als farbiges Emoji oder als Ersatzkästchen. Stattdessen Lucide-SVGs plus deutsches Wort | `src/renderer/src/components/BreakMenu.tsx` |
@@ -268,15 +268,17 @@ Reihenfolge, in der man sie abarbeitet, steht in Abschnitt 7:
   `release/Factorial-0.1.0-arm64.dmg` (119,2 MB) und
   `release/Factorial-0.1.0-arm64-mac.zip` (119,1 MB) erzeugt. Am Ergebnis
   nachgeprüft, nicht am Log:
-  > **Achtung, dieser Abschnitt ist nach der Identitäts-Trennung veraltet.** Der
-  > Lauf unten fand unter `appId: com.maxgiess.factorial-desktop` /
-  > `productName: Factorial` statt. Beide wurden danach auf
-  > `com.maxgiess.factorial-desktop-2` / `Factorial 2` geändert, um eine zweite
-  > Factorial-App desselben Benutzers nicht zu überschreiben (siehe
-  > `src/main/app-identity.ts`). Die Artefaktnamen und die Info.plist-Werte unten
-  > stimmen deshalb nicht mehr; **`npm run package:mac` muss neu laufen**, bevor
-  > dieser Abschnitt wieder als Beleg taugt. Die Aussagen über Signatur,
-  > `LSUIElement` und Icon sind von der Umbenennung nicht betroffen.
+  > **Achtung, dieser Abschnitt ist nach zwei Umbenennungen veraltet.** Der Lauf
+  > unten fand unter `appId: com.maxgiess.factorial-desktop` /
+  > `productName: Factorial` statt. Danach wurden beide auf
+  > `com.maxgiess.factorial-desktop-2` / `Factorial 2` gesetzt, um eine zweite
+  > Factorial-App desselben Benutzers nicht zu überschreiben; heute heißt die App
+  > `com.maxgiess.factorial-desktop` / `Factorial Desktop` (siehe
+  > `src/main/app-identity.ts`). Die appId stimmt damit wieder, der `productName`
+  > nicht: Artefaktnamen und `CFBundleName` unten lauten inzwischen
+  > `Factorial Desktop`. **`npm run package:mac` muss neu laufen**, bevor dieser
+  > Abschnitt wieder als Beleg taugt. Die Aussagen über Signatur, `LSUIElement`
+  > und Icon sind von den Umbenennungen nicht betroffen.
 
   - `Contents/Info.plist` des gebauten Bundles: `CFBundleIdentifier =
     com.maxgiess.factorial-desktop`, `CFBundleName = Factorial`,
@@ -427,7 +429,7 @@ Reihenfolge, in der man sie abarbeitet, steht in Abschnitt 7:
      hinter Cloudflare. Seitdem stellt die App **während der Anmeldung gar keine
      API-Anfrage** mehr; siehe `auth-flow.ts` und `login-target.ts`.
   2. Der User-Agent trug erst `Electron/43.4.0` und danach immer noch
-     `factorial-desktop-2/0.1.0`. Er wird jetzt aus Plattform und echter
+     `factorial-desktop/0.1.0`. Er wird jetzt aus Plattform und echter
      Chromium-Version neu gebaut; siehe `@shared/user-agent`.
 
   Diagnosewerkzeug dafür ist `FACTORIAL_DEBUG_NET=1 npm run dev`
@@ -573,7 +575,7 @@ Reihenfolge, in der man sie abarbeitet, steht in Abschnitt 7:
   dem Bundle heraus überhaupt hochkommt, ob das Tray-Icon aus `app.asar/resources`
   wirklich geladen wird (der Pfad existiert nachweislich, das Laden nicht),
   ob `LSUIElement` das Dock-Icon tatsächlich unterdrückt, ob die Session aus
-  `~/Library/Application Support/factorial-desktop-2` auch für das Bundle gilt,
+  `~/Library/Application Support/factorial-desktop` auch für das Bundle gilt,
   und ob der Anmeldeobjekt-Eintrag den richtigen Pfad bekommt.
 - **`npm run package:win`.** Nie ausgeführt — es gab keine Windows-Maschine.
   Belegt ist nur, dass electron-builder die Konfiguration **lädt** (es
@@ -1007,7 +1009,7 @@ In dieser Reihenfolge, weil jeder einzeln beobachtbar ist:
    `thickFrame: false` und der `border-radius` im Renderer die Stellschrauben.
 2. **Ziehen** an der Kopfzeile (`src/renderer/src/styles.css:32`): das Fenster
    folgt, die Position wird nach 250 ms Debounce in
-   `%APPDATA%\factorial-desktop-2\window-position.json` geschrieben. Drei
+   `%APPDATA%\factorial-desktop\window-position.json` geschrieben. Drei
    Windows-Eigenheiten: Aero Snap am oberen Rand darf nicht auslösen (das
    Fenster ist `resizable: false`), Buttons und das Arbeitsort-Select innerhalb
    der Region müssen klickbar bleiben (`.no-drag`), und `moved` feuert beim

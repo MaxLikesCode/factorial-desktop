@@ -10,7 +10,7 @@ const BARE =
  * this is the one a first, subtractive fix left behind.
  */
 const REAL_APP =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) factorial-desktop-2/0.1.0 Chrome/150.0.7871.224 Safari/537.36'
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) factorial-desktop/0.1.0 Chrome/150.0.7871.224 Safari/537.36'
 
 const EXPECTED =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.7871.224 Safari/537.36'
@@ -27,7 +27,7 @@ describe('toBrowserUserAgent', () => {
 
   it('removes both at once', () => {
     const both =
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) factorial-desktop-2/0.1.0 Chrome/150.0.7871.224 Electron/43.4.0 Safari/537.36'
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) factorial-desktop/0.1.0 Chrome/150.0.7871.224 Electron/43.4.0 Safari/537.36'
     expect(toBrowserUserAgent(both)).toBe(EXPECTED)
   })
 

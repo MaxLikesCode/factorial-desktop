@@ -9,7 +9,7 @@
  * Electron also inserts the application's own name and version, taken from
  * `package.json`, *before* the Chrome token:
  *
- *   ...(KHTML, like Gecko) factorial-desktop-2/0.1.0 Chrome/150.0.7871.224 Safari/537.36
+ *   ...(KHTML, like Gecko) factorial-desktop/0.1.0 Chrome/150.0.7871.224 Safari/537.36
  *
  * Both are foreign to a browser, and Factorial's sign-in runs behind Cloudflare
  * bot management — the login host serves `/cdn-cgi/rum` and an obfuscated

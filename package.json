@@ -1,5 +1,5 @@
 {
-  "name": "factorial-desktop-2",
+  "name": "factorial-desktop",
   "version": "0.1.0",
   "description": "Zeiterfassung für Factorial HR",
   "main": "./out/main/index.js",
