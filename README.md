@@ -41,10 +41,28 @@ Widgets blendet es nur aus — beendet wird über „Beenden" im Tray.
 | `npm run typecheck` | TypeScript prüfen (Main/Preload/Shared **und** Renderer) |
 | `npm run build` | Typecheck + Build nach `out/` |
 | `npm run package:mac` | macOS-Build, DMG + ZIP arm64, **unsigniert** (Erststart per Rechtsklick → Öffnen) |
-| `npm run package:win` | Windows-Build, NSIS-Installer — **nie ausgeführt** |
+| `npm run package:win` | Windows-Build: NSIS-Installer **und** portable `.exe`, x64, unsigniert (SmartScreen: „Weitere Informationen" → „Trotzdem ausführen") |
 
 Beide `package:`-Skripte laufen über `npm run build`, also inklusive Typecheck.
 Die Artefakte landen in `release/` (in `.gitignore`).
+
+Für Windows entstehen zwei Dateien, und die Wahl zwischen ihnen ist nicht nur
+Geschmack:
+
+- **`Factorial Desktop Setup <version>.exe`** installiert nach
+  `%LOCALAPPDATA%\Programs` (ohne Adminrechte), legt einen Startmenü-Eintrag an
+  und ist die Variante, bei der **Autostart sinnvoll ist** — der Run-Key-Eintrag
+  zeigt dann auf einen Pfad, den es dauerhaft gibt.
+- **`Factorial Desktop.exe`** läuft ohne Installation von überall. Sie entpackt
+  sich beim Start nach `%TEMP%`; Sitzung und Einstellungen teilt sie sich mit
+  der installierten Variante (beide schreiben nach
+  `%APPDATA%\factorial-desktop`), aber der Autostart hängt dann daran, dass die
+  Datei liegen bleibt, wo sie liegt.
+
+`.github/workflows/build.yml` baut beides plus die macOS-Artefakte. Tests und
+Typecheck laufen dort bei jedem Push und Pull Request; die Builds bei einem
+`v*`-Tag oder auf Knopfdruck (macOS-Runner sind teuer). Ein Tag erzeugt einen
+Release-Entwurf mit allen Dateien.
 
 ## Wichtig zu wissen
 

@@ -127,7 +127,7 @@ die erklärte Fassung davon und muss mit dem Grep-Ergebnis übereinstimmen.
 > **Seit Task 14 reicht `src/` als Suchraum nicht mehr.** Die
 > Windows-Konfiguration steht in `electron-builder.yml`, also außerhalb von
 > `src/`. Vollständig ist erst `grep -rn "PLATFORM:" src/ electron-builder.yml`
-> — 21 Treffer in `src/`, einer in der YAML.
+> — 22 Treffer in `src/`, einer in der YAML.
 >
 > **Seit Task 15 muss man das nicht mehr glauben.**
 > `src/shared/__tests__/handoff-docs.test.ts` läuft in `npm test` mit und
@@ -139,12 +139,13 @@ die erklärte Fassung davon und muss mit dem Grep-Ergebnis übereinstimmen.
 
 | Datei:Zeile | Was | Warum | Auf Windows zu prüfen |
 |---|---|---|---|
-| `src/main/settings.ts:170` | `platform === 'win32'` → `{ openAtLogin, path, args: [] }` | Windows-Autostart ist ein Eintrag im Registry-Run-Key und braucht einen Pfad auf eine `.exe`. Ohne explizites `path` trägt Electron das ein, was gerade läuft — im Dev-Modus `electron.exe`, im gepackten Zustand potenziell der falsche Launcher (DESIGN.md, Zeile „Autostart"). | Haken „Autostart" setzen, abmelden/anmelden: die App muss starten. Danach `reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Run"` — der Eintrag muss auf die installierte `.exe` zeigen, nicht auf `electron.exe`. Haken entfernen → Eintrag verschwindet. **Im Dev-Modus bewusst nicht ausprobieren**, sonst startet dauerhaft eine Electron-Instanz mit |
-| `src/main/settings.ts:177` | alles außer `win32` → `{ openAtLogin }` ohne Pfad | macOS registriert das `.app`-Bundle selbst über die Service-Management-API; ein `path` würde auf das Helper-Binary im Bundle zeigen. Linux fällt in denselben Zweig, wo `setLoginItemSettings` ein No-op ist — das ist das harmlose Ergebnis. | Nichts; der Zweig ist auf Windows unerreichbar |
+| `src/main/settings.ts:176` | `platform === 'win32'` → `{ openAtLogin, path, args: [] }` | Windows-Autostart ist ein Eintrag im Registry-Run-Key und braucht einen Pfad auf eine `.exe`. Ohne explizites `path` trägt Electron das ein, was gerade läuft — im Dev-Modus `electron.exe`, im gepackten Zustand potenziell der falsche Launcher (DESIGN.md, Zeile „Autostart"). | Haken „Autostart" setzen, abmelden/anmelden: die App muss starten. Danach `reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Run"` — der Eintrag muss auf die installierte `.exe` zeigen, nicht auf `electron.exe`. Haken entfernen → Eintrag verschwindet. **Im Dev-Modus bewusst nicht ausprobieren**, sonst startet dauerhaft eine Electron-Instanz mit |
+| `src/main/settings.ts:183` | im `win32`-Zweig: `portableExecutable ?? execPath` | Die portable `.exe` entpackt sich beim Start in ein frisches `%TEMP%`-Verzeichnis und läuft von dort, `process.execPath` zeigt also auf eine Datei, die es nach dem Beenden nicht mehr gibt und die beim nächsten Start anders heißt. **Gemessen**, bevor dieser Zweig existierte: der Eintrag lautete `%TEMP%\3IC03IX05LJIid8kYPVrzHXReRz\Factorial Desktop.exe`. Ein Autostart, der dorthin zeigt, ist schlimmer als keiner — er sieht eingerichtet aus und tut nichts. electron-builder legt den Pfad der echten Datei in `PORTABLE_EXECUTABLE_FILE`, der gewinnt deshalb, wo es ihn gibt. | Portable starten, im Tray den Autostart-Haken setzen, dann `reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Run"`: der Eintrag muss auf die Datei zeigen, die man **selbst** angeklickt hat, nicht auf irgendetwas unter `Temp`. Beim Installer ist der Fall unerreichbar — dort ist die Variable nicht gesetzt |
+| `src/main/settings.ts:195` | alles außer `win32` → `{ openAtLogin }` ohne Pfad | macOS registriert das `.app`-Bundle selbst über die Service-Management-API; ein `path` würde auf das Helper-Binary im Bundle zeigen. Linux fällt in denselben Zweig, wo `setLoginItemSettings` ein No-op ist — das ist das harmlose Ergebnis. | Nichts; der Zweig ist auf Windows unerreichbar |
 | `src/main/index.ts:103` | `applyLoginItem` liest `process.platform`/`process.execPath` und gibt sie an `buildLoginItemSettings` weiter | Die einzige Stelle, die `app.setLoginItemSettings` aufruft. Die Verzweigung selbst ist absichtlich ausgelagert und rein, damit der Windows-Zweig auf macOS getestet werden kann. | Nur zusammen mit den beiden Zeilen oben |
-| `src/main/index.ts:258` | `app.requestSingleInstanceLock()`, sonst `app.quit()` | Ohne Lock startet auf Windows bei jedem Aufruf eine zweite komplette Instanz, inklusive zweitem Tray-Icon und zweitem Poll-Loop. Auf macOS übernimmt das die Plattform. | Zweiten Start auslösen (Verknüpfung, Autostart, Doppelklick): es darf keine zweite Instanz erscheinen |
-| `src/main/index.ts:261` | `second-instance`-Handler ruft `showWidget()` | Gegenstück zum Lock: der zweite Start gibt hier ab, sonst passiert für den Nutzer sichtbar gar nichts. Auf macOS feuert das Event praktisch nie. Seit Task 10 zielt der Handler ausdrücklich auf das Widget statt auf `getAllWindows()[0]` — letzteres hätte das Login-Fenster nach vorn geholt, wenn gerade eines offen war. | Zweiten Start auslösen (Verknüpfung, Autostart, Doppelklick); das Widget muss sichtbar und fokussiert nach vorn kommen, auch wenn es vorher ausgeblendet oder minimiert war |
-| `src/main/index.ts:282` | `window-all-closed` beendet die App **nur, wenn es kein Tray gibt** | Seit Task 12 entscheidet nicht mehr die Plattform, sondern das Tray. Mit Tray ist das hier eine Tray-App: Schließen des Widgets blendet nur aus (Task 10), und die App hinter dem Rücken des Benutzers zu beenden, während ihr Icon im Infobereich „Beenden" anbietet, wäre falsch — auf Windows genauso wie auf macOS. Ohne Tray (Bootstrap gescheitert, Login-Fenster geschlossen) gibt es keine sichtbare Oberfläche und wegen `skipTaskbar: true` auch keinen Weg zurück: dann ist das letzte geschlossene Fenster das Ende. Der Handler muss registriert bleiben, weil Electron sonst von sich aus beendet, sobald das letzte Fenster **zerstört** wird. | Widget schließen → App läuft weiter, Tray-Icon bleibt. „Beenden" im Tray → Prozess ist wirklich weg (Task-Manager). Login-Fenster bei fehlgeschlagenem Bootstrap schließen → App beendet sich, es bleibt kein unsichtbarer Prozess übrig |
+| `src/main/index.ts:261` | `app.requestSingleInstanceLock()`, sonst `app.quit()` | Ohne Lock startet auf Windows bei jedem Aufruf eine zweite komplette Instanz, inklusive zweitem Tray-Icon und zweitem Poll-Loop. Auf macOS übernimmt das die Plattform. | Zweiten Start auslösen (Verknüpfung, Autostart, Doppelklick): es darf keine zweite Instanz erscheinen |
+| `src/main/index.ts:264` | `second-instance`-Handler ruft `showWidget()` | Gegenstück zum Lock: der zweite Start gibt hier ab, sonst passiert für den Nutzer sichtbar gar nichts. Auf macOS feuert das Event praktisch nie. Seit Task 10 zielt der Handler ausdrücklich auf das Widget statt auf `getAllWindows()[0]` — letzteres hätte das Login-Fenster nach vorn geholt, wenn gerade eines offen war. | Zweiten Start auslösen (Verknüpfung, Autostart, Doppelklick); das Widget muss sichtbar und fokussiert nach vorn kommen, auch wenn es vorher ausgeblendet oder minimiert war |
+| `src/main/index.ts:285` | `window-all-closed` beendet die App **nur, wenn es kein Tray gibt** | Seit Task 12 entscheidet nicht mehr die Plattform, sondern das Tray. Mit Tray ist das hier eine Tray-App: Schließen des Widgets blendet nur aus (Task 10), und die App hinter dem Rücken des Benutzers zu beenden, während ihr Icon im Infobereich „Beenden" anbietet, wäre falsch — auf Windows genauso wie auf macOS. Ohne Tray (Bootstrap gescheitert, Login-Fenster geschlossen) gibt es keine sichtbare Oberfläche und wegen `skipTaskbar: true` auch keinen Weg zurück: dann ist das letzte geschlossene Fenster das Ende. Der Handler muss registriert bleiben, weil Electron sonst von sich aus beendet, sobald das letzte Fenster **zerstört** wird. | Widget schließen → App läuft weiter, Tray-Icon bleibt. „Beenden" im Tray → Prozess ist wirklich weg (Task-Manager). Login-Fenster bei fehlgeschlagenem Bootstrap schließen → App beendet sich, es bleibt kein unsichtbarer Prozess übrig |
 | `src/main/tray.ts:105` | `iconFor`: `darwin` → `trayTemplate.png` + `setTemplateImage(true)`, sonst → `tray-<tone>.ico` | macOS erwartet ein monochromes Template-Bild und färbt es selbst für Hell-/Dunkelmodus und die hervorgehobene Menubar; ein farbiges Icon würde gegen das System arbeiten. Weil macOS den Zustand daneben als Text zeigt, reicht dort **ein** Icon. Windows hat diesen Text nicht — dort **ist** die Farbe der Zustand, deshalb vier `.ico` (grau/grün/amber/rot, dieselben Farben wie der Statuspunkt im Widget) mit je 16/32/48 px. | Icon in allen vier Zuständen ansehen: ausgestempelt grau, eingestempelt grün, Pause amber, Sitzung abgelaufen rot. Bei 100 %, 150 % und 200 % Skalierung prüfen, ob die 16/32/48-Auflösungen sauber greifen und das Glyph nicht matschig ist |
 | `src/main/tray.ts:117` | Fallback auf `tray-<tone>.png`, wenn das `.ico` leer dekodiert | Ob die `.ico`-Dateien auf Windows dekodieren, war auf macOS **nicht** prüfbar: Electron hat dort überhaupt keinen ICO-Decoder (gemessen: jede `.ico` kommt als leeres 0×0-Bild zurück, auch eine mit klassischen BMP-Einträgen). Ein leeres Tray-Bild ist auf Windows ein unsichtbares Icon — und damit eine App, die man weder zeigen noch beenden kann. PNG dekodiert überall. | Wenn das Icon sichtbar ist, hat das `.ico` funktioniert. Erscheint stattdessen `[tray] icon missing or unreadable` in der Konsole, greift der Fallback: dann `resources/make-tray-icons.py` anpassen (z. B. `bitmap_format` entfernen, um PNG-Einträge zu schreiben) und erneut probieren |
 | `src/main/tray.ts:154` | `setTitle` nur auf `darwin` | Der Live-Timer in der Menubar ist ein macOS-Feature (DESIGN.md, „Tray"): `tray.setTitle` existiert auf Windows nicht. | Nichts; auf Windows unerreichbar. Die Zeit muss stattdessen im Tooltip und im ersten Menüeintrag stehen — genau das ist unten zu prüfen |
@@ -173,8 +174,8 @@ Tray, zwei erklärende Kommentare in `tray-menu.ts`) und den
 (`electron-builder.yml`). Die erste Windows-Inbetriebnahme (2026-08-20) hat drei
 weitere ergänzt — die Cursor-Schleife, ihre Plattformverzweigung und den Kanal
 im Kontrakt —, weil sich die Weiterleitung von Mausbewegungen dort als nicht
-vorhanden herausgestellt hat. Die Tabelle hat **22** Zeilen und deckt
-`grep -rn "PLATFORM:" src/ electron-builder.yml` vollständig ab (21 Treffer in
+vorhanden herausgestellt hat. Die Tabelle hat **23** Zeilen und deckt
+`grep -rn "PLATFORM:" src/ electron-builder.yml` vollständig ab (22 Treffer in
 sieben Dateien unter `src/`, plus einer in der YAML). Die Tasks 13
 (Soll-Zeit im Ring), 14 (Packaging) und 15 (diese Übergabe) haben in `src/`
 **keine** neue Verzweigung erzeugt: die Soll-Zeit ist reine Rechnung, das
@@ -802,14 +803,68 @@ eigentliche Autostart-Test gehört weiterhin hinter die Installation
 einen Zeitstempel nach dem Start, der Bootstrap kam also weiter, als das
 Login-Fenster vermuten ließ. Wer das aufklärt, trägt es hier nach.
 
+### Nachtrag desselben Tages: Installer, Portable und CI
+
+Schritt 7 ist gelaufen, dazu kamen ein zweites Windows-Artefakt und ein
+CI-Workflow.
+
+**Der Installer, von der Installation bis zum Autostart:**
+
+- `Factorial Desktop Setup 0.1.0.exe` installiert **ohne Adminrechte** nach
+  `%LOCALAPPDATA%\Programs\Factorial Desktop` (`perMachine: false`), legt einen
+  Startmenü-Eintrag an und schreibt dabei **selbst keinen** Autostart-Eintrag.
+  Silent geprüft (`/S`), Exit-Code 0.
+- Beim ersten Start der installierten App entsteht der Run-Key-Eintrag
+  `electron.app.Factorial Desktop`, und er zeigt auf
+  `%LOCALAPPDATA%\Programs\Factorial Desktop\Factorial Desktop.exe` — also
+  auf die installierte `.exe`, **nicht** auf `electron.exe` und nicht auf einen
+  Ordner unter `release\`. Das ist genau, was Schritt 7 verlangt.
+- Der Haken im Tray-Untermenü schaltet ihn wieder ab: Eintrag verschwunden,
+  `"openAtLogin": false` in der `settings.json`. **Nicht geprüft** ist der
+  dritte Teil von Schritt 7 — ab- und wieder anmelden —, weil das die Sitzung
+  beendet, in der gearbeitet wird.
+
+**Die App lief dabei zum ersten Mal mit echter Anmeldung.** In der Konsole
+stand `[auth] signed in as …`, das Widget zeigte die Tagessumme des echten
+Kontos und das Tray-Menü `Ausgestempelt · heute 8:44` samt
+`Pause heute 0:33`. Damit ist die Kette echte API → Store → IPC → Widget → Tray
+einmal wirklich gelaufen — auf Windows, aus der installierten App. Das klärt
+auch die weiter oben offen gelassene Frage, warum der Bootstrap über
+`ensureAuthenticated` hinauskam: es **gibt** eine gültige Sitzung in der
+Partition. Ein- und Ausstempeln ist weiterhin nicht ausgelöst worden.
+
+**Der Single-Instance-Lock** (Schritt 4, Punkt 3) ist damit ebenfalls belegt:
+die portable `.exe` bei laufender installierter App gestartet — es blieb bei
+vier Prozessen, kein zweites Tray-Icon, die zweite Instanz beendete sich selbst.
+
+**Das portable Artefakt und die Falle darin.** `electron-builder.yml` baut für
+Windows jetzt zusätzlich `portable` → `release\Factorial Desktop.exe`, ohne
+Version im Namen. Das Ding entpackt sich beim Start in ein frisches
+`%TEMP%`-Verzeichnis und läuft von dort, und genau daran wäre der Autostart
+gescheitert: der Eintrag lautete
+`%TEMP%\3IC03IX05LJIid8kYPVrzHXReRz\Factorial Desktop.exe` — ein Pfad, den es
+nach dem Beenden nicht mehr gibt. Beim nächsten Start hieß das Verzeichnis
+`3IC14hlQfDDz86BHPTBNoqBbkGL`. Behoben über `PORTABLE_EXECUTABLE_FILE`
+(`src/main/settings.ts:183`); danach zeigte der Eintrag auf die Datei, die
+angeklickt wurde. Drei Tests halten den Zweig fest, gegengeprüft.
+
+**CI** liegt in `.github/workflows/build.yml`: Tests und Typecheck auf Linux bei
+jedem Push und PR, die Artefakte für macOS und Windows bei einem `v*`-Tag oder
+auf Knopfdruck. Dass die Builds **nicht** bei jedem Push auf `main` laufen, ist
+Absicht — macOS-Runner rechnen zehnfach, und beide Plattformen bei jedem Push
+würden das Monatskontingent eines kostenlosen Kontos in wenigen Tagen
+aufbrauchen. Ein Tag erzeugt einen Entwurf eines Releases mit allen Artefakten.
+**Der Workflow ist auf GitHub noch nie gelaufen**; geprüft sind bisher nur die
+YAML-Syntax und dass `npm run package:win -- --publish never` lokal
+durchläuft. Der erste echte Lauf ist der Test.
+
 ### Weiterhin offen
 
 Alles aus Abschnitt 4 unter „Nicht verifiziert", das oben nicht ausdrücklich
 abgeräumt ist. Insbesondere auf Windows: der Drag der Karte samt Aero Snap, das
 Verhalten über einer Vollbild-App, zwei Monitore mit gemischter Skalierung,
-Suspend/Resume, der Single-Instance-Lock, der Installer selbst (gebaut, aber
-nicht ausgeführt), der Autostart nach echter Installation — und der ganze
-Abschnitt 8.
+Suspend/Resume, das Ab- und Anmelden für den Autostart, der erste Lauf des
+CI-Workflows — und der ganze Abschnitt 8.
 
 ## 5. Wie man die Factorial-API selbst weiter erforscht
 

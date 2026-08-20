@@ -194,9 +194,27 @@ describe('README.md is a usable entry point', () => {
     })
   }
 
-  it('says on the first screen that Windows is unverified', () => {
+  /**
+   * Until Windows had actually been run this asserted the opposite — that the
+   * README said the Windows code had never been executed. It passed for a while
+   * on the wrong string: `nie ausgeführt` sat in the command table next to
+   * `package:win`, not in the status box, so editing the table broke a test
+   * about the box. Hence the anchor below is the box itself, by position.
+   *
+   * What has to survive is the *shape* of the claim, not its direction: the
+   * first screen says which platforms this has run on, and somewhere the README
+   * admits the one thing still untested everywhere — clocking in and out
+   * against the real API. A README that quietly starts claiming that too is the
+   * failure this guards against.
+   */
+  it('states on the first screen where the app has and has not run', () => {
     // The one fact a reader must not miss. Anything below the fold does not count.
-    expect(readme.slice(0, 1200)).toMatch(/Windows/)
-    expect(readme).toMatch(/nie (auf Windows )?(ausgeführt|gelaufen)/)
+    const firstScreen = readme.slice(0, 1200)
+    expect(firstScreen).toMatch(/Windows/)
+    expect(firstScreen).toMatch(/macOS/)
+    // The gap that is still real on every platform, and the pointer to where it
+    // is spelled out.
+    expect(readme).toMatch(/Ein- und Ausstempeln|echte Arbeitszeiterfassung/)
+    expect(readme).toContain('docs/WINDOWS.md')
   })
 })
