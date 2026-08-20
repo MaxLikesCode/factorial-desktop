@@ -40,8 +40,8 @@ hovering shows the running time without opening anything.
 > Drag it onto the taskbar once and it stays there.
 
 **The tray menu** is the way to everything: clock in and out, pick a break type,
-show or hide the widget, and *Einstellungen* for start-with-system, always-on-top,
-which way the card opens, light or dark, and checking for updates.
+show or hide the widget, and *Settings* for start-with-system, always-on-top,
+which way the card opens, light or dark, the language, and checking for updates.
 
 **Updates.** The installed build checks for a new version half a minute after
 launch and every six hours after that, and always asks before downloading
@@ -93,7 +93,7 @@ decides — it has no Node, no `require`, and no way to reach the network. The
 pieces that can be tested without Electron are deliberately kept free of it and
 are, which is why the suite runs anywhere.
 
-**Tests.** 521 of them, no Electron runtime required. They cover the time
+**Tests.** 517 of them, no Electron runtime required. They cover the time
 reconstruction, the store's optimistic updates and rollbacks, the IPC codec, the
 widget's five states, and the platform-dependent decisions — the last of those
 take their inputs as arguments precisely so that, say, the Windows autostart path
