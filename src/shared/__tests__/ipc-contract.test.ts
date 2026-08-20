@@ -11,6 +11,7 @@ import {
 /** Everything a snapshot needs beyond `state`, so the cases below stay readable. */
 const REST = {
   todayMinutes: 0,
+  daySegments: [],
   incompleteShifts: 0,
   expectedMinutes: null,
   breakOptions: [],
@@ -26,6 +27,7 @@ describe('snapshot serialisation', () => {
       ...REST,
       state: { kind: 'in', shiftId: '1', since, locationType: 'office', workplaceId: 3333333 },
       todayMinutes: 120,
+      daySegments: [],
       breakOptions: [{ id: '19613', name: 'Mittagspause' }],
     }
     const restored = deserialiseSnapshot(serialiseSnapshot(original))

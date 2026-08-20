@@ -569,7 +569,8 @@ Drag-Region. Position wird pro Monitor gemerkt.
 - Kopfzeile: farbiger Punkt + Status (*Ausgestempelt* / *Eingestempelt* /
   *In einer Pause*), rechts daneben die Soll-Zeile
 - Darunter der Timer, 42 px; die Sekunden eine Kontraststufe leiser
-- Darunter der Fortschrittsbalken (6 px) über die volle Breite
+- Darunter der Tagesbalken (6 px) über die volle Breite: grün gearbeitet, amber
+  Pause, transparent was noch fehlt — in der Reihenfolge, in der es passiert ist
 - Buttons je nach Zustand:
   - aus → **Einstempeln**
   - ein → **Pause** (Dropdown mit Pausentypen) + **Ausstempeln**
@@ -611,6 +612,60 @@ Drag-Region. Position wird pro Monitor gemerkt.
 > `work_from_home` heißt dort **„Mobiles Arbeiten"** (am echten Konto bestätigt),
 > nicht „Homeoffice" — wer Widget und Weboberfläche nebeneinander legt, soll
 > nicht erst übersetzen müssen.
+
+### Der Balken zeichnet den Tag, nicht einen Bruchteil
+
+Der Balken zeigt den **Tagesverlauf**: Arbeitsabschnitte grün, Pausen amber, der
+Rest bis zum frühestmöglichen Feierabend transparent — in echter zeitlicher
+Reihenfolge.
+
+Vorher war es gearbeitete Zeit gegen das Soll. Auf dieser Achse hat eine Pause
+**keine Breite**, denn sie ist genau die Zeit, die dort nicht zählt: ein Tag mit
+Pause sah aus wie ein Tag ohne. Das ist ein Problem, wenn das Gesetz eine Pause
+vorschreibt und diese App das ist, wo man nachschaut.
+
+**Die Spanne ist Soll plus Pausen**, denn eine Pause schiebt den Feierabend um
+ihre eigene Länge nach hinten. Läuft der Tag darüber hinaus — Überstunden, Soll
+längst erfüllt — ist die Spanne schlicht alles Geschehene, der Balken füllt sich
+und hört auf, statt überzulaufen. Was man beim Lesen wissen sollte: eine längere
+Pause streckt den ganzen Balken, weil sie die Ziellinie wirklich verschiebt.
+
+Nur Längen und Reihenfolge, nie Uhrzeiten. Zwei Records mit einer Lücke
+dazwischen (aus- und wieder eingestempelt, ohne Pause zu nehmen) zeichnen
+aneinander — das Widget beantwortet „wie viel gearbeitet, wie viel pausiert",
+es rekonstruiert keinen Stundenzettel.
+
+`attendanceShiftsConnection` sichert **keine Reihenfolge** zu, also sortiert der
+Store nach `clockInWithSeconds` + `clockInOffset` über `reconstructInstant`. Ein
+Record, dessen Start sich nicht lesen lässt, behält seine Länge und geht ans
+Ende: sein Beitrag zur Summe stimmt so oder so, nur seine Position ist geraten,
+und das Tagesende ist die Vermutung, die am wenigsten stört.
+
+**Amber bleibt amber**, auch wenn die Pause längst vorbei ist und wieder
+gearbeitet wird. Es ist überall sonst in der App die Pausenfarbe; eine, die nach
+Ende der Pause wechselt, wäre eine zweite Vokabel für dieselbe Sache.
+
+### Die Pausensumme
+
+Rechts in der Fußzeile steht „Pause HH:MM" — die Ecke, die frei wurde, als die
+laufende Pausenzeit nach oben in den Timer wanderte. Sie kostet damit **keine
+Höhe**, was der einzige Grund ist, warum eine zweite Zahl dort überhaupt
+tragbar ist.
+
+Im Tray-Menü steht dieselbe Angabe als eigene Zeile direkt unter der
+Statuszeile. Eigene Zeile und kein weiterer Zusatz an der Statuszeile: die trägt
+schon Zustand, Zeit, Pausenname und Aktualität, und die eine Zahl, für die
+jemand dieses Menü öffnet, sollte nicht das fünfte Element einer Reihe sein.
+
+An einem Tag ohne Pause steht dort **nichts** statt „0:00" — eine Null wäre
+jeden Vormittag eine Erinnerung, um die niemand gebeten hat.
+
+> **Keine gesetzliche Schwelle eingebaut.** Nach ArbZG §4 hängt die Mindestpause
+> an der Arbeitszeit (über 6 h → 30 min, über 9 h → 45 min), Tarif- und
+> Betriebsvereinbarungen weichen ab, andere Länder ohnehin. Eine Schwelle fest
+> zu verdrahten hieße, dass diese App eine Rechtsaussage macht — auf einer
+> Oberfläche, die an eine echte Zeiterfassung schreibt. Sie zeigt die Zahl; die
+> Bewertung bleibt beim Menschen.
 
 ### Während einer Pause zeigt der Timer die Pause
 

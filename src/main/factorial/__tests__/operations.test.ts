@@ -210,6 +210,8 @@ describe('fetchTodayShifts', () => {
                 date: '2026-08-12',
                 minutes: 67,
                 workable: true,
+                clockInWithSeconds: '2026-08-12T08:00:00+00:00',
+                clockInOffset: '+02:00',
                 timeSettingsBreakConfiguration: null,
               },
               {
@@ -217,6 +219,8 @@ describe('fetchTodayShifts', () => {
                 date: '2026-08-12',
                 minutes: 30,
                 workable: false,
+                clockInWithSeconds: '2026-08-12T12:30:00+00:00',
+                clockInOffset: '+02:00',
                 timeSettingsBreakConfiguration: { id: 19613, name: 'Mittagspause' },
               },
             ],
@@ -231,6 +235,8 @@ describe('fetchTodayShifts', () => {
         minutes: 67,
         workable: true,
         breakConfiguration: null,
+        clockInWithSeconds: '2026-08-12T08:00:00+00:00',
+        clockInOffset: '+02:00',
       },
       {
         id: '543343999',
@@ -238,6 +244,8 @@ describe('fetchTodayShifts', () => {
         minutes: 30,
         workable: false,
         breakConfiguration: { id: '19613', name: 'Mittagspause' },
+        clockInWithSeconds: '2026-08-12T12:30:00+00:00',
+        clockInOffset: '+02:00',
       },
     ])
 
@@ -247,6 +255,8 @@ describe('fetchTodayShifts', () => {
     // coming back, and nothing else would notice.
     expect(call.query).toContain('workable')
     expect(call.query).toContain('timeSettingsBreakConfiguration')
+    // The day cannot be drawn in order without these.
+    expect(call.query).toContain('clockInWithSeconds')
   })
 
   it('keeps a null minutes as null instead of counting it as zero', async () => {
@@ -268,7 +278,15 @@ describe('fetchTodayShifts', () => {
       },
     })
     await expect(createOperations(client).fetchTodayShifts(1111111, '2026-08-12')).resolves.toEqual([
-      { id: '1', date: '2026-08-12', minutes: null, workable: true, breakConfiguration: null },
+      {
+        id: '1',
+        date: '2026-08-12',
+        minutes: null,
+        workable: true,
+        breakConfiguration: null,
+        clockInWithSeconds: null,
+        clockInOffset: null,
+      },
     ])
   })
 
@@ -286,7 +304,15 @@ describe('fetchTodayShifts', () => {
       },
     })
     await expect(createOperations(client).fetchTodayShifts(1111111, '2026-08-12')).resolves.toEqual([
-      { id: '1', date: '2026-08-12', minutes: 42, workable: null, breakConfiguration: null },
+      {
+        id: '1',
+        date: '2026-08-12',
+        minutes: 42,
+        workable: null,
+        breakConfiguration: null,
+        clockInWithSeconds: null,
+        clockInOffset: null,
+      },
     ])
   })
 

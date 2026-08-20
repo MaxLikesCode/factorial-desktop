@@ -10,6 +10,7 @@ import { deserialiseSnapshot, type AppSnapshot } from '@shared/ipc-contract'
 const INITIAL: AppSnapshot = {
   state: { kind: 'unknown' },
   todayMinutes: 0,
+  daySegments: [],
   incompleteShifts: 0,
   // No target known yet; the ring stays empty rather than assuming eight hours.
   expectedMinutes: null,

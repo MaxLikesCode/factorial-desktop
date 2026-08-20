@@ -333,7 +333,10 @@ export function createOperations(client: GraphQLClient) {
         query: `query TodayShifts($id: Int!, $startOn: ISO8601Date!, $endOn: ISO8601Date!) {
           attendance { employee(id: $id) {
             attendanceShiftsConnection(startOn: $startOn, endOn: $endOn) {
-              nodes { id date minutes workable timeSettingsBreakConfiguration { id name } }
+              nodes {
+                id date minutes workable clockInWithSeconds clockInOffset
+                timeSettingsBreakConfiguration { id name }
+              }
             }
           } }
         }`,
@@ -353,6 +356,16 @@ export function createOperations(client: GraphQLClient) {
           breakConfiguration: parseBreakConfiguration(
             field(node, path, 'timeSettingsBreakConfiguration'),
             `${path}.timeSettingsBreakConfiguration`,
+          ),
+          // Only ever used to order the day; a record's length always comes from
+          // `minutes`, so neither of these is worth failing a refresh over.
+          clockInWithSeconds: asNullableString(
+            field(node, path, 'clockInWithSeconds'),
+            `${path}.clockInWithSeconds`,
+          ),
+          clockInOffset: asNullableString(
+            field(node, path, 'clockInOffset'),
+            `${path}.clockInOffset`,
           ),
         }
       })

@@ -7,6 +7,7 @@ import { createIpcHandlers, createSnapshotBroadcaster, type IpcStore } from '../
 const SNAPSHOT: AttendanceSnapshot = {
   state: { kind: 'out' },
   todayMinutes: 0,
+  daySegments: [],
   incompleteShifts: 0,
   expectedMinutes: null,
   breakOptions: [],

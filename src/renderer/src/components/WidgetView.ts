@@ -1,3 +1,5 @@
+import type { BarPart } from '@shared/day-timeline'
+
 /**
  * What the three card layouts are handed.
  *
@@ -24,8 +26,16 @@ export interface WidgetView {
   time: string
   /** "Verbleibende Zeit 01:47", "Soll erfüllt · +2:23", or null when there is no goal. */
   goalLine: string | null
-  /** 0..1, or null when there is nothing to be a fraction of — then no bar is drawn. */
-  progress: number | null
+  /**
+   * The day in order — worked stretches, breaks, and what is still ahead.
+   *
+   * Empty when there is nothing to draw: no goal for the day, or no records yet.
+   * The bar is then absent rather than empty, for the same reason the timer shows
+   * a dash instead of a fabricated 0:00:00.
+   */
+  bar: BarPart[]
+  /** Total break time today, pre-formatted, or null when none has been taken. */
+  breakLine: string | null
   /** Advisory lines, already joined by the caller's rules. */
   hints: string[]
 }

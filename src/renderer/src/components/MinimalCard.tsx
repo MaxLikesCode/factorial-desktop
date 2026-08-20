@@ -269,20 +269,28 @@ export function MinimalCard({
         />
       </button>
 
-      <div className="absolute inset-x-0 bottom-0 h-[3px] bg-muted">
-        {view.progress !== null && (
+      {/*
+        The day, flush to the bottom edge, breaks and all. Three pixels is enough
+        for a colour change to register even here — and a break the eye can see is
+        the whole point of the bar carrying the day rather than a fraction.
+      */}
+      <div className="absolute inset-x-0 bottom-0 flex h-[3px] bg-muted">
+        {view.bar.map((part, index) => (
           <div
-            data-slot="progress-bar-fill"
+            key={index}
+            data-slot={`bar-${part.kind}`}
             className={`h-full transition-[width,background-color] duration-500 ease-(--ease-out) ${
-              view.tone === 'active'
-                ? 'bg-emerald-500'
-                : view.tone === 'paused'
-                  ? 'bg-amber-500'
-                  : 'bg-muted-foreground/40'
+              part.kind === 'break'
+                ? 'bg-amber-500'
+                : part.kind === 'rest'
+                  ? 'bg-transparent'
+                  : view.tone === 'idle'
+                    ? 'bg-muted-foreground/40'
+                    : 'bg-emerald-500'
             }`}
-            style={{ width: `${Math.min(1, Math.max(0, view.progress)) * 100}%` }}
+            style={{ width: `${part.percent}%` }}
           />
-        )}
+        ))}
       </div>
     </div>
   )

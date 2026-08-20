@@ -31,7 +31,8 @@
  */
 
 import { deriveState, FALLBACK_BREAK_NAME, type AttendanceState } from '@shared/attendance-state'
-import { toLocalDate } from '@shared/time'
+import type { DaySegment } from '@shared/day-timeline'
+import { reconstructInstant, toLocalDate } from '@shared/time'
 import { FactorialError, type FactorialErrorKind } from './factorial/client'
 import type { Operations } from './factorial/operations'
 import type { BreakConfigOption, LocationType, ShiftSummary } from './factorial/types'
@@ -66,6 +67,8 @@ export interface AttendanceSnapshot {
    * counting it here as well would show it twice.
    */
   todayMinutes: number
+  /** Today's closed records in order — see `AppSnapshot.daySegments`. */
+  daySegments: DaySegment[]
   /**
    * How many of today's closed records arrived without `minutes` (C4). Such a
    * record has not been totalled by Factorial yet, which is a different fact
@@ -182,19 +185,62 @@ export function isBreakRecord(shift: ShiftSummary): boolean {
 function summariseDay(
   shifts: ShiftSummary[],
   openShiftId: string | null,
-): { todayMinutes: number; incompleteShifts: number } {
+): { todayMinutes: number; incompleteShifts: number; daySegments: DaySegment[] } {
   let todayMinutes = 0
   let incompleteShifts = 0
+  const placed: { at: number; segment: DaySegment }[] = []
+  const unplaced: DaySegment[] = []
+
   for (const shift of shifts) {
     if (openShiftId !== null && shift.id === openShiftId) continue
-    if (isBreakRecord(shift)) continue
+
+    const isBreak = isBreakRecord(shift)
     if (shift.minutes === null) {
-      incompleteShifts += 1
+      // Only a *work* record without minutes makes the worked total a lower
+      // bound. Either way there is no length to draw.
+      if (!isBreak) incompleteShifts += 1
       continue
     }
-    todayMinutes += shift.minutes
+    if (!isBreak) todayMinutes += shift.minutes
+
+    const segment: DaySegment = { kind: isBreak ? 'break' : 'work', minutes: shift.minutes }
+    const at = recordStart(shift)
+    if (at === null) unplaced.push(segment)
+    else placed.push({ at, segment })
   }
-  return { todayMinutes, incompleteShifts }
+
+  // The connection promises no ordering, and a day drawn out of order puts the
+  // break in the wrong place. A record whose start could not be read keeps its
+  // length and goes last rather than being dropped: the total it contributes is
+  // right either way, only its position is a guess, and the end of the day is
+  // the guess that disturbs least.
+  placed.sort((a, b) => a.at - b.at)
+
+  return {
+    todayMinutes,
+    incompleteShifts,
+    daySegments: [...placed.map((entry) => entry.segment), ...unplaced],
+  }
+}
+
+/**
+ * When a closed record started, in epoch milliseconds, or `null` when it cannot
+ * be read.
+ *
+ * `reconstructInstant` is the app's one way of turning Factorial's timestamps
+ * into a real instant, and it throws on anything it cannot parse — deliberately,
+ * because a start time is what the whole timer hangs on. Here that throw is
+ * caught: this start is only used to sort the day, a record without one still
+ * has a usable length, and losing the entire bar over one bad timestamp would be
+ * the larger failure by far.
+ */
+function recordStart(shift: ShiftSummary): number | null {
+  if (shift.clockInWithSeconds === null || shift.clockInOffset === null) return null
+  try {
+    return reconstructInstant(shift.date, shift.clockInWithSeconds, shift.clockInOffset).getTime()
+  } catch {
+    return null
+  }
 }
 
 export function createAttendanceStore({
@@ -207,6 +253,7 @@ export function createAttendanceStore({
   let snapshot: AttendanceSnapshot = {
     state: { kind: 'unknown' },
     todayMinutes: 0,
+  daySegments: [],
     incompleteShifts: 0,
     expectedMinutes: null,
     breakOptions: [],

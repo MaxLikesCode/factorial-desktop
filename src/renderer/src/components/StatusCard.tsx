@@ -74,9 +74,9 @@ export function StatusCard({ view, density, ready, actions, location }: Props): 
 
         <Timer value={view.time} className={d.time} />
 
-        {view.progress !== null && (
+        {view.bar.length > 0 && (
           <div className={d.barTop}>
-            <ProgressBar progress={view.progress} tone={view.tone} className={d.bar} />
+            <ProgressBar parts={view.bar} tone={view.tone} className={d.bar} />
           </div>
         )}
 
@@ -98,12 +98,21 @@ export function StatusCard({ view, density, ready, actions, location }: Props): 
           clean out through the bottom edge — visibly, since nothing here clips.
           It was wrong in every state; a break just happened to put text in it.
         */}
-        {location !== null && (
+        {/*
+          The footer carries the work location on the left and the day's break
+          total on the right — the corner that fell free when the break's own
+          running time moved up into the timer. It costs no height at all, which
+          is the only reason a second number is affordable here.
+        */}
+        {(location !== null || view.breakLine !== null) && (
           <div
             data-slot="card-footer"
-            className="flex w-full items-center gap-2 text-xs text-muted-foreground"
+            className="flex w-full items-center justify-between gap-2 text-xs text-muted-foreground"
           >
-            {location}
+            {location ?? <span />}
+            {view.breakLine !== null && (
+              <span className="shrink-0 tabular-nums">{view.breakLine}</span>
+            )}
           </div>
         )}
       </div>

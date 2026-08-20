@@ -44,6 +44,8 @@ function shift(
   id: string,
   minutes: number | null,
   kind: 'work' | 'break' = 'work',
+  /** Time of day the record started, for the order the day is drawn in. */
+  startedAt = '08:00:00',
 ): ShiftSummary {
   return {
     id,
@@ -51,6 +53,8 @@ function shift(
     minutes,
     workable: kind === 'work',
     breakConfiguration: kind === 'break' ? { id: '19613', name: 'Mittagspause' } : null,
+    clockInWithSeconds: `${TODAY}T${startedAt}+00:00`,
+    clockInOffset: '+02:00',
   }
 }
 
@@ -185,7 +189,15 @@ describe('refresh', () => {
     ops.fetchTodayShifts.mockResolvedValue([
       shift('1', 90),
       // Says it is not workable, but names no break configuration.
-      { id: '2', date: TODAY, minutes: 20, workable: false, breakConfiguration: null },
+      {
+        id: '2',
+        date: TODAY,
+        minutes: 20,
+        workable: false,
+        breakConfiguration: null,
+        clockInWithSeconds: `${TODAY}T09:00:00+00:00`,
+        clockInOffset: '+02:00',
+      },
       // Names a break configuration, but does not say it is unworkable.
       {
         id: '3',
@@ -193,6 +205,8 @@ describe('refresh', () => {
         minutes: 13,
         workable: null,
         breakConfiguration: { id: '19613', name: 'Mittagspause' },
+        clockInWithSeconds: `${TODAY}T10:00:00+00:00`,
+        clockInOffset: '+02:00',
       },
     ])
     const store = makeStore(ops)
@@ -214,6 +228,50 @@ describe('refresh', () => {
 
     expect(store.getSnapshot().todayMinutes).toBe(90)
     expect(store.getSnapshot().incompleteShifts).toBe(0)
+  })
+
+  /**
+   * The bar draws the day in the order it happened, and
+   * `attendanceShiftsConnection` promises no order at all — so a day that came
+   * back shuffled would put the break in the wrong place.
+   */
+  it('puts the day in the order it happened, whatever order it arrived in', async () => {
+    const ops = makeOps()
+    ops.fetchTodayShifts.mockResolvedValue([
+      shift('3', 173, 'work', '13:03:00'),
+      shift('1', 270, 'work', '08:00:00'),
+      shift('2', 33, 'break', '12:30:00'),
+    ])
+    const store = makeStore(ops)
+    await store.refresh()
+
+    expect(store.getSnapshot().daySegments).toEqual([
+      { kind: 'work', minutes: 270 },
+      { kind: 'break', minutes: 33 },
+      { kind: 'work', minutes: 173 },
+    ])
+    // And the same records still sum the way they did before.
+    expect(store.getSnapshot().todayMinutes).toBe(443)
+  })
+
+  /**
+   * A start that cannot be read costs the record its position, not its length:
+   * losing the whole bar over one bad timestamp would be the larger failure.
+   */
+  it('keeps a record whose start is unreadable, at the end', async () => {
+    const ops = makeOps()
+    ops.fetchTodayShifts.mockResolvedValue([
+      { ...shift('1', 60, 'work'), clockInWithSeconds: null, clockInOffset: null },
+      shift('2', 90, 'work', '09:00:00'),
+    ])
+    const store = makeStore(ops)
+    await store.refresh()
+
+    expect(store.getSnapshot().daySegments).toEqual([
+      { kind: 'work', minutes: 90 },
+      { kind: 'work', minutes: 60 },
+    ])
+    expect(store.getSnapshot().todayMinutes).toBe(150)
   })
 
   it('sums today’s minutes across the shifts a break split apart', async () => {

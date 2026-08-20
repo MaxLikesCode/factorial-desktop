@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { buildDayBar, breakMinutes, type DaySegment } from '@shared/day-timeline'
 import { formatDuration, formatHoursMinutes, formatOvertime } from '@shared/time'
 import { describeActionError, describeStaleReason } from '@renderer/lib/errors'
 import { useAttendance, useTicker } from '@renderer/hooks/useAttendance'
@@ -94,16 +95,43 @@ export function StatusWidget(): React.JSX.Element {
       : null
 
   /**
-   * The fraction of the day's goal that is done, or `null` when there is no
-   * comparison to draw. Both halves matter: without a goal there is nothing to
-   * be a fraction of, and before the first snapshot there is no worked time.
+   * The day as it happened, with the record that is still running on the end.
    *
-   * `null` means the bar is not rendered at all rather than rendered empty. An
-   * empty track is not neutral — it claims "0 % of something", which on a
-   * holiday or before the first answer is a statement this app does not have.
-   * Same reasoning as `UNKNOWN_TIME` above.
+   * The store hands over the CLOSED records; only here is the current second
+   * known, so only here can the running one be added — as work while clocked in,
+   * as a break while paused. That is what lets a break widen in the bar as it is
+   * being taken rather than appearing whole once it is over.
    */
-  const progress = workedMs === null || target === null ? null : workedMs / 60_000 / target
+  const daySegments: DaySegment[] =
+    since === null
+      ? snapshot.daySegments
+      : [
+          ...snapshot.daySegments,
+          { kind: state.kind === 'break' ? 'break' : 'work', minutes: segmentMs / 60_000 },
+        ]
+
+  /**
+   * The day drawn as bar parts, or an empty list when there is nothing to draw.
+   *
+   * Empty means the bar is not rendered at all rather than rendered empty. An
+   * empty track is not neutral — it claims "0 % of something", which on a holiday
+   * or before the first answer is a statement this app does not have. Same
+   * reasoning as `UNKNOWN_TIME` above.
+   */
+  const bar = state.kind === 'unknown' || state.kind === 'unauthenticated'
+    ? []
+    : buildDayBar(daySegments, target)
+
+  /**
+   * How long today's breaks have been, all told.
+   *
+   * Shown because the answer matters legally and was previously invisible: the
+   * bar's old axis was worked time against the goal, on which a break has no
+   * width at all. `null` rather than "0:00" when none has been taken — a zero
+   * here would be a reminder nobody asked for on every day before lunch.
+   */
+  const pausedMinutes = breakMinutes(daySegments)
+  const breakLine = pausedMinutes < 1 ? null : `Pause ${formatHoursMinutes(pausedMinutes)}`
 
   /** Minutes past the goal; negative while there is still time owed. */
   const overtimeMinutes = workedMs === null || target === null ? null : workedMs / 60_000 - target
@@ -222,7 +250,8 @@ export function StatusWidget(): React.JSX.Element {
           ? UNKNOWN_TIME
           : formatDuration(workedMs),
     goalLine,
-    progress,
+    bar,
+    breakLine,
     hints,
   }
 

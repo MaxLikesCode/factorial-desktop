@@ -19,6 +19,7 @@ import {
 export const EMPTY_SNAPSHOT: AppSnapshot = {
   state: { kind: 'unknown' },
   todayMinutes: 0,
+  daySegments: [],
   incompleteShifts: 0,
   expectedMinutes: null,
   breakOptions: [],

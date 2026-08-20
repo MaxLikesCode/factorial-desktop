@@ -64,6 +64,17 @@ export interface ShiftSummary {
    * record, which is the whole reason for reading both.
    */
   breakConfiguration: BreakConfiguration | null
+  /**
+   * When this record started, for putting the day in order.
+   *
+   * `attendanceShiftsConnection` promises no ordering, and a day drawn out of
+   * order puts the break in the wrong place. The pair is what
+   * `reconstructInstant` needs: the timestamp carries a usable time-of-day and a
+   * worthless date, the offset says which zone it belongs to. Nullable because a
+   * record without them can still be summed and drawn — only not placed.
+   */
+  clockInWithSeconds: string | null
+  clockInOffset: string | null
 }
 
 /**

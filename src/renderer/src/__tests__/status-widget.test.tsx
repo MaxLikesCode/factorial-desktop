@@ -252,17 +252,67 @@ describe('StatusWidget — the three states', () => {
 })
 
 describe('StatusWidget — the day’s target', () => {
-  /** The filled share of the track, or null when no bar is rendered at all. */
-  function fill(): string | null {
-    const bar = document.querySelector<HTMLElement>('[data-slot="progress-bar-fill"]')
-    return bar === null ? null : bar.style.width
+  /**
+   * The bar's parts, or null when no bar is rendered at all.
+   *
+   * The snapshot carries `daySegments` alongside `todayMinutes` — the same fact
+   * with its shape kept — so a fixture that sets one has to set the other. The
+   * store derives both from the same records and cannot disagree with itself.
+   */
+  function bar(): { kind: string; width: string }[] | null {
+    const parts = [...document.querySelectorAll<HTMLElement>('[data-slot^="bar-"]')]
+    if (parts.length === 0) return null
+    return parts.map((el) => ({
+      kind: el.dataset.slot?.replace('bar-', '') ?? '',
+      width: el.style.width,
+    }))
   }
 
   it('uses the target the API sent, not a hard-coded eight hours', async () => {
     // 300 minutes of goal, 120 worked: 03:00 left and 40 % of the track filled.
-    await mount({ state: { kind: 'out' }, todayMinutes: 120, expectedMinutes: 300 })
+    await mount({
+      state: { kind: 'out' },
+      todayMinutes: 120,
+      daySegments: [{ kind: 'work', minutes: 120 }],
+      expectedMinutes: 300,
+    })
     expect(screen.getByText('Verbleibende Zeit 03:00')).toBeTruthy()
-    expect(fill()).toBe('40%')
+    expect(bar()).toEqual([
+      { kind: 'work', width: '40%' },
+      { kind: 'rest', width: '60%' },
+    ])
+  })
+
+  /**
+   * Why the bar draws the day rather than a fraction of the goal: on that older
+   * axis a break had no width at all, so a day with one looked exactly like a day
+   * without. The law says you have to take a break; the app is where you check.
+   */
+  it('draws the day’s breaks, which the old axis could not', async () => {
+    await mount({
+      state: { kind: 'out' },
+      todayMinutes: 443,
+      daySegments: [
+        { kind: 'work', minutes: 270 },
+        { kind: 'break', minutes: 33 },
+        { kind: 'work', minutes: 173 },
+      ],
+      expectedMinutes: 480,
+    })
+
+    expect(bar()?.map((p) => p.kind)).toEqual(['work', 'break', 'work', 'rest'])
+    expect(screen.getByText('Pause 00:33')).toBeTruthy()
+  })
+
+  /** A zero would be a reminder nobody asked for on every day before lunch. */
+  it('says nothing about breaks on a day without one', async () => {
+    await mount({
+      state: { kind: 'out' },
+      todayMinutes: 120,
+      daySegments: [{ kind: 'work', minutes: 120 }],
+      expectedMinutes: 480,
+    })
+    expect(screen.queryByText(/^Pause /)).toBeNull()
   })
 
   it('counts the running shift towards the target while clocked in', async () => {
@@ -289,13 +339,13 @@ describe('StatusWidget — the day’s target', () => {
     await mount({ state: { kind: 'out' }, todayMinutes: 125, expectedMinutes: null })
     expect(screen.queryByText(/Verbleibende Zeit/)).toBeNull()
     expect(timer()).toBe('2:05:00')
-    expect(fill()).toBeNull()
+    expect(bar()).toBeNull()
   })
 
   it('treats a zero target the same way — a holiday is not "done for today"', async () => {
     await mount({ state: { kind: 'out' }, todayMinutes: 125, expectedMinutes: 0 })
     expect(screen.queryByText(/Verbleibende Zeit/)).toBeNull()
-    expect(fill()).toBeNull()
+    expect(bar()).toBeNull()
   })
 
   /**
@@ -304,10 +354,16 @@ describe('StatusWidget — the day’s target', () => {
    * point in the day.
    */
   it('reports the surplus once the target is met, not a zero remainder', async () => {
-    await mount({ state: { kind: 'out' }, todayMinutes: 540, expectedMinutes: 480 })
+    await mount({
+      state: { kind: 'out' },
+      todayMinutes: 540,
+      daySegments: [{ kind: 'work', minutes: 540 }],
+      expectedMinutes: 480,
+    })
     expect(screen.getByText('Soll erfüllt · +1:00')).toBeTruthy()
     expect(screen.queryByText(/Verbleibende Zeit/)).toBeNull()
-    expect(fill()).toBe('100%')
+    // Past the goal the day fills the bar and stops, rather than overflowing.
+    expect(bar()).toEqual([{ kind: 'work', width: '100%' }])
   })
 
   /**
@@ -326,7 +382,7 @@ describe('StatusWidget — the day’s target', () => {
     expect(screen.queryByText(/Verbleibende Zeit/)).toBeNull()
     expect(timer()).toBe(UNKNOWN_TIME)
     // No worked time either, so there is nothing to be a fraction of yet.
-    expect(fill()).toBeNull()
+    expect(bar()).toBeNull()
   })
 })
 

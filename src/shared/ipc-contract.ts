@@ -73,6 +73,17 @@ export interface AppSnapshot {
   state: AttendanceState
   /** Closed shifts only — the running one is recomputed from `state.since`. */
   todayMinutes: number
+  /**
+   * Today's CLOSED records in the order they happened, work and break alike.
+   *
+   * What the bar draws. Lengths and order only, no clock times — nothing here
+   * needs serialising beyond numbers and a word, and the running record is added
+   * by the renderer, which is the only place that knows the current second.
+   *
+   * The work entries sum to `todayMinutes` by construction; they are not a
+   * second copy of it so much as the same fact with its shape kept.
+   */
+  daySegments: DaySegment[]
   /** How many of today's records arrived without `minutes` (C4): day sum is provisional. */
   incompleteShifts: number
   /**
@@ -184,7 +195,9 @@ export function isThemeSetting(value: string): value is ThemeSetting {
   return (THEME_SETTINGS as readonly string[]).includes(value)
 }
 
+import type { DaySegment } from './day-timeline'
 import type { ExpandDirection, WidgetSize } from './widget-size'
+export type { DaySegment }
 export type { ExpandDirection, WidgetSize }
 
 export interface AppSettings {

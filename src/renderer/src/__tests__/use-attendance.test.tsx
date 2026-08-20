@@ -49,6 +49,7 @@ describe('useAttendance', () => {
       bridge.push({
         state: { kind: 'in', shiftId: '1', since, locationType: 'office', workplaceId: 3333333 },
         todayMinutes: 0,
+  daySegments: [],
         incompleteShifts: 0,
         expectedMinutes: null,
         breakOptions: [],

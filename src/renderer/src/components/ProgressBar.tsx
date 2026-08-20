@@ -1,55 +1,41 @@
 import { useEffect, useState } from 'react'
+import type { BarPart } from '@shared/day-timeline'
 
 interface Props {
-  /** 0..1. Out of range or non-finite values are clamped — see `fillWidth`. */
-  progress: number
+  /** The day in order, from `buildDayBar`. An empty list draws nothing. */
+  parts: BarPart[]
+  /** Whether the day is running; only decides the colour of the work parts. */
   tone: 'idle' | 'active' | 'paused'
   /** Height utility; the card's density decides how thick the bar is. */
   className?: string
 }
 
-const TONE: Record<Props['tone'], string> = {
-  idle: 'bg-muted-foreground/40',
-  active: 'bg-emerald-500',
-  paused: 'bg-amber-500',
-}
+const WORK = { idle: 'bg-muted-foreground/40', active: 'bg-emerald-500', paused: 'bg-emerald-500' }
 
 /**
- * How much of the track is filled.
+ * The day as a bar: worked stretches, breaks, and whatever is still ahead.
  *
- * The NaN guard is the same one the ring carried, and for a worse reason: a day
- * target of 0 makes `worked / target` exactly `NaN` (`0/0`), React writes
- * `width: NaN%`, the browser drops the invalid declaration — and a block-level
- * child with no width falls back to `auto`, which is the *full* track. The ring
- * failed that case by disappearing; the bar would fail it by claiming the day
- * was complete. Silent, and the more expensive of the two lies.
- */
-function fillWidth(progress: number): string {
-  if (Number.isNaN(progress)) return '0%'
-  const clamped = Math.min(1, Math.max(0, progress))
-  return `${clamped * 100}%`
-}
-
-/**
- * The day's progress as a bar across the full width of the card.
+ * It used to be a plain fraction of the day's goal, and on that axis a break has
+ * no width at all — it is exactly the time the axis does not count. So a day with
+ * a break looked identical to a day without one, which is a problem when the law
+ * says you have to take one and the app is the thing you check.
  *
- * A bar rather than the ring it replaced: at 320 px it resolves the day about
- * four times finer than an 88 px ring's circumference could, and it leaves the
- * middle of the card free for the timer — which is what the ring never managed
- * (`10:23:45` at a readable size simply does not fit inside a ring this card
- * has room for).
+ * The break parts stay amber even while work is running: amber is the app's
+ * colour for a break everywhere else, and a break that changed colour once it
+ * was over would be a second vocabulary. The work parts follow the day — grey
+ * once clocked out, green while it is running.
  */
-export function ProgressBar({ progress, tone, className = 'h-1.5' }: Props): React.JSX.Element {
+export function ProgressBar({ parts, tone, className = 'h-1.5' }: Props): React.JSX.Element | null {
   /**
    * The bar fills itself in, once per launch.
    *
    * A CSS transition does not run on the first render — the element is born at
-   * its final value — so the fill would otherwise appear already grown. It
-   * starts empty and is handed its real width on the next frame.
+   * its final value — so the fill would otherwise appear already grown. It starts
+   * empty and is handed its real widths on the next frame.
    *
-   * Deliberately tied to mount and nothing else: the fill must **not** animate
-   * on every tick. At an eight-hour target it grows 0.003 % per second,
-   * invisible, and this window sits in the corner of someone's eye all day.
+   * Deliberately tied to mount and nothing else: the fill must **not** animate on
+   * every tick. At an eight-hour target it grows 0.003 % per second, invisible,
+   * and this window sits in the corner of someone's eye all day.
    */
   const [drawn, setDrawn] = useState(false)
   useEffect(() => {
@@ -57,16 +43,28 @@ export function ProgressBar({ progress, tone, className = 'h-1.5' }: Props): Rea
     return () => cancelAnimationFrame(frame)
   }, [])
 
+  // Absent rather than empty: an empty track claims "0 % of something", and
+  // `buildDayBar` returns nothing exactly when there is no something.
+  if (parts.length === 0) return null
+
   return (
-    <div className={`${className} w-full overflow-hidden rounded-full bg-muted`}>
-      <div
-        data-slot="progress-bar-fill"
-        // `background-color` joins the transition: the tone carries the whole
-        // state change (green → amber), and a colour that teleports is the one
-        // part of a state change the eye is guaranteed to miss.
-        className={`h-full rounded-full transition-[width,background-color] duration-500 ease-(--ease-out) ${TONE[tone]}`}
-        style={{ width: drawn ? fillWidth(progress) : '0%' }}
-      />
+    <div className={`${className} flex w-full overflow-hidden rounded-full bg-muted`}>
+      {parts.map((part, index) => (
+        <div
+          // Position is the identity here — the parts have no ids of their own,
+          // and a day only ever grows at its end.
+          key={index}
+          data-slot={`bar-${part.kind}`}
+          className={`h-full transition-[width,background-color] duration-500 ease-(--ease-out) ${
+            part.kind === 'break'
+              ? 'bg-amber-500'
+              : part.kind === 'rest'
+                ? 'bg-transparent'
+                : WORK[tone]
+          }`}
+          style={{ width: drawn ? `${part.percent}%` : '0%' }}
+        />
+      ))}
     </div>
   )
 }

@@ -31,6 +31,7 @@ import {
 const base: AppSnapshot = {
   state: { kind: 'out' },
   todayMinutes: 0,
+  daySegments: [],
   incompleteShifts: 0,
   expectedMinutes: null,
   breakOptions: [],
@@ -327,6 +328,41 @@ describe('buildTrayMenu', () => {
     const items = menu(base, { lastActionError: 'Die Aktion ist fehlgeschlagen.' })
     expect(items[1]?.label).toBe('Die Aktion ist fehlgeschlagen.')
     expect(items[1]?.enabled).toBe(false)
+  })
+
+  describe('the break line', () => {
+    /**
+     * Asked for after a day where the break was invisible everywhere: the tray
+     * menu is where you look when the widget is behind something.
+     */
+    it('sits directly under the status, where the eye already is', () => {
+      const items = menu({
+        ...base,
+        state: clockedIn(NOW),
+        daySegments: [
+          { kind: 'work', minutes: 270 },
+          { kind: 'break', minutes: 33 },
+        ],
+      })
+      expect(labels(items)[1]).toBe('Pause heute 0:33')
+      expect(items[1]?.enabled).toBe(false)
+    })
+
+    it('counts a break that is still running', () => {
+      const items = menu({
+        ...base,
+        state: onBreak(new Date(NOW.getTime() - 12 * 60_000)),
+        daySegments: [{ kind: 'break', minutes: 20 }],
+      })
+      // 20 minutes closed plus 12 running.
+      expect(labels(items)[1]).toBe('Pause heute 0:32')
+    })
+
+    /** A zero would be a reminder nobody asked for, every morning. */
+    it('says nothing on a day without a break', () => {
+      const items = menu({ ...base, state: clockedIn(NOW), daySegments: [{ kind: 'work', minutes: 90 }] })
+      expect(labels(items)[1]).not.toContain('Pause heute')
+    })
   })
 
   describe('Einstellungen', () => {

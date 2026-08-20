@@ -22,6 +22,7 @@
  */
 
 import type { MenuItemConstructorOptions } from 'electron'
+import { breakMinutes } from '@shared/day-timeline'
 import { describeActionError, describeActionFailure, describeStaleReason } from '@shared/errors'
 import type { AppSettings, AppSnapshot, ThemeSetting } from '@shared/ipc-contract'
 import { WIDGET_LAYOUTS, type ExpandDirection, type WidgetSize } from '@shared/widget-size'
@@ -167,6 +168,28 @@ export function trayStatusLine(snapshot: AppSnapshot, now: Date): string {
   if (snapshot.stale) parts.push(describeStaleReason(snapshot.lastErrorKind))
 
   return parts.join(' · ')
+}
+
+/**
+ * How long today's breaks have been, all told, or `null` when none were taken.
+ *
+ * Its own line under the status rather than another clause on it: the status
+ * line already carries state, time, break name and staleness, and the one number
+ * somebody opens this menu to check should not be the fifth thing on a row.
+ *
+ * A running break is included — the store keeps the open record out of
+ * `daySegments`, so the elapsed part is added here from the same `since` the
+ * status line's own clock uses.
+ *
+ * `null` rather than "0:00" on a day without one: a zero here would be a
+ * reminder nobody asked for, every morning.
+ */
+export function trayBreakLine(snapshot: AppSnapshot, now: Date): string | null {
+  const { state } = snapshot
+  const running = state.kind === 'break' ? elapsedMs(state.since, now) / 60_000 : 0
+  const total = breakMinutes(snapshot.daySegments) + running
+  if (total < 1) return null
+  return `Pause heute ${formatTrayTime(total * 60_000)}`
 }
 
 /** A tray icon has no caption; the tooltip is it. */
@@ -353,6 +376,11 @@ export function buildTrayMenu({
   const items: MenuItemConstructorOptions[] = [
     { label: trayStatusLine(snapshot, now), enabled: false },
   ]
+
+  // Right under the status, which is where somebody who opened this menu to
+  // check their break is already looking.
+  const breakLine = trayBreakLine(snapshot, now)
+  if (breakLine !== null) items.push({ label: breakLine, enabled: false })
 
   // The tray can act while the widget is hidden, so a failure needs somewhere to
   // be read. It stays until the next action starts (see `tray.ts`).
