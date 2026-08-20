@@ -40,6 +40,7 @@ export const IPC = {
   setSettings: 'settings:set',
   settingsChanged: 'settings:changed',
   setWindowInteractive: 'widget:setInteractive',
+  setWindowDragging: 'widget:setDragging',
 } as const
 
 /**
@@ -301,4 +302,19 @@ export interface FactorialBridge {
    * currently is; the main process owns the window and does it.
    */
   setWindowInteractive(interactive: boolean): Promise<void>
+  /**
+   * Starts and stops moving the window with the pointer.
+   *
+   * The Minimal card cannot use `-webkit-app-region: drag`: a draggable region
+   * is a title bar to the platform, which then keeps the double click for
+   * itself, and the double click is the card's second way to open. So the drag
+   * is run by hand — the renderer says when, and the main process follows the
+   * cursor.
+   *
+   * Deliberately carries no coordinates. The main process reads the cursor from
+   * the screen instead, because the renderer's own coordinates are relative to a
+   * window that is moving underneath them, and a drag built on those chases its
+   * own tail.
+   */
+  setWindowDragging(dragging: boolean): Promise<void>
 }

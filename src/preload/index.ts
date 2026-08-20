@@ -56,6 +56,8 @@ const bridge: FactorialBridge = {
   },
   setWindowInteractive: (interactive: boolean) =>
     ipcRenderer.invoke(IPC.setWindowInteractive, interactive),
+  setWindowDragging: (dragging: boolean) =>
+    ipcRenderer.invoke(IPC.setWindowDragging, dragging),
 }
 
 contextBridge.exposeInMainWorld('factorial', bridge)

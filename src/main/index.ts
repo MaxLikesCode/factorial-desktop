@@ -28,6 +28,7 @@ import {
   createWidgetWindow,
   getWidget,
   setWidgetAlwaysOnTop,
+  setWidgetDragging,
   setWidgetInteractive,
   setWidgetLayout,
   showWidget,
@@ -190,6 +191,7 @@ async function bootstrap(): Promise<void> {
   // an unanswered `invoke` would reject in its first effect.
   registerIpc({
     setWindowInteractive: setWidgetInteractive,
+    setWindowDragging: setWidgetDragging,
     store,
     settings: settingsWithWindowEffects,
     onSignOut: signInAgain,

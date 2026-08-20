@@ -743,45 +743,44 @@ Minimal hat keine Aktionen. Ein 20-px-Knopf neben der Zahl klappt die Karte auf
 die Kompakt-Größe auf; das Tray-Menü bietet Ein-/Ausstempeln, Pause und
 Fortsetzen ohnehin durchgehend an.
 
-**Der Knopf ist erzwungen, nicht gewählt.** `-webkit-app-region: drag` schluckt
-Mausereignisse vollständig — eine Karte, die man verschieben kann, kann man
-nicht anklicken. Verschieben wiegt bei einem schwebenden Fenster schwerer, also
-bleibt die Karte Drag-Region und bekommt einen eigenen Knopf. Die 8 px Breite,
-die Minimal über den Inhalt hinaus misst, sind genau das.
+**Die Minimal-Karte zieht sich selbst.** Die anderen beiden Größen benutzen
+weiterhin `-webkit-app-region: drag`; hier geht das nicht. Eine Drag-Region ist
+für die Plattform eine Titelleiste, und den Doppelklick auf die Titelleiste
+behält sie für sich — gemessen, nicht vermutet: die Geste kam im Renderer gar
+nicht an. Der Doppelklick ist aber der zweite Weg, die Karte zu öffnen, also
+musste die Region weichen.
 
-**Ein Doppelklick auf die Karte klappt ebenfalls auf und zu — falls er ankommt.**
-Für die Plattform ist eine Drag-Region eine Titelleiste, und ein Doppelklick auf
-die Titelleiste gehört ihr: unter Windows Maximieren/Wiederherstellen, unter
-macOS das, was in den Systemeinstellungen dafür hinterlegt ist. `minimizable:
-false` und `maximizable: false` nehmen beiden Aktionen ihre Wirkung — mehr lässt
-sich von hier aus nicht arrangieren. Ob das Ereignis danach bis in den Renderer
-durchfällt, beantwortet die Plattform, nicht dieser Code, und ohne laufende App
-ist es nicht zu beantworten. Die Geste ist additiv: der Knopf neben der Zahl
-hängt nicht an ihr.
+Stattdessen hört die Karte auf ihre eigenen Zeigerereignisse: beim Drücken wird
+der Zeiger eingefangen, ab 3 px Weg beginnt das Ziehen, der Main-Prozess folgt
+dem Cursor bis zum Loslassen. **Der Cursor wird dabei vom Bildschirm gelesen,
+nicht vom Renderer gemeldet** — Zeigerkoordinaten im Renderer sind relativ zu
+einem Fenster, das die Schleife gerade darunter wegzieht, und ein Ziehen, das
+darauf aufbaut, füttert seine eigene Ausgabe zurück in die Eingabe. Der
+Greifversatz wird einmal am Anfang genommen; danach wird das Fenster jeden Tick
+schlicht auf Cursor plus Versatz gesetzt, also gibt es keine Deltas, in denen
+sich Fehler summieren könnten.
 
-`minimizable: false` schließt nebenbei eine ältere Falle. Steht in macOS
-„Doppelklick auf Titelleiste" auf „Im Dock ablegen", minimierte ein Doppelklick
-auf die Karte das Fenster — und für ein rahmenloses `skipTaskbar`-Fenster heißt
-minimiert *weg*: kein Taskleisten-Knopf, kein Dock-Symbol, nur „Fenster zeigen"
-im Tray.
+Die 3-px-Schwelle trennt Klick von Ziehen: ohne sie würde jeder Klick eine
+Schleife im Main-Prozess starten, um das Fenster nirgendwohin zu bewegen, und
+mit dem Doppelklick streiten.
 
-Die verborgenen Zeilen bleiben die ganze Zeit im DOM — sonst gäbe es nichts
-einzublenden — sind eingeklappt aber `inert` und `aria-hidden`. Ohne das läuft
-die Tabulatortaste in ein unsichtbares „Ausstempeln", und Enter beendet eine
-Schicht, von der auf dem Bildschirm nichts zu sehen ist.
+Das Einfangen des Zeigers ist eine Verbesserung, keine Voraussetzung — wo es
+fehlt, funktioniert das Ziehen weiterhin, es überlebt nur nicht, wenn der Cursor
+dem Fenster davonläuft.
 
-**`inert` reicht dafür nicht, und `pointer-events: none` auch nicht.**
-`-webkit-app-region` löst Chromiums Fenster-Hit-Testing auf, nicht die
-Ereignisverarbeitung — eine unsichtbare Zeile mit `no-drag` bleibt eine
-`no-drag`-Fläche. Die eingeklappte Karte ließ sich deshalb nur an einem 14 px
-schmalen Streifen am linken Rand anfassen: genau links von der absolut
-positionierten Aktionszeile. Eine Regel unter `[data-open='false']` gibt die
-Fläche zurück, für den Container *und* für die Buttons darin — letztere werden
-von `.drag-region button` einzeln erwischt und brauchen einen eigenen Selektor.
+**Zwei Wege, die Karte zu öffnen:** der Knopf neben der Zahl und ein Doppelklick
+irgendwo sonst auf die Karte. Ein Doppelklick, der auf einem Bedienelement
+landet, wird ignoriert — zwei Klicks auf den Pfeil sind schon zwei Umschaltungen.
 
-Der Aufklapp-Knopf liegt außerhalb dieser Zeilen und behält deshalb sein
-`no-drag`. Das ist die einzige Stelle der eingeklappten Karte, die klickt statt
-zu ziehen — und der Grund, warum sie außerhalb liegen muss.
+Der Knopf bleibt trotzdem, und die 8 px Breite, die Minimal über den Inhalt
+hinaus misst, sind weiterhin seine: ein Doppelklick ist nichts, was man auf einem
+Widget errät.
+
+`minimizable: false` steht seit demselben Anlass am Fenster und schließt eine
+ältere Falle, die für „Standard" und „Kompakt" weiter gilt: die sind noch
+Drag-Regionen, und mit macOS auf „Doppelklick auf Titelleiste → Im Dock ablegen"
+verschwände das Widget dort sonst dorthin, wo ein `skipTaskbar`-Fenster nicht
+mehr hinzeigt.
 
 #### Aufklapprichtung
 

@@ -230,6 +230,9 @@ export function createWidgetWindow(deps: {
   })
 
   win.on('closed', () => {
+    // A drag loop that outlived its window would keep firing against a destroyed
+    // handle every 16 ms for the rest of the session.
+    stopDragLoop()
     screen.removeListener('display-removed', revalidatePosition)
     screen.removeListener('display-added', revalidatePosition)
     screen.removeListener('display-metrics-changed', revalidatePosition)
@@ -245,6 +248,69 @@ export function createWidgetWindow(deps: {
 
   win.once('ready-to-show', () => win.show())
   return win
+}
+
+/** Roughly one frame; the cursor is sampled this often while a drag runs. */
+const DRAG_INTERVAL_MS = 16
+
+let dragTimer: NodeJS.Timeout | null = null
+
+function stopDragLoop(): void {
+  if (dragTimer === null) return
+  clearInterval(dragTimer)
+  dragTimer = null
+}
+
+/**
+ * Moves the window with the pointer, for as long as the renderer says so.
+ *
+ * The Minimal card cannot be a `-webkit-app-region: drag` region. A draggable
+ * region is a title bar as far as the platform is concerned, and the platform
+ * then keeps the double click on it for itself — which is the card's second way
+ * to open, and was reported as simply not working. So the drag is run here
+ * instead, and the card is an ordinary element that receives its own events.
+ *
+ * The cursor is read from the SCREEN rather than taken from the renderer, and
+ * that is the part worth not changing. Pointer coordinates in the renderer are
+ * relative to a window that this loop is moving underneath them, so a drag built
+ * on those feeds its own output back into its input and either drifts or
+ * oscillates. The screen's cursor is the one frame of reference that stands
+ * still. The grab offset is taken once, at the start, and the window is simply
+ * placed at cursor plus offset every tick — no deltas to accumulate, so nothing
+ * to accumulate error in either.
+ *
+ * The position is not clamped per tick: fighting the cursor mid-drag feels
+ * broken. It is clamped once when the drag ends, which is also when the position
+ * is written down.
+ */
+export function setWidgetDragging(dragging: boolean): void {
+  stopDragLoop()
+  if (!widget || widget.isDestroyed()) return
+
+  if (!dragging) {
+    const { x, y } = widget.getBounds()
+    const next = clampToVisibleArea(
+      { x, y },
+      currentDisplays().map((d) => d.bounds),
+      windowSize(),
+    )
+    if (next.x !== x || next.y !== y) widget.setPosition(next.x, next.y)
+    return
+  }
+
+  const start = screen.getCursorScreenPoint()
+  const bounds = widget.getBounds()
+  const offsetX = bounds.x - start.x
+  const offsetY = bounds.y - start.y
+
+  dragTimer = setInterval(() => {
+    if (!widget || widget.isDestroyed()) {
+      stopDragLoop()
+      return
+    }
+    const cursor = screen.getCursorScreenPoint()
+    widget.setPosition(cursor.x + offsetX, cursor.y + offsetY)
+  }, DRAG_INTERVAL_MS)
 }
 
 /**

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { ChevronDownIcon } from 'lucide-react'
 import { WIDGET_LAYOUTS, type ExpandDirection } from '@shared/widget-size'
 import type { WidgetView } from './WidgetView'
@@ -39,22 +39,24 @@ interface Props {
  *    compositor transition rather than `setSize()` across the IPC boundary. See
  *    `src/shared/widget-size.ts`.
  *
- * The expand control is a real button rather than the card itself, and that is
- * forced rather than chosen: `-webkit-app-region: drag` swallows mouse events
- * whole, so a card that is draggable cannot also be clickable. The card stays
- * draggable — it is a floating window and moving it matters more — and the
- * 20 px control next to the timer is what the size setting pays 8 px of width
- * for.
+ * This card does its own dragging, and the other sizes do not.
  *
- * The double click on the card is the same gesture asked for a second time, and
- * it may or may not arrive. A draggable region is a title bar to the platform,
- * and a title-bar double click is the platform's to handle: on Windows it is a
- * maximise/restore that never reaches the page, on macOS it is whatever the
- * system preference says. `minimizable: false` and `maximizable: false` on the
- * window leave both with nothing to do, which is the most that can be arranged
- * from here — whether the event then falls through to this handler is the
- * platform's answer, not ours, and it is not answerable without running the app.
- * It is additive either way: the control beside the timer does not depend on it.
+ * `-webkit-app-region: drag` is the obvious way to move a frameless window and
+ * it is what `standard` and `kompakt` still use. It cannot be used here: a
+ * draggable region is a title bar as far as the platform is concerned, so the
+ * platform keeps the double click on it — measured, not assumed, the gesture
+ * never reached this component at all. The double click is this card's second
+ * way to open, next to the control beside the timer, so the region had to go and
+ * the drag had to be run by hand.
+ *
+ * What that buys, beyond the double click: the card is draggable everywhere
+ * except its controls, in both sizes, with one rule instead of a CSS override
+ * fighting `.drag-region button` over specificity.
+ *
+ * The pointer is captured on the way down so the drag survives the cursor
+ * outrunning a window that is chasing it, and the drag only starts after the
+ * pointer has actually travelled — otherwise every click would spin up a loop in
+ * the main process to move the window nowhere.
  */
 export function MinimalCard({
   view,
@@ -111,6 +113,64 @@ export function MinimalCard({
     }
   }, [])
 
+  /**
+   * Where the pointer went down, and whether that has become a drag yet.
+   *
+   * A ref rather than state: nothing here is rendered, and re-rendering the card
+   * on every pointer move during a drag would be the one thing guaranteed to
+   * make the drag stutter.
+   */
+  const drag = useRef<{ x: number; y: number; moving: boolean } | null>(null)
+
+  /** Below this the gesture is still a click, not a drag. */
+  const DRAG_THRESHOLD_PX = 3
+
+  /**
+   * Pointer capture keeps the drag alive when the cursor outruns a window that
+   * is chasing it. It is an improvement, not a requirement — the drag has to
+   * survive an environment that does not implement it, so failing to take or
+   * release the capture is never allowed to abort the handler around it.
+   */
+  function withCapture(element: HTMLElement, pointerId: number, take: boolean): void {
+    try {
+      if (take) element.setPointerCapture(pointerId)
+      else if (element.hasPointerCapture(pointerId)) element.releasePointerCapture(pointerId)
+    } catch {
+      // No capture available. The drag still starts, moves and stops.
+    }
+  }
+
+  function onPointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
+    // Controls handle their own clicks; dragging from one would fight them.
+    if ((event.target as HTMLElement).closest('button') !== null) return
+    if (event.button !== 0) return
+    drag.current = { x: event.clientX, y: event.clientY, moving: false }
+    withCapture(event.currentTarget, event.pointerId, true)
+  }
+
+  function onPointerMove(event: ReactPointerEvent<HTMLDivElement>): void {
+    const started = drag.current
+    if (started === null || started.moving) return
+    if (
+      Math.abs(event.clientX - started.x) < DRAG_THRESHOLD_PX &&
+      Math.abs(event.clientY - started.y) < DRAG_THRESHOLD_PX
+    ) {
+      return
+    }
+    started.moving = true
+    void window.factorial.setWindowDragging(true).catch(() => {})
+  }
+
+  function onPointerUp(event: ReactPointerEvent<HTMLDivElement>): void {
+    const started = drag.current
+    drag.current = null
+    // Ending the drag comes first. A drag left running in the main process would
+    // glue the window to the cursor with no way to put it down, so nothing may
+    // come between the pointer going up and that being said.
+    if (started?.moving === true) void window.factorial.setWindowDragging(false).catch(() => {})
+    withCapture(event.currentTarget, event.pointerId, false)
+  }
+
   const size = open ? expanded : card
   if (size === null) throw new Error('minimal must have an expanded size')
 
@@ -126,7 +186,11 @@ export function MinimalCard({
         if ((event.target as HTMLElement).closest('button') !== null) return
         onToggle()
       }}
-      className={`morph-card drag-region absolute top-0 overflow-hidden rounded-xl border bg-background/95 backdrop-blur ${
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      className={`morph-card absolute top-0 overflow-hidden rounded-xl border bg-background/95 backdrop-blur ${
         // Pinned against the edge it does not grow into, so the transparent
         // remainder of the window is exactly the room the expansion moves into.
         direction === 'left' ? 'right-0' : 'left-0'
@@ -172,7 +236,7 @@ export function MinimalCard({
       </div>
 
       <div
-        className="morph-late no-drag absolute bottom-3.5 left-3.5 flex gap-2"
+        className="morph-late absolute bottom-3.5 left-3.5 flex gap-2"
         data-row="2"
         inert={!open}
         aria-hidden={!open}
@@ -195,7 +259,7 @@ export function MinimalCard({
         // not move, so this stays exactly where it was clicked — the whole point
         // of the direction. Growing right it rides along, and drops to sit
         // opposite the action buttons rather than crowding the status line.
-        className="morph-move no-drag absolute right-2.5 grid size-5 place-items-center rounded-md text-muted-foreground transition-colors duration-150 ease-(--ease-out) hover:bg-muted hover:text-foreground"
+        className="morph-move absolute right-2.5 grid size-5 place-items-center rounded-md text-muted-foreground transition-colors duration-150 ease-(--ease-out) hover:bg-muted hover:text-foreground"
         style={{ top: open && direction === 'right' ? 88 : 12 }}
       >
         <ChevronDownIcon

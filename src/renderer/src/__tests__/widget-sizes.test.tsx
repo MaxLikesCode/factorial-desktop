@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppSnapshot } from '@shared/ipc-contract'
@@ -170,46 +168,55 @@ describe('the minimal card', () => {
 })
 
 /**
- * The whole card is the handle, and that has to survive the rows that are
- * present but invisible while it is collapsed.
+ * The whole card is the handle, and the drag is this component's own.
  *
- * `-webkit-app-region` cannot be evaluated in jsdom — it is resolved by
- * Chromium's window hit testing — so the rule itself is read back out of the
- * stylesheet. What jsdom *can* prove is the structure the rule depends on, and
- * that is asserted against the rendered card rather than trusted.
+ * `-webkit-app-region: drag` is not used here: it makes the card a title bar as
+ * far as the platform is concerned, and the platform then keeps the double click
+ * for itself. So the card watches its own pointer instead, which is testable —
+ * unlike an app region, which jsdom has no window to hit-test against.
  */
 describe('dragging the collapsed card', () => {
-  const css = readFileSync(join(process.cwd(), 'src/renderer/src/styles.css'), 'utf8')
+  const down = (target: Element, x: number, y: number): void => {
+    fireEvent.pointerDown(target, { pointerId: 1, button: 0, clientX: x, clientY: y })
+  }
 
-  /**
-   * Reported from using it: the widget could only be picked up by a narrow strip
-   * down its left edge. The invisible action row is absolutely positioned 14 px
-   * from the left and carries `no-drag`, and its buttons are caught by the
-   * global `.drag-region button` rule — neither of which `pointer-events: none`
-   * or `inert` has any effect on.
-   */
-  it('hands the drag region back while collapsed, container and buttons alike', () => {
-    const rule = /\.morph-card\[data-open='false'\][^{]*\{[^}]*-webkit-app-region:\s*drag/
-    expect(rule.test(css)).toBe(true)
+  it('starts no drag until the pointer has actually travelled', async () => {
+    const bridge = await mount('minimal')
+    const card = minimalCard()
 
-    const selectors = css.slice(css.indexOf(".morph-card[data-open='false']")).split('{')[0]
-    expect(selectors).toContain('.morph-late')
-    // The buttons need their own selector: `.drag-region button` reaches them
-    // directly and out-specifies a rule aimed only at their container.
-    expect(selectors).toContain('.morph-late button')
+    down(card, 40, 20)
+    fireEvent.pointerMove(card, { pointerId: 1, clientX: 41, clientY: 21 })
+    // Two pixels is still a click. Spinning up a loop in the main process to
+    // move the window nowhere is not free, and it would fight the double click.
+    expect(bridge.setWindowDragging).not.toHaveBeenCalled()
+
+    fireEvent.pointerMove(card, { pointerId: 1, clientX: 60, clientY: 20 })
+    expect(bridge.setWindowDragging).toHaveBeenCalledWith(true)
+
+    fireEvent.pointerUp(card, { pointerId: 1 })
+    expect(bridge.setWindowDragging).toHaveBeenLastCalledWith(false)
   })
 
   /**
-   * The one exception the user asked for. It only holds because the control
-   * lives outside the rows that rule targets — move it inside one and the
-   * collapsed card would swallow its own clicks.
+   * The one exception the user asked for: everywhere except the controls.
    */
-  it('keeps the expand control out of the rows that give the drag region back', async () => {
-    await mount('minimal')
+  it('does not drag from a control', async () => {
+    const bridge = await mount('minimal')
     const toggle = screen.getByRole('button', { name: 'Aktionen zeigen' })
 
-    expect(toggle.closest('.morph-late')).toBeNull()
-    expect(toggle.classList.contains('no-drag')).toBe(true)
+    down(toggle, 130, 20)
+    fireEvent.pointerMove(minimalCard(), { pointerId: 1, clientX: 200, clientY: 20 })
+    expect(bridge.setWindowDragging).not.toHaveBeenCalled()
+  })
+
+  /** A gesture that never became a drag must not report the end of one. */
+  it('reports no end for a drag that never began', async () => {
+    const bridge = await mount('minimal')
+    const card = minimalCard()
+
+    down(card, 40, 20)
+    fireEvent.pointerUp(card, { pointerId: 1 })
+    expect(bridge.setWindowDragging).not.toHaveBeenCalled()
   })
 })
 

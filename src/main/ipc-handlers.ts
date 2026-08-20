@@ -73,6 +73,8 @@ export interface IpcHandlerDeps {
    * Injected rather than reached for, so these handlers stay free of Electron.
    */
   setWindowInteractive: (interactive: boolean) => void
+  /** Starts and stops moving the window with the pointer. Owned by `windows.ts`. */
+  setWindowDragging: (dragging: boolean) => void
   /** Clears the session cookie and offers a new sign-in. Owned by `index.ts`. */
   onSignOut: () => Promise<void>
 }
@@ -189,6 +191,7 @@ export function createIpcHandlers({
   settings,
   onSignOut,
   setWindowInteractive,
+  setWindowDragging,
 }: IpcHandlerDeps): IpcHandlers {
   const handlers: IpcHandlers = {
     [IPC.getSnapshot]: async () => serialiseSnapshot(store.getSnapshot()),
@@ -219,6 +222,12 @@ export function createIpcHandlers({
     // somebody's desktop, and nothing on screen would explain why.
     [IPC.setWindowInteractive]: async (payload) => {
       setWindowInteractive(payload === true)
+    },
+    // Same rule, and the safe default is the same shape: anything that is not a
+    // literal `true` stops the drag. A drag left running would glue the window
+    // to the cursor with no way to put it down.
+    [IPC.setWindowDragging]: async (payload) => {
+      setWindowDragging(payload === true)
     },
   }
 
