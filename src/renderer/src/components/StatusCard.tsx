@@ -101,10 +101,14 @@ export function StatusCard({ view, density, ready, actions, location }: Props): 
         {/*
           The footer carries the work location on the left and the day's break
           total on the right — the corner that fell free when the break's own
-          running time moved up into the timer. It costs no height at all, which
-          is the only reason a second number is affordable here.
+          running time moved up into the timer. Costing no height is what makes a
+          second number affordable there, but only where the row already exists:
+          `kompakt` has no location select, so putting the break total in it
+          would conjure a 24 px row into a card with 10 px to spare, and the
+          content would push it out through the bottom edge. Which is the same
+          overflow, from the same row, as the one this condition was written for.
         */}
-        {(location !== null || view.breakLine !== null) && (
+        {location !== null && (
           <div
             data-slot="card-footer"
             className="flex w-full items-center justify-between gap-2 text-xs text-muted-foreground"

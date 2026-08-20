@@ -86,6 +86,30 @@ describe('the three sizes', () => {
     expect(document.querySelector('[data-slot="card-footer"]')).toBeNull()
   })
 
+  /**
+   * Twice now the same 24 px row has pushed kompakt's content out through its
+   * own bottom edge — first as an empty footer, then as one conjured up to hold
+   * the day's break total. The row exists only where the work-location select
+   * already made room for it, which is `standard` alone.
+   */
+  it('never grows a footer row in kompakt, not even to report a break', async () => {
+    installBridge(
+      {
+        ...CLOCKED_IN,
+        daySegments: [
+          { kind: 'work', minutes: 270 },
+          { kind: 'break', minutes: 33 },
+        ],
+      },
+      { widgetSize: 'kompakt' },
+    )
+    render(<StatusWidget />)
+    await act(async () => {})
+
+    expect(document.querySelector('[data-slot="card-footer"]')).toBeNull()
+    expect(screen.queryByText(/^Pause /)).toBeNull()
+  })
+
   it('follows a size change pushed from the tray, without a remount', async () => {
     const bridge = await mount('standard')
     expect(screen.getByText('Büro')).toBeTruthy()
