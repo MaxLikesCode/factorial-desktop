@@ -59,6 +59,13 @@ Geschmack:
   `%APPDATA%\factorial-desktop`), aber der Autostart hängt dann daran, dass die
   Datei liegen bleibt, wo sie liegt.
 
+**Updates:** Die installierte Fassung sucht selbst nach neuen Versionen — 30 s
+nach dem Start und danach alle sechs Stunden — und fragt, bevor sie etwas lädt.
+Läuft gerade eine Schicht, wird nicht neu gestartet; das Update wird dann beim
+nächsten Beenden angewandt. Von Hand: Tray → „Einstellungen" → „Nach Updates
+suchen …". Die portable `.exe` kann sich nicht selbst ersetzen und verweist
+stattdessen auf die Download-Seite. Details in `docs/WINDOWS.md`, Abschnitt 4b.
+
 `.github/workflows/build.yml` baut beides plus die macOS-Artefakte. Tests und
 Typecheck laufen dort bei jedem Push und Pull Request; die Builds bei einem
 `v*`-Tag oder auf Knopfdruck (macOS-Runner sind teuer). Ein Tag erzeugt einen

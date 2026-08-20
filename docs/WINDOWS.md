@@ -868,6 +868,60 @@ Verhalten über einer Vollbild-App, zwei Monitore mit gemischter Skalierung,
 Suspend/Resume, das Ab- und Anmelden für den Autostart, der erste Lauf des
 CI-Workflows — und der ganze Abschnitt 8.
 
+## 4b. Der Update-Mechanismus
+
+Seit 2026-08-21. Zwei Dateien: `src/main/update-policy.ts` entscheidet und ist
+unit-getestet, `src/main/updater.ts` redet mit `electron-updater` und mit dem
+Benutzer. Dieselbe Trennung wie bei `window-position.ts` — und aus demselben
+Grund: die interessanten Fälle sind von der Entwicklungsmaschine aus nicht
+erreichbar.
+
+**Die drei Regeln, aus denen alles folgt:**
+
+1. **Es lädt nichts ungefragt.** `autoDownload` ist aus. Erst der Dialog, dann
+   die 100 MB.
+2. **Es startet keine laufende Schicht neu.** Ein Neustart mitten in der Schicht
+   ist eine Uhr, auf die niemand mehr schaut — genau der Fehler, gegen den diese
+   App gebaut ist. `mayRestart` fragt den Anwesenheitszustand, und behandelt
+   `unknown` wie eine laufende Schicht: *noch nicht wissen* ist nicht dasselbe
+   wie *wissen, dass niemand eingestempelt ist*. Läuft eine Schicht, wird das
+   Update vorgemerkt (`autoInstallOnAppQuit`) und der Benutzer einmal informiert
+   statt wiederholt gefragt.
+3. **Es behauptet nichts.** Die portable `.exe` kann sich nicht selbst
+   ersetzen — sie entpackt sich bei jedem Start nach `%TEMP%`, die aufbewahrte
+   Datei liegt woanders. Sie prüft trotzdem und bietet die Download-Seite an.
+
+**Was für den Feed nötig war**, und beides ist eine Stolperstelle:
+
+- **`publish:` in `electron-builder.yml`** ist hier *kein* Upload-Ziel — die CI
+  hängt die Dateien selbst ans Release. Der Block steht da, weil electron-builder
+  daraus `app-update.yml` ins Paket legt, und **nur** daraus weiß die laufende
+  App, wo sie suchen soll. Ohne ihn scheitert der Updater beim Start mit
+  „provider is not specified".
+- **`latest.yml` muss im Release liegen.** Das ist der Feed. Der Workflow lädt
+  es seit dem Updater-Commit mit hoch; vorher filterte er auf `*.exe`, `*.dmg`,
+  `*.zip` und hätte den Updater zu Dekoration gemacht.
+
+**Was geprüft ist und was nicht:**
+
+- Geprüft (lokal, Windows 11): `latest.yml` entsteht und trägt Version, Dateiname
+  und SHA-512; `app-update.yml` liegt im Paket und zeigt auf
+  `MaxLikesCode/factorial-desktop`; `electron-updater` liegt im `app.asar`. Die
+  Policy-Logik ist unit-getestet, inklusive der beiden Fälle, die man sonst
+  vergisst: `unknown` blockiert den Neustart, und ein leerer
+  `PORTABLE_EXECUTABLE_FILE` gilt **nicht** als portabel (sonst wäre jede
+  installierte Kopie vom Update ausgeschlossen).
+- **Nicht geprüft:** ein echter Durchlauf von einer Version zur nächsten. Dafür
+  braucht es zwei Releases und eine installierte ältere Fassung. Erster
+  Prüfpunkt für den Nächsten, der hier weiterarbeitet — und der Punkt, an dem
+  sich zeigt, ob `verifyUpdateCodeSignature: false` reicht oder ob Windows die
+  unsignierte Installation an anderer Stelle abweist.
+
+**Wenn das Update nicht kommt**, in dieser Reihenfolge nachsehen: Liegt
+`latest.yml` im Release? Zeigt `app-update.yml` im installierten Paket auf das
+richtige Repo? Ist das Repo öffentlich (ein privates braucht ein Token in der
+App, das es hier bewusst nicht gibt)? Steht in der Konsole `[update] …`?
+
 ## 5. Wie man die Factorial-API selbst weiter erforscht
 
 **Vollständig und reproduzierbar in `docs/api-discovery.md`** (Introspection-Snippet,
