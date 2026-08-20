@@ -96,8 +96,11 @@ describe('windowSize', () => {
     const peakHeight =
       CARD.collapsed.height + (CARD.expanded.height - CARD.collapsed.height) * (1 + OVERSHOOT)
 
-    expect(win.width).toBeGreaterThanOrEqual(peakWidth)
-    expect(win.height).toBeGreaterThanOrEqual(peakHeight)
+    // Strictly greater, and by more than rounding: the day's bar sits at the
+    // card's very bottom edge, so a window that merely *reaches* the peak clips
+    // it at the fullest point of the bounce and hands it back as things settle.
+    expect(win.width - peakWidth).toBeGreaterThan(1)
+    expect(win.height - peakHeight).toBeGreaterThan(1)
     // And genuinely larger than the settled card, or the test above would pass
     // for the wrong reason.
     expect(win.width).toBeGreaterThan(CARD.expanded.width)

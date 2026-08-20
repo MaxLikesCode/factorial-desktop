@@ -691,7 +691,18 @@ Auf „Fortsetzen" übernimmt die Tagessumme die Zahl wieder und läuft weiter.
 **Farbcodierung:** grün = eingestempelt, amber = Pause, neutral = ausgestempelt.
 
 **Stack:** React + TypeScript, Tailwind v4, shadcn/ui im **Nova**-Stil. Genutzte
-Komponenten: Button, DropdownMenu, Select, Tooltip, Badge, Sonner.
+Komponenten: Button, Tooltip, Badge, Sonner.
+
+> **Pausentyp und Arbeitsort öffnen ein NATIVES Menü, kein Dropdown im DOM.**
+> In einem Fenster von 321 × 179 wird ein im Dokument gezeichnetes Menü
+> abgeschnitten — die Pausenliste brach nach zwei Einträgen ab, der Rest lag
+> hinter einer Scrollleiste. Keine Fenstergröße repariert das: die Liste ist so
+> lang, wie ein Arbeitgeber sie konfiguriert hat, und die Fenstergröße liegt
+> durch die Animation fest. Ein natives Menü ist ein Fenster der Plattform: es
+> wird vom Bildschirm begrenzt statt von unserem Fenster und klappt in
+> Randnähe von selbst um. Der Renderer schickt Zeilen und einen Ankerpunkt in
+> Fensterkoordinaten, der Main-Prozess öffnet das Menü und antwortet mit der
+> Wahl — oder mit `null`, wenn weggeklickt wurde.
 
 Der Arbeitsort merkt sich die letzte Wahl und wird beim Einstempeln als
 `locationType` + `workplaceId` mitgeschickt.
@@ -815,8 +826,14 @@ bräuchte Fenstergrößen jenseits des Ziels.
 
 Also bleibt das Fenster stehen und nur das `div` darin wächst, als
 CSS-Transition auf dem Compositor. Es hält den Platz vor, in den der
-Überschwinger geht: 13 % über die Zielgröße, also **319 × 177** für eine Karte,
-die bei 300 × 162 zur Ruhe kommt. Ohne diesen Spielraum wird die Spitze
+Überschwinger geht: 13 % über die Zielgröße, also **321 × 179** für eine Karte,
+die bei 300 × 162 zur Ruhe kommt — die Federspitze plus zwei Pixel.
+
+> **Die zwei Pixel sind kein Sicherheitsaufschlag ins Blaue.** Genau die Spitze
+> zu reservieren ließ 0,13 px Luft, und Subpixel-Rundung nimmt sich die. Was sie
+> sich nahm, war der Tagesbalken: der sitzt an der untersten Kante der Karte,
+> verschwand auf dem vollsten Punkt des Gummiband-Effekts und kam beim
+> Einschwingen zurück. Ohne diesen Spielraum wird die Spitze
 abgeschnitten und die Feder ist lautlos weg.
 
 Der Preis ist der unsichtbare Rand. Er würde Klicks schlucken, die dem Desktop

@@ -54,6 +54,7 @@ function fakeSettings(current: AppSettings = SETTINGS) {
 function handlersFor(store: IpcStore, settings = fakeSettings(), onSignOut = vi.fn(async () => {})) {
   const setWindowInteractive = vi.fn()
   const setWindowDragging = vi.fn()
+  const popupMenu = vi.fn(async () => null)
   return {
     handlers: createIpcHandlers({
       store,
@@ -61,11 +62,13 @@ function handlersFor(store: IpcStore, settings = fakeSettings(), onSignOut = vi.
       onSignOut,
       setWindowInteractive,
       setWindowDragging,
+      popupMenu,
     }),
     settings,
     onSignOut,
     setWindowInteractive,
     setWindowDragging,
+    popupMenu,
   }
 }
 
@@ -95,6 +98,7 @@ describe('createIpcHandlers', () => {
         IPC.setSettings,
         IPC.setWindowInteractive,
         IPC.setWindowDragging,
+        IPC.popupMenu,
       ].sort(),
     )
     expect(Object.keys(handlers)).not.toContain(IPC.snapshotChanged)

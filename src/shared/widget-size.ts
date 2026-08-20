@@ -114,15 +114,31 @@ export function isExpandDirection(value: string): value is ExpandDirection {
 export const OVERSHOOT = 0.126
 
 /**
- * The window the card lives in: the expanded card plus the room its opening
- * spring needs to overshoot into, rounded up to whole pixels. Rounding *up* is
- * what keeps the guarantee that the peak fits.
+ * A little more room than the spring's peak strictly needs.
+ *
+ * Reserving exactly the peak leaves the card's last row of pixels flush against
+ * the window's edge at the top of the bounce — 0.13 px of margin, in one case —
+ * and sub-pixel rounding is enough to take it. What gets taken is the day's bar,
+ * because that lives at the very bottom edge of the card: it vanished at the
+ * fullest point of the rubber band and came back as the card settled.
+ *
+ * Two pixels is not a fudge factor. It is the difference between "fits" and
+ * "fits with nothing to spare", on a window whose whole job is to be bigger than
+ * what it contains.
+ */
+const SPRING_HEADROOM_PX = 2
+
+/**
+ * The window the card lives in: the expanded card, plus the room its opening
+ * spring overshoots into, plus a margin. Rounded up — rounding down would give
+ * back exactly what the margin is there to provide.
  */
 export function windowSize(): Size {
   const { collapsed, expanded } = CARD
+  const peak = (from: number, to: number): number => from + (to - from) * (1 + OVERSHOOT)
   return {
-    width: Math.ceil(collapsed.width + (expanded.width - collapsed.width) * (1 + OVERSHOOT)),
-    height: Math.ceil(collapsed.height + (expanded.height - collapsed.height) * (1 + OVERSHOOT)),
+    width: Math.ceil(peak(collapsed.width, expanded.width)) + SPRING_HEADROOM_PX,
+    height: Math.ceil(peak(collapsed.height, expanded.height)) + SPRING_HEADROOM_PX,
   }
 }
 

@@ -1,11 +1,5 @@
 import { PauseIcon } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@renderer/components/ui/dropdown-menu'
 import type { BreakOption } from '@shared/ipc-contract'
 
 interface Props {
@@ -16,43 +10,45 @@ interface Props {
 }
 
 /**
- * K11 — this component is the plan's Radix snippet translated to Base UI, which
- * is what Nova actually generates. Two props changed and both are silent
- * failures rather than type errors:
+ * The break picker: a button that opens a NATIVE menu.
  *
- * - `<DropdownMenuTrigger asChild>` does not exist. Base UI composes through
- *   `render`, which takes the element instead of wrapping it.
- * - `<DropdownMenuItem onSelect>` does not exist either; the item's handler is
- *   `onClick`. `onSelect` would have compiled as an unknown DOM prop and simply
- *   never fired — a Pause button that opens a menu and then does nothing.
+ * It used to be a dropdown drawn inside the page, and in a 321 x 179 window that
+ * cannot work — the list was cut off after two entries with the rest behind a
+ * scrollbar. No window size fixes it either: the list is however long an
+ * employer configured it, and this window's size is fixed by the animation
+ * (`src/shared/widget-size.ts`).
  *
- * Both are recorded in `docs/WINDOWS.md` §6, because a shadcn update can bring
- * the Radix spelling back.
- *
- * The button carries a word, not just the plan's `❙❙` glyph: an icon-only
- * control here would rely on `aria-label` alone for its meaning, and the widget
- * has the room.
+ * A native menu is the platform's own window. It is bounded by the screen rather
+ * than by ours, and it flips and scrolls near an edge without being told to.
  */
 export function BreakMenu({ options, disabled, onSelect }: Props): React.JSX.Element {
+  async function open(event: React.MouseEvent<HTMLButtonElement>): Promise<void> {
+    const box = event.currentTarget.getBoundingClientRect()
+    // The menu hangs from the button's bottom-left, in window coordinates —
+    // which is what `getBoundingClientRect` already gives for a page that fills
+    // its window. Where it actually lands is the platform's call: near a screen
+    // edge it will flip above the button by itself.
+    const picked = await window.factorial
+      .popupMenu(
+        options.map((option) => ({ id: option.id, label: option.name })),
+        { x: box.left, y: box.bottom },
+      )
+      .catch(() => null)
+    if (picked !== null) onSelect(picked)
+  }
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        // No break types loaded means there is nothing to start: the store only
-        // ever fills this from the API, so an empty list is "not known yet",
-        // never "breaks are not configured".
-        disabled={disabled || options.length === 0}
-        render={<Button size="sm" variant="secondary" />}
-      >
-        <PauseIcon />
-        Pause
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
-        {options.map((option) => (
-          <DropdownMenuItem key={option.id} onClick={() => onSelect(option.id)}>
-            {option.name}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Button
+      size="sm"
+      variant="secondary"
+      // No break types loaded means there is nothing to start: the store only
+      // ever fills this from the API, so an empty list is "not known yet", never
+      // "breaks are not configured".
+      disabled={disabled || options.length === 0}
+      onClick={(event) => void open(event)}
+    >
+      <PauseIcon />
+      Pause
+    </Button>
   )
 }

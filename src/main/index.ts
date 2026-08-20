@@ -30,6 +30,7 @@ import {
   setWidgetAlwaysOnTop,
   setWidgetDragging,
   setWidgetInteractive,
+  popupWidgetMenu,
   setWidgetExpandDirection,
   showWidget,
 } from './windows'
@@ -191,6 +192,7 @@ async function bootstrap(): Promise<void> {
   registerIpc({
     setWindowInteractive: setWidgetInteractive,
     setWindowDragging: setWidgetDragging,
+    popupMenu: popupWidgetMenu,
     store,
     settings: settingsWithWindowEffects,
     onSignOut: signInAgain,

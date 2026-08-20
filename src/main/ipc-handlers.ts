@@ -28,6 +28,8 @@ import {
   type ActionErrorKind,
   isThemeSetting,
   type AppSettings,
+  type Point,
+  type PopupMenuItem,
   type AppSnapshot,
   type InvokeChannel,
   type SerialisedSnapshot,
@@ -75,6 +77,11 @@ export interface IpcHandlerDeps {
   setWindowInteractive: (interactive: boolean) => void
   /** Starts and stops moving the window with the pointer. Owned by `windows.ts`. */
   setWindowDragging: (dragging: boolean) => void
+  /**
+   * Opens a native menu over the widget and resolves what was picked.
+   * Injected rather than reached for, so these handlers stay free of Electron.
+   */
+  popupMenu: (items: PopupMenuItem[], anchor: Point) => Promise<string | null>
   /** Clears the session cookie and offers a new sign-in. Owned by `index.ts`. */
   onSignOut: () => Promise<void>
 }
@@ -182,12 +189,20 @@ function asSettingsPatch(payload: unknown): Partial<AppSettings> {
   return patch
 }
 
+/** Keeps a malformed row out of a native menu rather than rendering a blank. */
+function isPopupMenuItem(value: unknown): value is PopupMenuItem {
+  if (typeof value !== 'object' || value === null) return false
+  const row = value as Record<string, unknown>
+  return typeof row.id === 'string' && row.id !== '' && typeof row.label === 'string'
+}
+
 export function createIpcHandlers({
   store,
   settings,
   onSignOut,
   setWindowInteractive,
   setWindowDragging,
+  popupMenu,
 }: IpcHandlerDeps): IpcHandlers {
   const handlers: IpcHandlers = {
     [IPC.getSnapshot]: async () => serialiseSnapshot(store.getSnapshot()),
@@ -222,6 +237,22 @@ export function createIpcHandlers({
     // Same rule, and the safe default is the same shape: anything that is not a
     // literal `true` stops the drag. A drag left running would glue the window
     // to the cursor with no way to put it down.
+    /**
+     * The payload is two shapes at once, so it is checked as two. A menu built
+     * from junk would be an empty popup the user cannot explain, and an anchor
+     * built from junk would put it somewhere off screen — neither is worth
+     * failing the whole call over, so both degrade to "nothing to show".
+     */
+    [IPC.popupMenu]: async (payload) => {
+      const raw = asRecord(payload, IPC.popupMenu)
+      const items = Array.isArray(raw.items) ? raw.items.filter(isPopupMenuItem) : []
+      if (items.length === 0) return null
+
+      const anchor = asRecord(raw.anchor, `${IPC.popupMenu}.anchor`)
+      if (typeof anchor.x !== 'number' || typeof anchor.y !== 'number') return null
+
+      return popupMenu(items, { x: anchor.x, y: anchor.y })
+    },
     [IPC.setWindowDragging]: async (payload) => {
       setWindowDragging(payload === true)
     },

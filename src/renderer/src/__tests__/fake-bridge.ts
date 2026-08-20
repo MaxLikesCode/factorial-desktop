@@ -81,6 +81,7 @@ export function createFakeBridge(
     },
     setWindowInteractive: vi.fn(async () => {}),
     setWindowDragging: vi.fn(async () => {}),
+    popupMenu: vi.fn(async () => null),
     pushSettings(patch) {
       currentSettings = { ...currentSettings, ...patch }
       for (const listener of [...settingsListeners]) listener(currentSettings)

@@ -1,10 +1,4 @@
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@renderer/components/ui/select'
+import { ChevronDownIcon } from 'lucide-react'
 
 /**
  * `AttendanceShiftLocationTypeEnum`, in the same order as `LOCATION_TYPES` in
@@ -43,32 +37,44 @@ interface Props {
  * - `onValueChange` is called with `string | null` plus an event-details second
  *   argument, so the handler cannot be passed straight through.
  */
+/**
+ * The work-location picker: a button that opens a NATIVE menu.
+ *
+ * Same reason as `BreakMenu`. A dropdown drawn inside the page is clipped by a
+ * window 179 px tall, and this one sits 120 px down it — there was never
+ * anywhere for three entries to go.
+ *
+ * The current value is marked, so the platform renders the entries as a radio
+ * group and the menu answers "which one is set" without being read.
+ */
 export function LocationSelect({ value, disabled, onChange }: Props): React.JSX.Element {
+  const current = LOCATIONS.find((location) => location.value === value)
+
+  async function open(event: React.MouseEvent<HTMLButtonElement>): Promise<void> {
+    const box = event.currentTarget.getBoundingClientRect()
+    const picked = await window.factorial
+      .popupMenu(
+        LOCATIONS.map((location) => ({
+          id: location.value,
+          label: location.label,
+          checked: location.value === value,
+        })),
+        { x: box.left, y: box.bottom },
+      )
+      .catch(() => null)
+    if (picked !== null) onChange(picked)
+  }
+
   return (
-    <Select
-      items={LOCATIONS}
-      value={value}
+    <button
+      type="button"
+      aria-label="Arbeitsort"
       disabled={disabled}
-      // `null` arrives only when a selection is cleared, which this select has
-      // no control for; ignoring it keeps a location always set.
-      onValueChange={(next) => {
-        if (next !== null) onChange(next)
-      }}
+      onClick={(event) => void open(event)}
+      className="flex h-6 items-center gap-1 rounded-md px-1 text-xs text-muted-foreground transition-colors duration-150 ease-(--ease-out) hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
     >
-      <SelectTrigger
-        size="sm"
-        aria-label="Arbeitsort"
-        className="h-6 border-none bg-transparent px-1 text-xs shadow-none dark:bg-transparent dark:hover:bg-transparent"
-      >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {LOCATIONS.map((location) => (
-          <SelectItem key={location.value} value={location.value}>
-            {location.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+      {current?.label ?? value}
+      <ChevronDownIcon className="size-4 shrink-0" />
+    </button>
   )
 }

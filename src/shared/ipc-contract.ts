@@ -41,6 +41,7 @@ export const IPC = {
   settingsChanged: 'settings:changed',
   setWindowInteractive: 'widget:setInteractive',
   setWindowDragging: 'widget:setDragging',
+  popupMenu: 'widget:popupMenu',
 } as const
 
 /**
@@ -200,6 +201,19 @@ import type { ExpandDirection } from './widget-size'
 export type { DaySegment }
 export type { ExpandDirection }
 
+/** One row of a native menu. `checked` renders the group as radios. */
+export interface PopupMenuItem {
+  id: string
+  label: string
+  checked?: boolean
+}
+
+/** A point in window coordinates. */
+export interface Point {
+  x: number
+  y: number
+}
+
 export interface AppSettings {
   openAtLogin: boolean
   alwaysOnTop: boolean
@@ -325,4 +339,18 @@ export interface FactorialBridge {
    * own tail.
    */
   setWindowDragging(dragging: boolean): Promise<void>
+  /**
+   * Opens a native menu at a point in the window and resolves what was picked.
+   *
+   * The widget's window is 321 x 179. A menu drawn inside the page is clipped by
+   * it, and there is no size that fixes that — the break list is however long an
+   * employer configured it. A native menu is the platform's own window and is
+   * bounded by the screen instead, which is also what makes it flip and scroll
+   * on its own near an edge.
+   *
+   * `anchor` is in window coordinates, which is what `getBoundingClientRect`
+   * already returns for a page that fills its window. Resolves `null` when the
+   * menu is dismissed without a choice.
+   */
+  popupMenu(items: PopupMenuItem[], anchor: Point): Promise<string | null>
 }

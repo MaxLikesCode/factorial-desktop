@@ -17,7 +17,7 @@
  *    monitor which is no longer attached is unreachable by any normal means.
  */
 
-import { BrowserWindow, app, screen } from 'electron'
+import { BrowserWindow, Menu, app, screen } from 'electron'
 import { join } from 'node:path'
 import {
   keepCardInPlace,
@@ -335,6 +335,52 @@ export function setWidgetExpandDirection(direction: ExpandDirection): void {
     windowSize(),
   )
   if (next.x !== bounds.x || next.y !== bounds.y) widget.setPosition(next.x, next.y)
+}
+
+/**
+ * Opens a native menu over the widget and resolves what was picked.
+ *
+ * A menu drawn inside the page is clipped by a window this small — 321 x 179 —
+ * and no window size fixes it, because the list of break types is however long
+ * an employer made it. A native menu is the platform's own window: it is bounded
+ * by the screen, and it flips and scrolls near an edge without being told to.
+ *
+ * `anchor` arrives in window coordinates, which is what `popup` wants.
+ *
+ * The promise always settles. `popup`'s callback fires when the menu closes for
+ * any reason, so a dismissal resolves `null` rather than leaving the renderer
+ * waiting on a click that is never coming.
+ */
+export function popupWidgetMenu(
+  items: { id: string; label: string; checked?: boolean }[],
+  anchor: { x: number; y: number },
+): Promise<string | null> {
+  const win = widget
+  if (!win || win.isDestroyed()) return Promise.resolve(null)
+
+  return new Promise((resolve) => {
+    let picked: string | null = null
+    const menu = Menu.buildFromTemplate(
+      items.map((item) => ({
+        label: item.label,
+        // A row that knows whether it is the current one renders as a radio, and
+        // consecutive radios form one group — which is what the work location
+        // wants and the break list, having no current value, never asks for.
+        type: item.checked === undefined ? undefined : ('radio' as const),
+        checked: item.checked,
+        click: () => {
+          picked = item.id
+        },
+      })),
+    )
+    menu.popup({
+      window: win,
+      x: Math.round(anchor.x),
+      y: Math.round(anchor.y),
+      // Fires on close, whatever closed it. `click` has already run by then.
+      callback: () => resolve(picked),
+    })
+  })
 }
 
 export function getWidget(): BrowserWindow | null {

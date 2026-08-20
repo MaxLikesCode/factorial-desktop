@@ -1,17 +1,28 @@
 /**
- * K11: these two components are the ones the plan wrote against Radix props.
- * Nova is Base UI, so the trigger takes `render` instead of `asChild` and the
- * item takes `onClick` instead of `onSelect`. A rename that happens to stay
- * type-compatible would not be caught by `tsc` — clicking through it is.
+ * Both pickers open a NATIVE menu rather than drawing one in the page.
+ *
+ * The widget's window is 321 x 179, and a menu inside it is clipped — the break
+ * list was cut off after two entries with the rest behind a scrollbar. No window
+ * size fixes that: the list is however long an employer configured it, and this
+ * window's size is fixed by the animation. So what is testable here is no longer
+ * the menu's markup but the request: the right rows, the right anchor, and what
+ * the component does with the answer.
  */
 
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BreakMenu } from '@renderer/components/BreakMenu'
 import { LOCATIONS, LocationSelect } from '@renderer/components/LocationSelect'
+import { installBridge, type FakeBridge } from './fake-bridge'
 
-// Vitest runs without `globals`, so Testing Library registers no auto-cleanup.
 afterEach(cleanup)
+
+/** Makes the next `popupMenu` resolve as if the user had picked `id`. */
+function bridgeAnswering(id: string | null): FakeBridge {
+  const bridge = installBridge()
+  vi.mocked(bridge.popupMenu).mockResolvedValue(id)
+  return bridge
+}
 
 describe('BreakMenu', () => {
   const options = [
@@ -19,14 +30,31 @@ describe('BreakMenu', () => {
     { id: '20261', name: 'Arztbesuch' },
   ]
 
-  it('reports the chosen break id', async () => {
+  it('offers every break type the store knows, and reports the chosen id', async () => {
+    const bridge = bridgeAnswering('19613')
     const onSelect = vi.fn()
     render(<BreakMenu options={options} disabled={false} onSelect={onSelect} />)
 
     await act(async () => void screen.getByRole('button', { name: 'Pause' }).click())
-    await act(async () => void screen.getByText('Mittagspause').click())
 
+    expect(bridge.popupMenu).toHaveBeenCalledWith(
+      [
+        { id: '19613', label: 'Mittagspause' },
+        { id: '20261', label: 'Arztbesuch' },
+      ],
+      expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }),
+    )
     expect(onSelect).toHaveBeenCalledWith('19613')
+  })
+
+  /** Dismissing the menu is not choosing the first entry. */
+  it('starts nothing when the menu is dismissed', async () => {
+    bridgeAnswering(null)
+    const onSelect = vi.fn()
+    render(<BreakMenu options={options} disabled={false} onSelect={onSelect} />)
+
+    await act(async () => void screen.getByRole('button', { name: 'Pause' }).click())
+    expect(onSelect).not.toHaveBeenCalled()
   })
 
   it('is disabled when the store has no break types to offer', () => {
@@ -45,6 +73,29 @@ describe('LocationSelect', () => {
     render(<LocationSelect value="work_from_home" disabled={false} onChange={vi.fn()} />)
     expect(screen.getByText('Mobiles Arbeiten')).toBeTruthy()
     expect(screen.queryByText('work_from_home')).toBeNull()
+  })
+
+  /**
+   * The current value is marked, which is what makes the platform draw the rows
+   * as a radio group — the menu then answers "which one is set" without being
+   * read.
+   */
+  it('marks the current location so the menu reads as a choice already made', async () => {
+    const bridge = bridgeAnswering('business_trip')
+    const onChange = vi.fn()
+    render(<LocationSelect value="work_from_home" disabled={false} onChange={onChange} />)
+
+    await act(async () => void screen.getByRole('button', { name: 'Arbeitsort' }).click())
+
+    expect(bridge.popupMenu).toHaveBeenCalledWith(
+      [
+        { id: 'office', label: 'Büro', checked: false },
+        { id: 'work_from_home', label: 'Mobiles Arbeiten', checked: true },
+        { id: 'business_trip', label: 'Dienstreise', checked: false },
+      ],
+      expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }),
+    )
+    expect(onChange).toHaveBeenCalledWith('business_trip')
   })
 
   it('offers exactly the three values the schema accepts', () => {
