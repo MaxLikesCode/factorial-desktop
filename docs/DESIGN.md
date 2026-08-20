@@ -778,7 +778,7 @@ Eine Karte, zwei Zustände:
 | | | |
 |---|---|---|
 | eingeklappt | 156 × 44 | Punkt · Zahl · Tagesbalken |
-| aufgeklappt | 300 × 150 | + Status · Restzeit · Buttons · Arbeitsort · Pausensumme |
+| aufgeklappt | 300 × 162 | + Status · Restzeit · Buttons · Arbeitsort · Pausensumme |
 
 **Der aufgeklappte Zustand ist kein Anblick, sondern ein Handlungsmoment.** Man
 klappt auf, um Pause zu drücken oder auszustempeln, und es schließt sich wieder.
@@ -790,8 +790,15 @@ Vorher waren es drei feste Größen mit einer Einstellung im Tray. Die mittlere
 („Kompakt“) zeigte nachweislich nichts, was die aufgeklappte Karte nicht auch
 zeigt — sie konnte die Pausensumme nicht einmal tragen, ohne überzulaufen. Und
 die größte verteilte 37 px Luft, die sie nicht brauchte. Übrig bleibt eine Karte
-ganz ohne Einstellung: 300 × 150 gegen die früheren 340 × 224, also **41 %
+ganz ohne Einstellung: 300 × 162 gegen die früheren 340 × 224, also **36 %
 weniger Fläche bei gleichem Inhalt**.
+
+Die Zeilenpositionen stehen in `widget-size.ts`, nicht als Zahlen in der
+Komponente — Geometrie, die nichts prüft, driftet. Die Fußzeile saß eine Weile
+3 px über dem Tagesbalken und wirkte, als läge sie darauf: der
+Arbeitsort-Selector ist 24 px hoch, nicht die 16 einer Textzeile, also endet die
+Zeile 8 px tiefer, als sie im Quelltext aussieht. `widget-size.test.ts` rechnet
+das jetzt nach.
 
 Aufgeklappt wird über den Pfeil neben der Zahl oder per Doppelklick auf die
 Karte. Die Hinweiszeile („Keine Verbindung“) sitzt in der Lücke, die die
@@ -808,8 +815,8 @@ bräuchte Fenstergrößen jenseits des Ziels.
 
 Also bleibt das Fenster stehen und nur das `div` darin wächst, als
 CSS-Transition auf dem Compositor. Es hält den Platz vor, in den der
-Überschwinger geht: 13 % über die Zielgröße, also **319 × 164** für eine Karte,
-die bei 300 × 150 zur Ruhe kommt. Ohne diesen Spielraum wird die Spitze
+Überschwinger geht: 13 % über die Zielgröße, also **319 × 177** für eine Karte,
+die bei 300 × 162 zur Ruhe kommt. Ohne diesen Spielraum wird die Spitze
 abgeschnitten und die Feder ist lautlos weg.
 
 Der Preis ist der unsichtbare Rand. Er würde Klicks schlucken, die dem Desktop
@@ -830,12 +837,13 @@ als die Zielgröße — das ist der Schwung. Zurück heißt es kleiner als die
 als Zucken statt als Leben. Bei Dämpfung 0,55 auf dem Rückweg tauchte die Karte
 auf 130 × 34 px durch und `overflow: hidden` schnitt die Zahl an.
 
-Deshalb: 12,6 % hinaus (520 ms), nur 9,0 % zurück über kürzere 420 ms. Die 9 %
-sind keine Geschmacksfrage — die Karte legt zwischen ihren Zuständen 106 px
+Deshalb: 12,6 % hinaus (520 ms), nur 8,0 % zurück über kürzere 420 ms. Die 8 %
+sind keine Geschmacksfrage — die Karte legt zwischen ihren Zuständen 118 px
 zurück, und unter der eingeklappten Zahl bleiben 11,1 px, bevor
-`overflow: hidden` sie anschneidet: 10,5 % des Wegs. Als die Karte nur 82 px
-wuchs, passten dort noch 12 %. Die größere aufgeklappte Karte hat den Platz
-gekostet, also musste der Rückweg etwas Schwung zurückgeben. Die Deckkraft federt nie mit: ein Überschwinger unter 0 oder über 1
+`overflow: hidden` sie anschneidet: 9,4 % des Wegs. Als die Karte nur 82 px
+wuchs, passten dort noch 12 %. Jedes Mal, wenn die aufgeklappte Karte seither
+gewachsen ist, hat sie dieser Zahl Platz weggenommen, und der Rückweg musste
+Schwung dafür abgeben. Die Obergrenze ist Arithmetik, keine Vorliebe. Die Deckkraft federt nie mit: ein Überschwinger unter 0 oder über 1
 wird abgeschnitten, und der Schnitt liest sich als Hänger.
 
 ### Erscheinungsbild

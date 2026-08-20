@@ -1,6 +1,6 @@
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { ChevronDownIcon } from 'lucide-react'
-import { CARD, type ExpandDirection } from '@shared/widget-size'
+import { CARD, EXPANDED_ROWS, type ExpandDirection } from '@shared/widget-size'
 import { ProgressBar } from './ProgressBar'
 import type { WidgetView } from './WidgetView'
 
@@ -227,7 +227,8 @@ export function WidgetCard({
         files the end of somebody's shift with nothing on screen to show for it.
       */}
       <div
-        className="morph-late absolute top-[11px] right-9 left-3.5 flex items-center justify-between gap-2.5"
+        className="morph-late absolute right-9 left-3.5 flex items-center justify-between gap-2.5"
+        style={{ top: EXPANDED_ROWS.head.top }}
         data-row="1"
         inert={!open}
         aria-hidden={!open}
@@ -242,7 +243,7 @@ export function WidgetCard({
 
       <div
         className="morph-move absolute left-3.5 flex items-center gap-1.5"
-        style={{ top: open ? 32 : 10 }}
+        style={{ top: open ? EXPANDED_ROWS.timer.top : 10 }}
       >
         <span
           className={`size-[7px] shrink-0 rounded-full transition-colors duration-300 ease-(--ease-out) ${view.dotClass}`}
@@ -255,7 +256,7 @@ export function WidgetCard({
 
       <div
         className="morph-late absolute left-3.5 flex gap-2"
-        style={{ top: 80 }}
+        style={{ top: EXPANDED_ROWS.actions.top }}
         data-row="2"
         inert={!open}
         aria-hidden={!open}
@@ -271,7 +272,7 @@ export function WidgetCard({
       */}
       <div
         className="morph-late absolute right-3.5 left-3.5 flex items-center justify-between gap-2 text-xs text-muted-foreground"
-        style={{ top: 120 }}
+        style={{ top: EXPANDED_ROWS.footer.top }}
         data-row="2"
         inert={!open}
         aria-hidden={!open}
@@ -290,7 +291,7 @@ export function WidgetCard({
       {view.hints.length > 0 && (
         <p
           className="morph-late absolute right-3.5 left-3.5 m-0 truncate text-[10px] text-muted-foreground"
-          style={{ top: 65 }}
+          style={{ top: EXPANDED_ROWS.hint.top }}
           data-row="1"
           inert={!open}
           aria-hidden={!open}

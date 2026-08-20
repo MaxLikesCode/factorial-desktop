@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  BOTTOM_CLEARANCE,
   CARD,
+  DAY_BAR_HEIGHT,
+  EXPANDED_ROWS,
   EXPAND_DIRECTIONS,
   OVERSHOOT,
   cardOffsetFor,
@@ -25,6 +28,51 @@ describe('the two states', () => {
   it('grows in both directions, so the card never only stretches', () => {
     expect(CARD.expanded.width).toBeGreaterThan(CARD.collapsed.width)
     expect(CARD.expanded.height).toBeGreaterThan(CARD.collapsed.height)
+  })
+})
+
+describe('the expanded card’s rows', () => {
+  const rows = Object.entries(EXPANDED_ROWS).map(([name, row]) => ({ name, ...row }))
+  const bottomOf = (row: { top: number; height: number }) => row.top + row.height
+
+  /**
+   * The bug this block exists for. The footer sat 3 px above the day's bar and
+   * read as resting on it — because the work-location select is 24 px tall, not
+   * the 16 of a line of text, so the row ends 8 px lower than it looks in the
+   * source. Nothing was doing this arithmetic.
+   */
+  it('leaves the day’s bar room to breathe under the lowest row', () => {
+    const lowest = Math.max(...rows.map(bottomOf))
+    const barTop = CARD.expanded.height - DAY_BAR_HEIGHT
+
+    expect(barTop - lowest).toBeGreaterThanOrEqual(BOTTOM_CLEARANCE)
+  })
+
+  it('keeps every row inside the card', () => {
+    for (const row of rows) {
+      expect(row.top).toBeGreaterThanOrEqual(0)
+      expect(bottomOf(row)).toBeLessThanOrEqual(CARD.expanded.height - DAY_BAR_HEIGHT)
+    }
+  })
+
+  /**
+   * The hint deliberately sits in the gap between the timer and the buttons —
+   * that is what makes it free. It must fit there rather than land on either.
+   */
+  it('fits the advisory line into the gap it was promised', () => {
+    const { timer, hint, actions } = EXPANDED_ROWS
+    expect(hint.top).toBeGreaterThanOrEqual(bottomOf(timer))
+    expect(bottomOf(hint)).toBeLessThanOrEqual(actions.top)
+  })
+
+  it('does not let any two rows overlap', () => {
+    const ordered = [...rows].sort((a, b) => a.top - b.top)
+    for (let i = 1; i < ordered.length; i++) {
+      const above = ordered[i - 1]
+      const below = ordered[i]
+      if (above === undefined || below === undefined) throw new Error('rows expected')
+      expect(below.top).toBeGreaterThanOrEqual(bottomOf(above))
+    }
   })
 })
 

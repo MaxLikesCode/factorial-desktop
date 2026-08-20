@@ -86,20 +86,21 @@ body {
      * means bigger than the open size — the bounce. On the way back it means
      * smaller than the RESTING size, which the eye already knows, so the same
      * effect reads there as a twitch rather than as life. So: out peaks 12.6 %
-     * past the target over 520 ms, back only 9.0 % over a shorter 420 ms.
+     * past the target over 520 ms, back only 8.0 % over a shorter 420 ms.
      *
-     * That 9 % is not a taste: the card travels 106 px between its two states,
+     * That 8 % is not a taste: the card travels 118 px between its two states,
      * and the collapsed timer's line box leaves 11.1 px below it before
-     * `overflow: hidden` starts cutting into the number — 10.5 % of the trip.
-     * The return was at 12 % while the card grew only 82 px, where the same
-     * fraction reached 9.8 px and fit. Growing the expanded card is what took
-     * the room away, so the return had to give some bounce back.
+     * `overflow: hidden` starts cutting into the number — 9.4 % of the trip. The
+     * return was at 12 % while the card grew only 82 px, where the same fraction
+     * reached 9.8 px and fit. Every time the expanded card has grown since, it
+     * has taken room away from this number, and the return has had to give some
+     * bounce back for it. The ceiling is arithmetic, not preference.
      *
      * The window has to be large enough for the outward overshoot or the peak
      * is clipped and the spring is silently gone. `windowSizeFor` reserves it.
      */
     --spring-out: linear(0.0000,0.0190,0.0700,0.1446,0.2352,0.3353,0.4393,0.5426,0.6417,0.7338,0.8171,0.8903,0.9528,1.0046,1.0461,1.0778,1.1006,1.1155,1.1236,1.1260,1.1238,1.1180,1.1095,1.0993,1.0880,1.0763,1.0646,1.0535,1.0431,1.0337,1.0255,1.0185,1.0127,1.0080,1.0045,1.0019,1.0002,0.9993,0.9991,0.9993,1);
-    --spring-back: linear(0.0000,0.0161,0.0593,0.1227,0.2002,0.2866,0.3774,0.4688,0.5580,0.6426,0.7210,0.7921,0.8551,0.9098,0.9562,0.9946,1.0254,1.0493,1.0670,1.0791,1.0865,1.0899,1.0900,1.0875,1.0830,1.0770,1.0701,1.0626,1.0549,1.0473,1.0399,1.0330,1.0267,1.0211,1.0161,1.0118,1.0082,1.0053,1.0030,1.0013,1);
+    --spring-back: linear(0.0000,0.0153,0.0566,0.1173,0.1915,0.2744,0.3618,0.4500,0.5364,0.6188,0.6956,0.7657,0.8283,0.8833,0.9304,0.9700,1.0025,1.0283,1.0480,1.0624,1.0721,1.0777,1.0800,1.0796,1.0769,1.0727,1.0673,1.0611,1.0544,1.0476,1.0409,1.0345,1.0284,1.0229,1.0179,1.0135,1.0097,1.0065,1.0038,1.0017,1);
 }
 
 /*

@@ -35,8 +35,49 @@ export interface Size {
 
 export const CARD: { collapsed: Size; expanded: Size } = {
   collapsed: { width: 156, height: 44 },
-  expanded: { width: 300, height: 150 },
+  // 162, not the 150 the rows themselves need. The work-location select is 24 px
+  // tall, not the 16 of a line of text, so the footer ends 24 px below where it
+  // starts — and the day's bar sits flush to the very bottom edge. At 150 that
+  // left 3 px between them, which read as the footer resting on the bar.
+  expanded: { width: 300, height: 162 },
 }
+
+/**
+ * Where each row sits inside the expanded card, measured from its top edge.
+ *
+ * These live here rather than as numbers inside the component because they are
+ * geometry, and geometry that nothing can check drifts. The footer looked right
+ * at every height until someone noticed it resting on the day's bar: the
+ * work-location select is 24 px tall, not the 16 of a line of text, so the row
+ * ends 8 px lower than it reads in the source. `widget-size.test.ts` now does
+ * the arithmetic that nobody was doing.
+ *
+ * `height` is what the row actually occupies on screen — the tallest thing in
+ * it — not the font size it is written with.
+ */
+export const EXPANDED_ROWS = {
+  /** Status label and the goal line. */
+  head: { top: 11, height: 16 },
+  /** The timer, at 30 px on a 1.04 line. */
+  timer: { top: 32, height: 32 },
+  /** The advisory line, in the gap the composition leaves anyway. */
+  hint: { top: 65, height: 14 },
+  /** Pause / Ausstempeln, at the button height. */
+  actions: { top: 80, height: 28 },
+  /** Work location and the day's break total; the select sets the height. */
+  footer: { top: 120, height: 24 },
+} as const
+
+/** The day's bar, flush to the card's bottom edge in both states. */
+export const DAY_BAR_HEIGHT = 3
+
+/**
+ * The smallest gap allowed between the last row and the day's bar.
+ *
+ * Not a round number for its own sake: at 3 px the footer read as resting on the
+ * bar, which is what prompted this constant existing at all.
+ */
+export const BOTTOM_CLEARANCE = 12
 
 /**
  * Which way the card grows when it is opened.
