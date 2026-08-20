@@ -2,10 +2,21 @@ appId: com.maxgiess.factorial-desktop
 productName: Factorial Desktop
 # Where `--publish` sends the artefacts. Named explicitly rather than left to be
 # guessed from the git remote, because the guess is silent when it is wrong.
-# Draft, so a release is never public before somebody has looked at it.
+#
+# `prerelease`, not `draft`, and the reason is mechanical rather than editorial.
+# A draft has no tag — it lives at `untagged-<hash>` until somebody publishes it
+# — and a release electron-builder cannot find by tag is a release it makes a
+# second one of. Measured twice: two tagged runs, each leaving two drafts with
+# the assets split across them, and the second run had the platforms building
+# strictly one after the other. A prerelease has a real tag, so the second
+# platform adds to what the first one made.
+#
+# It is also the honest label for this state: shipped, visible, and with the
+# real-API path still untested (docs/WINDOWS.md §4a). Promote it to a full
+# release by hand once that is not true any more.
 publish:
   provider: github
-  releaseType: draft
+  releaseType: prerelease
 directories:
   output: release
   buildResources: build
