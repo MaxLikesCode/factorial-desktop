@@ -54,10 +54,15 @@ export interface WidgetLayout {
  */
 
 /**
- * The peak of the opening spring, as a fraction of the distance travelled:
- * `exp(-zeta * pi / sqrt(1 - zeta^2))` at zeta = 0.55. Hard-coded rather than
- * computed so the value cannot drift away from the easing in `styles.css`, which
- * is where the spring is actually spelled out.
+ * The peak of the opening spring, as a fraction of the distance travelled.
+ *
+ * Hard-coded rather than derived, because the easing it has to match is a
+ * sampled-and-rescaled curve in `styles.css` rather than a closed form — the
+ * textbook `exp(-zeta * pi / sqrt(1 - zeta^2))` is only the starting point. The
+ * two are pinned against each other in `widget-size.test.ts`, which reads the
+ * stylesheet: if the spring is ever retuned to peak higher than this, the window
+ * clips the peak and the spring is silently gone, with nothing to see but a
+ * slightly abrupt stop.
  */
 export const OVERSHOOT = 0.126
 

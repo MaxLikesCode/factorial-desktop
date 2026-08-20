@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   OVERSHOOT,
@@ -107,6 +109,75 @@ describe('the sizes themselves', () => {
     const dip = card.height - travel * UNDERSHOOT
 
     /** The 22 px timer at line-height 1.04, sitting 10 px below the card's top. */
+    const timerBottom = 10 + 22 * 1.04
+
+    expect(dip).toBeGreaterThan(timerBottom)
+  })
+})
+
+/**
+ * The springs live in `styles.css` as `linear()` easings, and two facts about
+ * them are load-bearing outside CSS: the window has to be big enough for the
+ * outward peak, and the closing dip has to stay clear of the collapsed timer.
+ * Neither is checkable by reading the stylesheet by eye, and both were wrong
+ * once — so they are read back out of the file and asserted here.
+ */
+describe('the springs in styles.css', () => {
+  const css = readFileSync(
+    join(process.cwd(), 'src/renderer/src/styles.css'),
+    'utf8',
+  )
+
+  function stops(name: string): number[] {
+    const match = new RegExp(`--${name}:\\s*linear\\(([^)]*)\\)`).exec(css)
+    if (!match?.[1]) throw new Error(`--${name} is not a linear() easing`)
+    return match[1].split(',').map((value) => Number(value.trim()))
+  }
+
+  const OUT = stops('spring-out')
+  const BACK = stops('spring-back')
+
+  it.each([
+    ['spring-out', OUT],
+    ['spring-back', BACK],
+  ])('%s starts at 0 and lands exactly on 1', (_name, curve) => {
+    expect(curve[0]).toBe(0)
+    expect(curve[curve.length - 1]).toBe(1)
+  })
+
+  /**
+   * The regression this describe block exists for. A damped spring has not
+   * settled when its duration ends, so writing `1` as the final stop on top of
+   * an unscaled curve left the last frame covering 1.4 % of the distance in one
+   * go — two pixels of width, snapping into place after the motion had visibly
+   * stopped. Anything under about a quarter of a pixel is invisible; the widest
+   * travel here is 144 px, so 0.3 % is the ceiling.
+   */
+  it.each([
+    ['spring-out', OUT],
+    ['spring-back', BACK],
+  ])('%s does not jump on its final frame', (_name, curve) => {
+    const last = curve[curve.length - 2]
+    if (last === undefined) throw new Error('easing needs at least two stops')
+    expect(1 - last).toBeLessThan(0.003)
+  })
+
+  /**
+   * `OVERSHOOT` is what reserves the window's headroom. If the easing is ever
+   * retuned to peak higher than the constant claims, the window clips the peak
+   * and the spring is silently gone — the failure has nothing to see.
+   */
+  it('peaks no higher outward than the window reserves room for', () => {
+    expect(Math.max(...OUT) - 1).toBeLessThanOrEqual(OVERSHOOT)
+  })
+
+  /** The closing dip must leave the collapsed timer's line box intact. */
+  it('does not dip the collapsed card below its own timer on the way back', () => {
+    const { card, expanded } = WIDGET_LAYOUTS.minimal
+    if (expanded === null) throw new Error('minimal must expand')
+
+    const overshoot = Math.max(...BACK) - 1
+    const dip = card.height - (expanded.height - card.height) * overshoot
     const timerBottom = 10 + 22 * 1.04
 
     expect(dip).toBeGreaterThan(timerBottom)
