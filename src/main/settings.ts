@@ -27,12 +27,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { isThemeSetting, type AppSettings, type ThemeSetting } from '@shared/ipc-contract'
-import {
-  isExpandDirection,
-  isWidgetSize,
-  type ExpandDirection,
-  type WidgetSize,
-} from '@shared/widget-size'
+import { isExpandDirection, type ExpandDirection } from '@shared/widget-size'
 import { isLocationType } from './factorial/types'
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -45,8 +40,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   // Follow the OS unless the user says otherwise. A widget that sits on the
   // desktop all day should match what everything around it is doing.
   theme: 'system',
-  // The size that shipped before this was a choice.
-  widgetSize: 'standard',
   // The direction that shipped first; the alternative is opt-in.
   expandDirection: 'right',
 }
@@ -57,14 +50,8 @@ export interface SettingsDeps {
   applyLoginItem: (openAtLogin: boolean) => void
   /** Called with the new value whenever `theme` actually changes. */
   applyTheme: (theme: ThemeSetting) => void
-  /**
-   * Called whenever the widget's size OR its expand direction changes.
-   *
-   * One callback for both, because the window cannot act on either alone: it
-   * needs the pair to work out its own dimensions and where the card sits inside
-   * them, and two callbacks would each have to go looking for the other's value.
-   */
-  applyWidgetLayout: (layout: { size: WidgetSize; direction: ExpandDirection }) => void
+  /** Called with the new value whenever `expandDirection` actually changes. */
+  applyExpandDirection: (direction: ExpandDirection) => void
 }
 
 /**
@@ -104,12 +91,6 @@ function sanitise(raw: unknown, base: AppSettings): AppSettings {
     // `nativeTheme.themeSource`, which throws on anything outside the three.
     theme:
       typeof r.theme === 'string' && isThemeSetting(r.theme) ? r.theme : base.theme,
-    // Whitelisted like the rest: an unknown size would index the layout table
-    // with nothing and leave the window without a size at all.
-    widgetSize:
-      typeof r.widgetSize === 'string' && isWidgetSize(r.widgetSize)
-        ? r.widgetSize
-        : base.widgetSize,
     expandDirection:
       typeof r.expandDirection === 'string' && isExpandDirection(r.expandDirection)
         ? r.expandDirection
@@ -121,7 +102,7 @@ export function createSettings({
   filePath,
   applyLoginItem,
   applyTheme,
-  applyWidgetLayout,
+  applyExpandDirection,
 }: SettingsDeps): Settings {
   let current: AppSettings
   try {
@@ -152,15 +133,11 @@ export function createSettings({
       persist(next)
       const loginItemChanged = next.openAtLogin !== current.openAtLogin
       const themeChanged = next.theme !== current.theme
-      const layoutChanged =
-        next.widgetSize !== current.widgetSize ||
-        next.expandDirection !== current.expandDirection
+      const directionChanged = next.expandDirection !== current.expandDirection
       current = next
       if (loginItemChanged) applyLoginItem(current.openAtLogin)
       if (themeChanged) applyTheme(current.theme)
-      if (layoutChanged) {
-        applyWidgetLayout({ size: current.widgetSize, direction: current.expandDirection })
-      }
+      if (directionChanged) applyExpandDirection(current.expandDirection)
       return { ...current }
     },
   }

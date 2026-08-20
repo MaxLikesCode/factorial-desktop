@@ -25,6 +25,14 @@ async function mount(
   await act(async () => {
     vi.advanceTimersByTime(32)
   })
+
+  // These tests are about what the widget SAYS — the state labels, the goal
+  // line, the actions, the phrasing of a rejection. All of that lives in the
+  // expanded card, because the card opens straight to everything; the collapsed
+  // state and the gesture that leaves it are `widget-card.test.tsx`'s subject.
+  const toggle = screen.queryByRole('button', { name: 'Aktionen zeigen' })
+  if (toggle !== null) await act(async () => void toggle.click())
+
   return bridge
 }
 

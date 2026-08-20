@@ -34,7 +34,6 @@ export const TEST_SETTINGS: AppSettings = {
   lastLocationType: 'office',
   lastWorkplaceId: null,
   theme: 'system',
-  widgetSize: 'standard',
   expandDirection: 'right',
 }
 

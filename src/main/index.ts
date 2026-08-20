@@ -12,7 +12,7 @@
 import { app, dialog, nativeTheme, powerMonitor } from 'electron'
 import { join } from 'node:path'
 import { IPC, type ThemeSetting } from '@shared/ipc-contract'
-import type { ExpandDirection, WidgetSize } from '@shared/widget-size'
+import type { ExpandDirection } from '@shared/widget-size'
 import { resolveUserDataPath } from './app-identity'
 import { createAttendanceStore, type ClockInInput } from './attendance'
 import { ensureAuthenticated, openLoginWindow } from './auth'
@@ -30,7 +30,7 @@ import {
   setWidgetAlwaysOnTop,
   setWidgetDragging,
   setWidgetInteractive,
-  setWidgetLayout,
+  setWidgetExpandDirection,
   showWidget,
 } from './windows'
 
@@ -87,15 +87,14 @@ function applyTheme(theme: ThemeSetting): void {
 }
 
 /**
- * Re-lays-out the widget window for a newly chosen size or expand direction.
+ * Points the card at the other edge of its window.
  *
- * Thin on purpose: the window module owns the resize, the repositioning, the
- * clamp and the click-through mask, because all four are properties of the
- * window and none of them belong to a settings store that deliberately knows
- * nothing about Electron.
+ * Thin on purpose: the window module owns the move and the clamp, because both
+ * are properties of the window and neither belongs to a settings store that
+ * deliberately knows nothing about Electron.
  */
-function applyWidgetLayout(layout: { size: WidgetSize; direction: ExpandDirection }): void {
-  setWidgetLayout(layout)
+function applyExpandDirection(direction: ExpandDirection): void {
+  setWidgetExpandDirection(direction)
 }
 
 function applyLoginItem(openAtLogin: boolean): void {
@@ -141,7 +140,7 @@ async function bootstrap(): Promise<void> {
     filePath: join(app.getPath('userData'), 'settings.json'),
     applyLoginItem,
     applyTheme,
-    applyWidgetLayout,
+    applyExpandDirection,
   })
 
   // One wrapped instance for both writers — the widget through IPC and the
@@ -208,7 +207,6 @@ async function bootstrap(): Promise<void> {
   const widget = createWidgetWindow({
     positionFile: join(app.getPath('userData'), 'window-position.json'),
     alwaysOnTop: settings.get().alwaysOnTop,
-    widgetSize: settings.get().widgetSize,
     expandDirection: settings.get().expandDirection,
   })
 

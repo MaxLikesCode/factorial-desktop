@@ -7,8 +7,7 @@ import { useAttendance, useTicker } from '@renderer/hooks/useAttendance'
 import { useSettings } from '@renderer/hooks/useSettings'
 import { ActionBar } from './ActionBar'
 import { LocationSelect } from './LocationSelect'
-import { MinimalCard } from './MinimalCard'
-import { StatusCard } from './StatusCard'
+import { WidgetCard } from './WidgetCard'
 import type { WidgetView } from './WidgetView'
 
 /**
@@ -48,14 +47,18 @@ export function StatusWidget(): React.JSX.Element {
   const state = snapshot.state
   const [busy, setBusy] = useState(false)
   const settings = useSettings()
-  const size = settings?.widgetSize ?? 'standard'
   /**
-   * Whether the smallest size is currently showing its actions.
+   * Whether the card is currently showing its actions.
    *
-   * Keyed off nothing but a click. It deliberately does NOT reset when the
-   * attendance state changes: the card popping shut under someone who opened it
-   * to clock out, because a poll happened to land, would be the worst kind of
-   * surprise in a window that writes to a real time record.
+   * Keyed off nothing but a click, and deliberately not remembered across
+   * launches. Opening the card is a moment of doing something — press Pause,
+   * clock out — not a size to settle on, and the collapsed card is what the day
+   * is actually spent looking at.
+   *
+   * It also does NOT reset when the attendance state changes: the card popping
+   * shut under someone who opened it to clock out, because a poll happened to
+   * land, would be the worst kind of surprise in a window that writes to a real
+   * time record.
    */
   const [expanded, setExpanded] = useState(false)
 
@@ -204,14 +207,6 @@ export function StatusWidget(): React.JSX.Element {
   }
 
   /**
-   * True once the first real answer has arrived. Drives a single fade-in of the
-   * card's contents — the one moment per launch where "Lädt …" and the dash
-   * placeholder are replaced wholesale, and the only place a whole-card
-   * animation is affordable.
-   */
-  const ready = state.kind !== 'unknown'
-
-  /**
    * The advisory line under the bar. Order matters: a lost connection explains
    * why everything else might be old, so it is read first.
    *
@@ -285,46 +280,22 @@ export function StatusWidget(): React.JSX.Element {
     </div>
   )
 
-  /*
-    `minimal` is its own component rather than a third density, because the only
-    size that changes shape needs a layout built for changing shape — absolutely
-    positioned, springing, with a control the others have no use for.
-  */
-  if (size === 'minimal') {
-    return (
-      <MinimalCard
-        view={view}
-        open={expanded}
-        onToggle={() => setExpanded((current) => !current)}
-        actions={actions}
-        direction={settings?.expandDirection ?? 'right'}
-      />
-    )
-  }
-
   return (
-    <StatusCard
+    <WidgetCard
       view={view}
-      density={size}
-      ready={ready}
+      open={expanded}
+      onToggle={() => setExpanded((current) => !current)}
       actions={actions}
       location={
-        /*
-          Only `standard` has the room. In `kompakt` the work location is reached
-          through the tray, where it has always belonged as a preference — the
-          cost being that a running shift's actual location is no longer visible
-          at a glance there.
-        */
-        size === 'standard' ? (
-          <LocationSelect
-            value={displayedLocation}
-            // The location is only sent with a clock-in, so changing it mid-shift
-            // would silently do nothing.
-            disabled={busy || settings === null || state.kind !== 'out'}
-            onChange={chooseLocation}
-          />
-        ) : null
+        <LocationSelect
+          value={displayedLocation}
+          // The location is only sent with a clock-in, so changing it mid-shift
+          // would silently do nothing.
+          disabled={busy || settings === null || state.kind !== 'out'}
+          onChange={chooseLocation}
+        />
       }
+      direction={settings?.expandDirection ?? 'right'}
     />
   )
 }

@@ -48,7 +48,6 @@ const settings: AppSettings = {
   lastLocationType: 'office',
   lastWorkplaceId: null,
   theme: 'system',
-  widgetSize: 'standard',
   expandDirection: 'right',
 }
 
@@ -73,7 +72,6 @@ function noopActions(): TrayActions {
     setOpenAtLogin: vi.fn(),
     setAlwaysOnTop: vi.fn(),
     setTheme: vi.fn(),
-    setWidgetSize: vi.fn(),
     setExpandDirection: vi.fn(),
     quit: vi.fn(),
   }
@@ -402,63 +400,10 @@ describe('buildTrayMenu', () => {
       expect(itemAt(off, 'Immer im Vordergrund').checked).toBe(false)
     })
 
-    it('offers the size as three radios that name their own pixels', () => {
-      const entries = submenuOf(itemAt(menu(base), 'Einstellungen'))
-      const sizes = submenuOf(itemAt(entries, 'Größe'))
-
-      // The measurements are the point of the setting: "Kompakt" alone does not
-      // say whether that is a nudge or a halving.
-      expect(sizes.map((entry) => entry.label)).toEqual([
-        'Standard  340 × 224',
-        'Kompakt  300 × 126',
-        'Minimal  156 × 44',
-      ])
-      for (const entry of sizes) expect(entry.type).toBe('radio')
-      expect(sizes.map((entry) => entry.checked)).toEqual([true, false, false])
-    })
-
-    it('writes the size it names, not the radio item’s own state', () => {
-      const actions = noopActions()
-      const sizes = submenuOf(
-        itemAt(submenuOf(itemAt(menu(base, { actions }), 'Einstellungen')), 'Größe'),
-      )
-
-      fire(sizes[2])
-      expect(actions.setWidgetSize).toHaveBeenCalledWith('minimal')
-      fire(sizes[0])
-      expect(actions.setWidgetSize).toHaveBeenCalledWith('standard')
-    })
-
-    /**
-     * Only Minimal has anywhere to grow. A menu that lists options which do
-     * nothing teaches people to distrust the ones that do.
-     */
-    it('offers the expand direction only while Minimal is selected', () => {
-      for (const size of ['standard', 'kompakt'] as const) {
-        const entries = submenuOf(
-          itemAt(menu(base, { settings: { ...settings, widgetSize: size } }), 'Einstellungen'),
-        )
-        expect(labels(entries)).not.toContain('Aufklappen')
-      }
-
-      const minimal = submenuOf(
-        itemAt(menu(base, { settings: { ...settings, widgetSize: 'minimal' } }), 'Einstellungen'),
-      )
-      expect(labels(minimal)).toContain('Aufklappen')
-    })
-
     it('offers both directions as radios and writes the one it names', () => {
       const actions = noopActions()
       const directions = submenuOf(
-        itemAt(
-          submenuOf(
-            itemAt(
-              menu(base, { settings: { ...settings, widgetSize: 'minimal' }, actions }),
-              'Einstellungen',
-            ),
-          ),
-          'Aufklappen',
-        ),
+        itemAt(submenuOf(itemAt(menu(base, { actions }), 'Einstellungen')), 'Aufklappen'),
       )
 
       expect(directions.map((entry) => entry.label)).toEqual(['Nach rechts', 'Nach links'])

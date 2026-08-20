@@ -193,7 +193,6 @@ export function createTray(deps: TrayDeps): Tray {
             setOpenAtLogin: (value) => applySetting({ openAtLogin: value }),
             setAlwaysOnTop: (value) => applySetting({ alwaysOnTop: value }),
             setTheme: (value) => applySetting({ theme: value }),
-            setWidgetSize: (value) => applySetting({ widgetSize: value }),
             setExpandDirection: (value) => applySetting({ expandDirection: value }),
             toggleWindow: () => {
               toggleWidget()

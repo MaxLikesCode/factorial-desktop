@@ -20,11 +20,9 @@
 import { BrowserWindow, app, screen } from 'electron'
 import { join } from 'node:path'
 import {
-  hasTransparentMargin,
   keepCardInPlace,
-  windowSizeFor,
+  windowSize,
   type ExpandDirection,
-  type WidgetSize,
 } from '@shared/widget-size'
 import {
   clampToVisibleArea,
@@ -37,43 +35,19 @@ import {
   type PositionStore,
 } from './window-position'
 
-/**
- * The size the window currently is, as a *setting* rather than a constant.
- *
- * It is module state because the position logic below needs it on every move,
- * resize and display change, and threading it through four callbacks would only
- * spread the same single value around. `createWidgetWindow` sets it before the
- * window exists; `setWidgetWindowSize` is the only thing that changes it after.
- *
- * The window is not always the card: for a size that expands, the window is the
- * expanded card plus the room its opening spring needs to overshoot into. See
- * `src/shared/widget-size.ts`.
- */
-let currentSize: WidgetSize = 'standard'
-
-/**
- * Which way the Minimal card grows. Kept here beside the size because the two
- * are only ever useful together: the size gives the window its dimensions, the
- * direction says where in them the card sits.
- */
-let currentDirection: ExpandDirection = 'right'
-
-/** The window's pixel size for whatever size is currently selected. */
-function windowSize(): { width: number; height: number } {
-  return windowSizeFor(currentSize)
-}
-
-// Re-exported so consumers (and PLAN.md's stated interface) can keep importing
-// the placement logic from `./windows` without pulling in Electron themselves.
-export {
-  clampToVisibleArea,
-  type DisplayBounds,
-  type DisplayInfo,
-  type Point,
-} from './window-position'
-
 /** `moved` can fire per pixel of a drag on some platforms; one write is enough. */
 const POSITION_WRITE_DELAY_MS = 250
+
+/**
+ * Which way the card grows, kept here because the window's own placement depends
+ * on it: the card sits against the edge it does not grow into, so the direction
+ * decides where inside this window the visible thing actually is.
+ *
+ * The window itself never changes size. It is always the expanded card plus the
+ * room the opening spring overshoots into — see `src/shared/widget-size.ts` for
+ * why growing the real window is not an option.
+ */
+let currentDirection: ExpandDirection = 'right'
 
 let widget: BrowserWindow | null = null
 
@@ -114,12 +88,10 @@ function currentDisplays(): DisplayInfo[] {
 export function createWidgetWindow(deps: {
   positionFile: string
   alwaysOnTop: boolean
-  widgetSize: WidgetSize
   expandDirection: ExpandDirection
 }): BrowserWindow {
   hookBeforeQuit()
 
-  currentSize = deps.widgetSize
   currentDirection = deps.expandDirection
 
   let store: PositionStore = readPositionStore(deps.positionFile)
@@ -332,36 +304,23 @@ export function setWidgetDragging(dragging: boolean): void {
  */
 export function setWidgetInteractive(interactive: boolean): void {
   if (!widget || widget.isDestroyed()) return
-  if (!hasTransparentMargin(currentSize)) {
-    widget.setIgnoreMouseEvents(false)
-    return
-  }
   widget.setIgnoreMouseEvents(!interactive, { forward: true })
 }
 
 /**
- * Switches the widget to another size, another expand direction, or both.
+ * Points the card at the other edge of its window.
  *
- * Four things have to happen together and the order matters. The window is
- * resized; then it is moved so the card does not appear to jump; then the result
- * is clamped, because a window that was flush against an edge may now hang off
- * it; and only then is the mouse mask re-applied, since whether the window has a
- * transparent margin at all is a property of the new size.
+ * The window keeps its size — it never changes — so all that happens is a move,
+ * chosen so the visible card stays exactly where it was, and a clamp in case
+ * that move pushed it off a display.
  *
- * The renderer is told nothing here. It reads both values from its settings
- * subscription like any other preference, and the card inside animates itself.
+ * The renderer is told nothing here. It reads the direction from its settings
+ * subscription like any other preference, and the card inside re-anchors itself.
  */
-export function setWidgetLayout(layout: {
-  size: WidgetSize
-  direction: ExpandDirection
-}): void {
-  const before = { size: currentSize, direction: currentDirection }
-  currentSize = layout.size
-  currentDirection = layout.direction
+export function setWidgetExpandDirection(direction: ExpandDirection): void {
+  const before = currentDirection
+  currentDirection = direction
   if (!widget || widget.isDestroyed()) return
-
-  const { width, height } = windowSize()
-  widget.setSize(width, height)
 
   // The user is looking at the CARD, not at the invisible rectangle around it.
   // Flipping the direction moves the card to the other end of that rectangle, so
@@ -369,17 +328,13 @@ export function setWidgetLayout(layout: {
   // room sideways — 163 px — for a setting that is supposed to change nothing
   // but which way it opens.
   const bounds = widget.getBounds()
-  const kept = keepCardInPlace({ x: bounds.x, y: bounds.y }, before, layout)
+  const kept = keepCardInPlace({ x: bounds.x, y: bounds.y }, before, direction)
   const next = clampToVisibleArea(
     kept,
     currentDisplays().map((d) => d.bounds),
-    { width, height },
+    windowSize(),
   )
   if (next.x !== bounds.x || next.y !== bounds.y) widget.setPosition(next.x, next.y)
-
-  // A size without a margin must end up plainly interactive, which is exactly
-  // what `setWidgetInteractive` does for that case whatever it is passed.
-  setWidgetInteractive(true)
 }
 
 export function getWidget(): BrowserWindow | null {

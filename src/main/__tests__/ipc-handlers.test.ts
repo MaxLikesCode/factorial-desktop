@@ -22,7 +22,6 @@ const SETTINGS: AppSettings = {
   lastLocationType: 'office',
   lastWorkplaceId: null,
   theme: 'system',
-  widgetSize: 'standard',
   expandDirection: 'right',
 }
 
@@ -298,12 +297,6 @@ describe('settings and session channels', () => {
     expect(settings.set).toHaveBeenCalledWith({})
   })
 
-  it('passes a known widget size through', async () => {
-    const { handlers, settings } = handlersFor(fakeStore())
-    await handlers[IPC.setSettings]({ widgetSize: 'kompakt' })
-    expect(settings.set).toHaveBeenCalledWith({ widgetSize: 'kompakt' })
-  })
-
   it('passes a known expand direction through', async () => {
     const { handlers, settings } = handlersFor(fakeStore())
     await handlers[IPC.setSettings]({ expandDirection: 'left' })
@@ -316,9 +309,14 @@ describe('settings and session channels', () => {
     expect(settings.set).toHaveBeenCalledWith({})
   })
 
-  it('drops a widget size that has no layout', async () => {
+  /**
+   * A key the contract does not have — an older renderer, a newer one, or a
+   * setting that has since been removed, as `widgetSize` was. It is copied
+   * nowhere rather than passed through and stored for nobody to read.
+   */
+  it('drops a key the contract does not know', async () => {
     const { handlers, settings } = handlersFor(fakeStore())
-    await handlers[IPC.setSettings]({ widgetSize: 'winzig' })
+    await handlers[IPC.setSettings]({ widgetSize: 'kompakt' })
     expect(settings.set).toHaveBeenCalledWith({})
   })
 

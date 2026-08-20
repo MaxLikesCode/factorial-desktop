@@ -39,7 +39,7 @@ import {
   type ClockInInput,
 } from './attendance'
 import { FactorialError } from './factorial/client'
-import { isExpandDirection, isWidgetSize } from '@shared/widget-size'
+import { isExpandDirection } from '@shared/widget-size'
 import { isLocationType } from './factorial/types'
 
 type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
@@ -176,10 +176,6 @@ function asSettingsPatch(payload: unknown): Partial<AppSettings> {
   // Whitelisted for the same reason as the store does it: the value ends up as
   // `nativeTheme.themeSource`, which throws on anything outside the three.
   if (typeof raw.theme === 'string' && isThemeSetting(raw.theme)) patch.theme = raw.theme
-  // Same reasoning: an unknown size has no entry in the layout table.
-  if (typeof raw.widgetSize === 'string' && isWidgetSize(raw.widgetSize)) {
-    patch.widgetSize = raw.widgetSize
-  }
   if (typeof raw.expandDirection === 'string' && isExpandDirection(raw.expandDirection)) {
     patch.expandDirection = raw.expandDirection
   }

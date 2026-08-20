@@ -48,7 +48,7 @@ export function ProgressBar({ parts, tone, className = 'h-1.5' }: Props): React.
   if (parts.length === 0) return null
 
   return (
-    <div className={`${className} flex w-full overflow-hidden rounded-full bg-muted`}>
+    <div className={`${className} flex w-full overflow-hidden bg-muted`}>
       {parts.map((part, index) => (
         <div
           // Position is the identity here — the parts have no ids of their own,

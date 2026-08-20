@@ -1,16 +1,18 @@
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { ChevronDownIcon } from 'lucide-react'
-import { WIDGET_LAYOUTS, type ExpandDirection } from '@shared/widget-size'
+import { CARD, type ExpandDirection } from '@shared/widget-size'
+import { ProgressBar } from './ProgressBar'
 import type { WidgetView } from './WidgetView'
-import { Timer } from './StatusCard'
 
-const { card, expanded } = WIDGET_LAYOUTS.minimal
+
 
 interface Props {
   view: WidgetView
   open: boolean
   onToggle: () => void
   actions: ReactNode
+  /** The work-location select. Reachable only while the card is open. */
+  location: ReactNode
   /**
    * Which way the card grows, and with it whether the expand control travels.
    *
@@ -24,45 +26,62 @@ interface Props {
 }
 
 /**
- * The smallest size, and the only one that changes shape.
+ * The widget. One card, two states.
  *
- * Collapsed it is a dot, the timer and a hairline of progress. Expanded it is
- * the `kompakt` card. Three things make that morph cheap enough to spring:
+ * Collapsed it is a dot, the timer and a hairline of the day. Expanded it adds
+ * the status, the remaining time, the actions, the work-location select and the
+ * day's break total — everything, in one step.
  *
- * 1. **Every child is absolutely positioned.** The collapsed layout is then
- *    exact without having to pull hidden rows out of flow, and nothing reflows
+ * That completeness is the point rather than a compromise. The expanded card is
+ * not a view you sit in; you open it to press Pause or to clock out, and it goes
+ * away again. So it shows everything you might reach for while you are there,
+ * instead of making you open it twice. There is no size to choose, nothing to
+ * remember, and the collapsed card is what the day is actually spent looking at.
+ *
+ * Three things make the morph cheap enough to spring:
+ *
+ * 1. **Every child is absolutely positioned.** The collapsed layout is exact
+ *    without having to pull hidden rows out of flow, and nothing reflows
  *    mid-animation.
- * 2. **The progress hairline is flush to the bottom edge in both sizes.** It
- *    never moves; it only gets wider.
+ * 2. **The day's bar is flush to the bottom edge in both states.** It never
+ *    moves; it only gets wider.
  * 3. **The window never resizes.** It is fixed at the expanded size plus the
  *    spring's overshoot and is transparent around the card, so the growing is a
- *    compositor transition rather than `setSize()` across the IPC boundary. See
- *    `src/shared/widget-size.ts`.
+ *    compositor transition rather than `setSize()` across the IPC boundary.
  *
- * This card does its own dragging, and the other sizes do not.
- *
- * `-webkit-app-region: drag` is the obvious way to move a frameless window and
- * it is what `standard` and `kompakt` still use. It cannot be used here: a
- * draggable region is a title bar as far as the platform is concerned, so the
- * platform keeps the double click on it — measured, not assumed, the gesture
- * never reached this component at all. The double click is this card's second
- * way to open, next to the control beside the timer, so the region had to go and
- * the drag had to be run by hand.
- *
- * What that buys, beyond the double click: the card is draggable everywhere
- * except its controls, in both sizes, with one rule instead of a CSS override
- * fighting `.drag-region button` over specificity.
- *
- * The pointer is captured on the way down so the drag survives the cursor
- * outrunning a window that is chasing it, and the drag only starts after the
- * pointer has actually travelled — otherwise every click would spin up a loop in
- * the main process to move the window nowhere.
+ * This card does its own dragging, and that is forced rather than chosen:
+ * `-webkit-app-region: drag` makes an element a title bar as far as the platform
+ * is concerned, and the platform then keeps the double click on it — measured,
+ * not assumed. The double click is one of the two ways to open, so the region
+ * had to go and the drag had to be run by hand.
  */
-export function MinimalCard({
+/**
+ * The worked time, with its seconds a step down in contrast.
+ *
+ * Not in size: they tick once a second in the corner of someone's eye for eight
+ * hours, and muting settles that movement while every digit stays readable. The
+ * split is on the last colon, so the dash placeholder takes the same path rather
+ * than needing a branch.
+ */
+function Timer({ value, className }: { value: string; className: string }): React.JSX.Element {
+  const cut = value.lastIndexOf(':')
+  return (
+    <span
+      data-slot="worked-timer"
+      className={`${className} leading-[1.04] font-semibold tabular-nums`}
+    >
+      {value.slice(0, cut)}
+      <span className="text-muted-foreground">{value.slice(cut)}</span>
+    </span>
+  )
+}
+
+export function WidgetCard({
   view,
   open,
   onToggle,
   actions,
+  location,
   direction,
 }: Props): React.JSX.Element {
   const cardRef = useRef<HTMLDivElement>(null)
@@ -171,8 +190,7 @@ export function MinimalCard({
     withCapture(event.currentTarget, event.pointerId, false)
   }
 
-  const size = open ? expanded : card
-  if (size === null) throw new Error('minimal must have an expanded size')
+  const size = open ? CARD.expanded : CARD.collapsed
 
   return (
     <div
@@ -236,13 +254,50 @@ export function MinimalCard({
       </div>
 
       <div
-        className="morph-late absolute bottom-3.5 left-3.5 flex gap-2"
+        className="morph-late absolute left-3.5 flex gap-2"
+        style={{ top: 80 }}
         data-row="2"
         inert={!open}
         aria-hidden={!open}
       >
         {actions}
       </div>
+
+      {/*
+        Everything the larger card used to have, arriving in the one step that
+        opens this one. The work location sits where it always did; the day's
+        break total takes the corner opposite it — the corner that fell free when
+        the running break moved up into the timer.
+      */}
+      <div
+        className="morph-late absolute right-3.5 left-3.5 flex items-center justify-between gap-2 text-xs text-muted-foreground"
+        style={{ top: 120 }}
+        data-row="2"
+        inert={!open}
+        aria-hidden={!open}
+      >
+        {location}
+        {view.breakLine !== null && (
+          <span className="shrink-0 tabular-nums">{view.breakLine}</span>
+        )}
+      </div>
+
+      {/*
+        The advisory line, in the gap the composition already leaves between the
+        timer and the buttons. It costs no height because that gap exists either
+        way, which is the only reason a warning fits on a card this size at all.
+      */}
+      {view.hints.length > 0 && (
+        <p
+          className="morph-late absolute right-3.5 left-3.5 m-0 truncate text-[10px] text-muted-foreground"
+          style={{ top: 65 }}
+          data-row="1"
+          inert={!open}
+          aria-hidden={!open}
+        >
+          {view.hints.join(' · ')}
+        </p>
+      )}
 
       {/*
         The one control the card owns. It moves with the card rather than staying
@@ -260,7 +315,7 @@ export function MinimalCard({
         // of the direction. Growing right it rides along, and drops to sit
         // opposite the action buttons rather than crowding the status line.
         className="morph-move absolute right-2.5 grid size-5 place-items-center rounded-md text-muted-foreground transition-colors duration-150 ease-(--ease-out) hover:bg-muted hover:text-foreground"
-        style={{ top: open && direction === 'right' ? 88 : 12 }}
+        style={{ top: open && direction === 'right' ? 84 : 12 }}
       >
         <ChevronDownIcon
           className={`size-3.5 transition-transform duration-300 ease-(--ease-out) ${
@@ -270,27 +325,12 @@ export function MinimalCard({
       </button>
 
       {/*
-        The day, flush to the bottom edge, breaks and all. Three pixels is enough
-        for a colour change to register even here — and a break the eye can see is
-        the whole point of the bar carrying the day rather than a fraction.
+        The day, flush to the bottom edge in both states, breaks and all. Three
+        pixels is enough for a colour change to register, and a break the eye can
+        see is the whole reason the bar carries the day rather than a fraction.
       */}
-      <div className="absolute inset-x-0 bottom-0 flex h-[3px] bg-muted">
-        {view.bar.map((part, index) => (
-          <div
-            key={index}
-            data-slot={`bar-${part.kind}`}
-            className={`h-full transition-[width,background-color] duration-500 ease-(--ease-out) ${
-              part.kind === 'break'
-                ? 'bg-amber-500'
-                : part.kind === 'rest'
-                  ? 'bg-transparent'
-                  : view.tone === 'idle'
-                    ? 'bg-muted-foreground/40'
-                    : 'bg-emerald-500'
-            }`}
-            style={{ width: `${part.percent}%` }}
-          />
-        ))}
+      <div className="absolute inset-x-0 bottom-0">
+        <ProgressBar parts={view.bar} tone={view.tone} className="h-[3px]" />
       </div>
     </div>
   )

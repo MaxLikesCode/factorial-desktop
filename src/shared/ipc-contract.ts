@@ -196,9 +196,9 @@ export function isThemeSetting(value: string): value is ThemeSetting {
 }
 
 import type { DaySegment } from './day-timeline'
-import type { ExpandDirection, WidgetSize } from './widget-size'
+import type { ExpandDirection } from './widget-size'
 export type { DaySegment }
-export type { ExpandDirection, WidgetSize }
+export type { ExpandDirection }
 
 export interface AppSettings {
   openAtLogin: boolean
@@ -212,12 +212,7 @@ export interface AppSettings {
    * re-clamps its remembered position — see `src/shared/widget-size.ts` for why
    * the window is not always the same size as the card.
    */
-  widgetSize: WidgetSize
-  /**
-   * Which way the Minimal card grows when it opens. Ignored by the other sizes,
-   * which have nothing to grow into — the tray only offers it while Minimal is
-   * selected.
-   */
+  /** Which way the card grows when it opens. */
   expandDirection: ExpandDirection
 }
 

@@ -1,41 +1,45 @@
 /**
  * How much screen the widget takes, and how much window it needs to take it.
  *
- * Three sizes, chosen in the tray. They are not three skins of one layout — each
- * drops something the smaller one cannot afford:
+ * One card, two states:
  *
- * - `standard`  340 × 224. Everything: status, goal line, 42 px timer, bar,
- *                actions, work-location select.
- * - `kompakt`   300 × 126. The same anatomy, tighter, without the location
- *                select — that is a preference and lives in the tray.
- * - `minimal`   156 × 44. Dot, timer, a hairline of progress, and one small
- *                button that grows the card to `kompakt`'s size. No actions of
- *                its own; the tray offers all of them regardless.
+ * - **collapsed** 156 × 44. A dot, the timer, the day's bar. This is what is on
+ *   screen all day.
+ * - **expanded** 300 × 150. Everything: status, remaining time, the action
+ *   buttons, the work-location select and the day's break total.
+ *
+ * The split is not about how much fits — it is about what the expanded card IS.
+ * You open it to do something, press Pause or clock out, and it closes again. It
+ * is a moment of acting, not a view you sit in, so it shows everything you might
+ * reach for while you are there rather than making you open it twice. That is
+ * also why the collapsed state is the one that persists: there is no size to
+ * choose and nothing to remember.
  *
  * **Window size is not card size, and that is the whole trick.** Growing a real
  * `BrowserWindow` means `setSize()` from the main process, frame by frame across
  * the IPC boundary, with nothing interpolating in between — it stutters, and a
  * spring is outright impossible there because the overshoot would need window
- * sizes past the target. So the window for an expandable size is fixed at the
- * expanded card's size *plus the overshoot*, sits there transparent, and only
- * the card inside it animates, on the compositor.
+ * sizes past the target. So the window is fixed at the expanded card's size
+ * *plus the overshoot*, sits there transparent, and only the card inside it
+ * animates, on the compositor.
  *
- * That headroom is `OVERSHOOT`. The opening spring is damped at 0.55, which
- * peaks about 13 % past the target: a card going 148 → 300 px wide touches
- * 320 px before it settles. Without the room the peak is clipped and the spring
- * is silently gone.
+ * That headroom is `OVERSHOOT`. The opening spring is damped so it peaks about
+ * 13 % past the target: a card going 156 → 300 px wide touches 318 px before it
+ * settles. Without the room the peak is clipped and the spring is silently gone.
  */
 
-export const WIDGET_SIZES = ['standard', 'kompakt', 'minimal'] as const
+export interface Size {
+  width: number
+  height: number
+}
 
-export type WidgetSize = (typeof WIDGET_SIZES)[number]
-
-export function isWidgetSize(value: string): value is WidgetSize {
-  return (WIDGET_SIZES as readonly string[]).includes(value)
+export const CARD: { collapsed: Size; expanded: Size } = {
+  collapsed: { width: 156, height: 44 },
+  expanded: { width: 300, height: 150 },
 }
 
 /**
- * Which way the Minimal card grows when it is opened.
+ * Which way the card grows when it is opened.
  *
  * `right` grows away from the expand control, which therefore travels with the
  * card's far corner: the pointer that just clicked it is left behind and has to
@@ -56,65 +60,29 @@ export function isExpandDirection(value: string): value is ExpandDirection {
   return (EXPAND_DIRECTIONS as readonly string[]).includes(value)
 }
 
-export interface Size {
-  width: number
-  height: number
-}
-
-export interface WidgetLayout {
-  /** The visible card at rest. */
-  card: Size
-  /** What the card grows to on click, or `null` when the size needs no growing. */
-  expanded: Size | null
-}
-
-/**
- * Why 156 and not the 148 the card needs for its own contents: a drag region
- * swallows clicks whole (`-webkit-app-region: drag`), so the card cannot both be
- * draggable and be its own expand button. The 20 px control that resolves that
- * is what the extra width buys.
- */
-
 /**
  * The peak of the opening spring, as a fraction of the distance travelled.
  *
  * Hard-coded rather than derived, because the easing it has to match is a
- * sampled-and-rescaled curve in `styles.css` rather than a closed form — the
- * textbook `exp(-zeta * pi / sqrt(1 - zeta^2))` is only the starting point. The
- * two are pinned against each other in `widget-size.test.ts`, which reads the
+ * sampled-and-rescaled curve in `styles.css` rather than a closed form. The two
+ * are pinned against each other in `widget-size.test.ts`, which reads the
  * stylesheet: if the spring is ever retuned to peak higher than this, the window
  * clips the peak and the spring is silently gone, with nothing to see but a
  * slightly abrupt stop.
  */
 export const OVERSHOOT = 0.126
 
-export const WIDGET_LAYOUTS: Record<WidgetSize, WidgetLayout> = {
-  standard: { card: { width: 340, height: 224 }, expanded: null },
-  kompakt: { card: { width: 300, height: 126 }, expanded: null },
-  minimal: { card: { width: 156, height: 44 }, expanded: { width: 300, height: 126 } },
-}
-
 /**
- * The window a size needs.
- *
- * For a size that never grows this is the card itself — no transparent margin,
- * so nothing invisible is in the way of the desktop behind it. For one that
- * grows it is the expanded card plus the overshoot, rounded up to whole pixels:
- * a fractional window size is rounded by the platform anyway, and rounding *up*
- * here keeps the guarantee that the peak fits.
+ * The window the card lives in: the expanded card plus the room its opening
+ * spring needs to overshoot into, rounded up to whole pixels. Rounding *up* is
+ * what keeps the guarantee that the peak fits.
  */
-export function windowSizeFor(size: WidgetSize): Size {
-  const { card, expanded } = WIDGET_LAYOUTS[size]
-  if (expanded === null) return { ...card }
+export function windowSize(): Size {
+  const { collapsed, expanded } = CARD
   return {
-    width: Math.ceil(card.width + (expanded.width - card.width) * (1 + OVERSHOOT)),
-    height: Math.ceil(card.height + (expanded.height - card.height) * (1 + OVERSHOOT)),
+    width: Math.ceil(collapsed.width + (expanded.width - collapsed.width) * (1 + OVERSHOOT)),
+    height: Math.ceil(collapsed.height + (expanded.height - collapsed.height) * (1 + OVERSHOOT)),
   }
-}
-
-/** True when the window carries transparent margin the card does not fill. */
-export function hasTransparentMargin(size: WidgetSize): boolean {
-  return WIDGET_LAYOUTS[size].expanded !== null
 }
 
 export interface Point {
@@ -125,42 +93,37 @@ export interface Point {
 /**
  * Where the collapsed card sits inside its window, from the window's top-left.
  *
- * A size that fills its window sits at the origin and has nowhere else to be.
- * The Minimal card sits against the edge it does *not* grow into: growing right
- * pins it left, growing left pins it right, and the transparent remainder is the
- * room the expansion moves into.
+ * Against the edge it does *not* grow into: growing right pins it left, growing
+ * left pins it right, and the transparent remainder is the room the expansion
+ * moves into.
  *
  * Vertically there is never an offset — both directions grow downwards, which
  * keeps the expand control's y fixed in the `left` case and is the only reason
  * that case can leave the pointer where it is.
  */
-export function cardOffsetFor(size: WidgetSize, direction: ExpandDirection): Point {
-  const { card, expanded } = WIDGET_LAYOUTS[size]
-  if (expanded === null || direction === 'right') return { x: 0, y: 0 }
-  return { x: windowSizeFor(size).width - card.width, y: 0 }
+export function cardOffsetFor(direction: ExpandDirection): Point {
+  if (direction === 'right') return { x: 0, y: 0 }
+  return { x: windowSize().width - CARD.collapsed.width, y: 0 }
 }
 
 /**
- * Where to put the window so the card does not appear to jump.
+ * Where to put the window so the card does not appear to jump when the expand
+ * direction changes.
  *
- * Changing the size or the direction changes both the window's dimensions and
- * where the card sits inside it. The user's eye is on the card, not on the
- * invisible rectangle around it, so the card's screen position is what has to be
- * preserved — switching direction otherwise slides the visible widget 163 px
- * sideways for no reason the user asked for.
+ * The user's eye is on the card, not on the invisible rectangle around it, and
+ * flipping the direction moves the card to the other end of that rectangle.
+ * Without this the visible widget would slide the full width of its growth room
+ * — 163 px — for a setting meant to change nothing but which way it opens.
  *
  * Returns the new window origin. Clamping to a display is the caller's job; this
  * is arithmetic and knows nothing about screens.
  */
 export function keepCardInPlace(
   origin: Point,
-  from: { size: WidgetSize; direction: ExpandDirection },
-  to: { size: WidgetSize; direction: ExpandDirection },
+  from: ExpandDirection,
+  to: ExpandDirection,
 ): Point {
-  const before = cardOffsetFor(from.size, from.direction)
-  const after = cardOffsetFor(to.size, to.direction)
-  return {
-    x: origin.x + before.x - after.x,
-    y: origin.y + before.y - after.y,
-  }
+  const before = cardOffsetFor(from)
+  const after = cardOffsetFor(to)
+  return { x: origin.x + before.x - after.x, y: origin.y + before.y - after.y }
 }

@@ -575,10 +575,8 @@ Drag-Region. Position wird pro Monitor gemerkt.
   - aus → **Einstempeln**
   - ein → **Pause** (Dropdown mit Pausentypen) + **Ausstempeln**
   - Pause → **Fortsetzen** + **Ausstempeln**
-- Fußzeile: Arbeitsort-Selector (Büro / Mobiles Arbeiten / Dienstreise). Nur in
-  „Standard"; wo sie nichts zu zeigen hat, wird sie gar nicht erst gerendert —
-  eine leere Zeile ist trotzdem eine Zeile, und in „Kompakt" waren das 24 px,
-  die die Karte nicht hat
+- Fußzeile: Arbeitsort-Selector (Büro / Mobiles Arbeiten / Dienstreise) und
+  rechts die Pausensumme des Tages — beides nur im aufgeklappten Zustand
 
 > **Der Ring ist einem Balken gewichen — aus Platzgründen, nicht aus Geschmack.**
 > Der Ring maß 88 px bei 6 px Strich, also 67,6 px lichte Weite innen. „2:00:14"
@@ -767,134 +765,58 @@ Fenster schließen blendet aus statt zu beenden; beendet wird nur über das Tray
 
 - Autostart beim Login (Standard: an, `app.setLoginItemSettings`)
 - Always-on-Top an/aus
-- Größe: Standard (Vorgabe) / Kompakt / Minimal
-- Aufklappen: Nach rechts (Vorgabe) / Nach links — nur bei „Minimal" angeboten
+- Aufklappen: Nach rechts (Vorgabe) / Nach links
 - Erscheinungsbild: Systemvorgabe (Standard) / Hell / Dunkel
 - Abmelden (Partition-Cookies löschen)
 
 Persistiert als JSON in `app.getPath('userData')`.
 
-### Größe
+### Zwei Zustände, keine Größen
 
-Drei Größen, keine drei Skins derselben Anordnung — jede lässt weg, was die
-nächstkleinere nicht mehr trägt:
+Eine Karte, zwei Zustände:
 
-| | Karte | Fläche | Was fehlt |
-|---|---|---|---|
-| Standard | 340 × 224 | 76.160 px² | — |
-| Kompakt | 300 × 126 | 37.800 px² | Arbeitsort-Selector |
-| Minimal | 156 × 44 | 6.864 px² | alle Aktionen; Karte klappt auf |
+| | | |
+|---|---|---|
+| eingeklappt | 156 × 44 | Punkt · Zahl · Tagesbalken |
+| aufgeklappt | 300 × 150 | + Status · Restzeit · Buttons · Arbeitsort · Pausensumme |
 
-Gespart wird über die **Höhe**. Die Breite braucht die Zahl: „10:23:45" misst bei
-42 px 178 px — daran ist der frühere Fortschrittsring gescheitert. Die Höhe ging
-dagegen fast vollständig für Dinge drauf, die nicht die Zeit sind.
+**Der aufgeklappte Zustand ist kein Anblick, sondern ein Handlungsmoment.** Man
+klappt auf, um Pause zu drücken oder auszustempeln, und es schließt sich wieder.
+Deshalb zeigt er alles auf einmal, statt jemanden zweimal aufklappen zu lassen —
+und deshalb wird er auch nicht gemerkt: der eingeklappte Zustand ist der, in dem
+der Tag verbracht wird.
 
-Die Maße stehen in `src/shared/widget-size.ts`, zusammen mit der Rechnung, die
-daraus die Fenstergröße macht.
+Vorher waren es drei feste Größen mit einer Einstellung im Tray. Die mittlere
+(„Kompakt“) zeigte nachweislich nichts, was die aufgeklappte Karte nicht auch
+zeigt — sie konnte die Pausensumme nicht einmal tragen, ohne überzulaufen. Und
+die größte verteilte 37 px Luft, die sie nicht brauchte. Übrig bleibt eine Karte
+ganz ohne Einstellung: 300 × 150 gegen die früheren 340 × 224, also **41 %
+weniger Fläche bei gleichem Inhalt**.
 
-**Kompakt verliert etwas Konkretes:** ohne Selector zeigt das Widget bei
-laufender Schicht nicht mehr deren tatsächlichen Arbeitsort. Genau dieser Fehler
-wurde weiter oben behoben („Der Selector zeigt bei offener Schicht deren echten
-Arbeitsort"). In Kompakt ist die Angabe nicht falsch, sondern abwesend — das ist
-der Unterschied, der sie vertretbar macht.
+Aufgeklappt wird über den Pfeil neben der Zahl oder per Doppelklick auf die
+Karte. Die Hinweiszeile („Keine Verbindung“) sitzt in der Lücke, die die
+Komposition ohnehin zwischen Zahl und Buttons lässt, und kostet damit keine
+Höhe.
 
 #### Fenster ≠ Karte
 
-Für Minimal ist das Fenster **größer als die sichtbare Karte** und drumherum
-durchsichtig. Der Grund ist die Animation: eine `BrowserWindow`-Größe ändert nur
-der Main-Prozess mit `setSize()`, Frame für Frame über die IPC-Grenze, und dort
+Das Fenster ist **größer als die sichtbare Karte** und drumherum durchsichtig.
+Der Grund ist die Animation: eine `BrowserWindow`-Größe ändert nur der
+Main-Prozess mit `setSize()`, Frame für Frame über die IPC-Grenze, und dort
 interpoliert nichts. Eine Feder wäre da ohnehin unmöglich — ihr Überschwinger
 bräuchte Fenstergrößen jenseits des Ziels.
 
 Also bleibt das Fenster stehen und nur das `div` darin wächst, als
-CSS-Transition auf dem Compositor. Das Fenster hält den Platz vor, in den der
-Überschwinger geht: 13 % über die Zielgröße, also 320 × 137 statt 300 × 126.
-Ohne diesen Spielraum wird die Spitze abgeschnitten und die Feder ist lautlos
-weg.
+CSS-Transition auf dem Compositor. Es hält den Platz vor, in den der
+Überschwinger geht: 13 % über die Zielgröße, also **319 × 164** für eine Karte,
+die bei 300 × 150 zur Ruhe kommt. Ohne diesen Spielraum wird die Spitze
+abgeschnitten und die Feder ist lautlos weg.
 
 Der Preis ist der unsichtbare Rand. Er würde Klicks schlucken, die dem Desktop
 dahinter galten — bei einem Fenster, das immer im Vordergrund liegt. Deshalb
 macht der Main-Prozess das Fenster durchlässig (`setIgnoreMouseEvents(true,
 { forward: true })`), und der Renderer fordert die Klicks zurück, sobald der
-Zeiger über der Karte ist. `forward: true` ist dabei das, was die Sache
-umkehrbar macht: nur weil das durchlässige Fenster weiterhin Mausbewegungen
-bekommt, merkt der Renderer die Ankunft überhaupt.
-
-#### Aufklappen
-
-Minimal hat keine Aktionen. Ein 20-px-Knopf neben der Zahl klappt die Karte auf
-die Kompakt-Größe auf; das Tray-Menü bietet Ein-/Ausstempeln, Pause und
-Fortsetzen ohnehin durchgehend an.
-
-**Die Minimal-Karte zieht sich selbst.** Die anderen beiden Größen benutzen
-weiterhin `-webkit-app-region: drag`; hier geht das nicht. Eine Drag-Region ist
-für die Plattform eine Titelleiste, und den Doppelklick auf die Titelleiste
-behält sie für sich — gemessen, nicht vermutet: die Geste kam im Renderer gar
-nicht an. Der Doppelklick ist aber der zweite Weg, die Karte zu öffnen, also
-musste die Region weichen.
-
-Stattdessen hört die Karte auf ihre eigenen Zeigerereignisse: beim Drücken wird
-der Zeiger eingefangen, ab 3 px Weg beginnt das Ziehen, der Main-Prozess folgt
-dem Cursor bis zum Loslassen. **Der Cursor wird dabei vom Bildschirm gelesen,
-nicht vom Renderer gemeldet** — Zeigerkoordinaten im Renderer sind relativ zu
-einem Fenster, das die Schleife gerade darunter wegzieht, und ein Ziehen, das
-darauf aufbaut, füttert seine eigene Ausgabe zurück in die Eingabe. Der
-Greifversatz wird einmal am Anfang genommen; danach wird das Fenster jeden Tick
-schlicht auf Cursor plus Versatz gesetzt, also gibt es keine Deltas, in denen
-sich Fehler summieren könnten.
-
-Die 3-px-Schwelle trennt Klick von Ziehen: ohne sie würde jeder Klick eine
-Schleife im Main-Prozess starten, um das Fenster nirgendwohin zu bewegen, und
-mit dem Doppelklick streiten.
-
-Das Einfangen des Zeigers ist eine Verbesserung, keine Voraussetzung — wo es
-fehlt, funktioniert das Ziehen weiterhin, es überlebt nur nicht, wenn der Cursor
-dem Fenster davonläuft.
-
-**Zwei Wege, die Karte zu öffnen:** der Knopf neben der Zahl und ein Doppelklick
-irgendwo sonst auf die Karte. Ein Doppelklick, der auf einem Bedienelement
-landet, wird ignoriert — zwei Klicks auf den Pfeil sind schon zwei Umschaltungen.
-
-Der Knopf bleibt trotzdem, und die 8 px Breite, die Minimal über den Inhalt
-hinaus misst, sind weiterhin seine: ein Doppelklick ist nichts, was man auf einem
-Widget errät.
-
-`minimizable: false` steht seit demselben Anlass am Fenster und schließt eine
-ältere Falle, die für „Standard" und „Kompakt" weiter gilt: die sind noch
-Drag-Regionen, und mit macOS auf „Doppelklick auf Titelleiste → Im Dock ablegen"
-verschwände das Widget dort sonst dorthin, wo ein `skipTaskbar`-Fenster nicht
-mehr hinzeigt.
-
-#### Aufklapprichtung
-
-Zwei Richtungen, im Tray wählbar, aber **nur solange „Minimal" gewählt ist**.
-Die anderen beiden Größen füllen ihr Fenster aus und haben nichts, wohinein sie
-wachsen könnten; ein Menüeintrag, der nichts tut, bringt Leuten bei, auch den
-anderen zu misstrauen.
-
-**Nach rechts** (Vorgabe) wächst von der Aufklapp-Schaltfläche weg. Die reitet
-damit auf der fernen Ecke der Karte mit: sie wandert nach rechts und rutscht
-nach unten, den Aktionsknöpfen gegenüber. Der Zeiger, der eben geklickt hat,
-muss ihr folgen, um wieder zuzuklappen.
-
-**Nach links** wächst in die andere Richtung. Die rechte Kante der Karte bleibt
-stehen, die Schaltfläche behält beide Koordinaten — klicken, handeln, wieder
-klicken, ohne die Maus zu bewegen. Dass beide Richtungen nach *unten* wachsen,
-ist die Voraussetzung dafür: eine vertikal wandernde Schaltfläche würde den
-Zeiger genauso abhängen.
-
-Es geht dabei nicht nur um den Mausweg. Das Fenster ist breiter als die
-eingeklappte Karte und wird als Ganzes auf den Bildschirm geklemmt, also
-entscheidet die Richtung auch, an welche Bildschirmkante sich die Karte
-vollständig schieben lässt: nach rechts wachsend bleibt die linke Kante
-erreichbar, nach links wachsend die rechte.
-
-**Beim Umschalten wird das Fenster mitverschoben.** Die Karte sitzt an der
-Kante, in die sie *nicht* wächst — ein Richtungswechsel setzt sie also ans
-andere Ende des unsichtbaren Rechtecks. Ohne Ausgleich würde das sichtbare
-Widget um die volle Breite des Wachstumsraums springen, 163 px, für eine
-Einstellung, die nichts als die Aufklapprichtung ändern soll. `keepCardInPlace`
-rechnet den Versatz aus, `setWidgetLayout` verschiebt und klemmt.
+Zeiger über der Karte ist.
 
 #### Die Feder
 
@@ -908,9 +830,12 @@ als die Zielgröße — das ist der Schwung. Zurück heißt es kleiner als die
 als Zucken statt als Leben. Bei Dämpfung 0,55 auf dem Rückweg tauchte die Karte
 auf 130 × 34 px durch und `overflow: hidden` schnitt die Zahl an.
 
-Deshalb: 0,55 hinaus (520 ms), 0,56 zurück über kürzere 420 ms. Der Rückweg
-landet damit bei rund 34 px — knapp über den 33 px, die die eingeklappte Zahl
-braucht. Die Deckkraft federt nie mit: ein Überschwinger unter 0 oder über 1
+Deshalb: 12,6 % hinaus (520 ms), nur 9,0 % zurück über kürzere 420 ms. Die 9 %
+sind keine Geschmacksfrage — die Karte legt zwischen ihren Zuständen 106 px
+zurück, und unter der eingeklappten Zahl bleiben 11,1 px, bevor
+`overflow: hidden` sie anschneidet: 10,5 % des Wegs. Als die Karte nur 82 px
+wuchs, passten dort noch 12 %. Die größere aufgeklappte Karte hat den Platz
+gekostet, also musste der Rückweg etwas Schwung zurückgeben. Die Deckkraft federt nie mit: ein Überschwinger unter 0 oder über 1
 wird abgeschnitten, und der Schnitt liest sich als Hänger.
 
 ### Erscheinungsbild
