@@ -5,12 +5,16 @@
 Schwebendes Widget mit Tray-Icon für die Zeiterfassung in Factorial HR.
 Ein- und Ausstempeln, Pause und Fortsetzen — ohne den Browser zu öffnen.
 
-> **Stand:** gebaut und verifiziert ausschließlich auf macOS (Darwin 25.5,
-> Electron 43). Der Windows-Code ist mitgeschrieben, kompiliert und
-> typgeprüft, aber **nie auf Windows ausgeführt** worden — auch
-> `npm run package:win` nicht. Wer dort weiterarbeitet, liest zuerst
-> `docs/WINDOWS.md`; dort steht Stelle für Stelle, was belegt ist und was nur
-> behauptet wäre.
+> **Stand:** entwickelt und verifiziert auf macOS (Darwin 25.5, Electron 43).
+> Am 2026-08-20 lief die erste Inbetriebnahme auf Windows 11: `npm test`,
+> `npm run package:win` und die gepackte App sind dort durch, Tray-Icon,
+> Widget und der IPC-Pfad ebenfalls — und ein Windows-Fehler kam dabei heraus
+> und wurde behoben (Mausbewegungen werden an ein klickdurchlässiges Fenster
+> nicht weitergeleitet, das Widget blieb dadurch unbedienbar). **Nicht**
+> gelaufen ist der Durchstich gegen die echte API: Ein- und Ausstempeln
+> schreibt in eine echte Arbeitszeiterfassung und ist Sache eines Menschen.
+> Wer auf Windows weiterarbeitet, liest zuerst `docs/WINDOWS.md`, Abschnitt 4a;
+> dort steht Stelle für Stelle, was belegt ist und was nur behauptet wäre.
 
 ## Start
 
