@@ -1,3 +1,5 @@
+![Das Widget auf dem Desktop: eingestempelt seit 8:43:11, Soll erfüllt mit +0:43, darunter Pause und Ausstempeln](docs/images/header.png)
+
 # Factorial Desktop
 
 Schwebendes Widget mit Tray-Icon für die Zeiterfassung in Factorial HR.
