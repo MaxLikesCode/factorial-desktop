@@ -33,11 +33,16 @@
 #   the run — a manual run is asking "does it still build", and the answer to
 #   that is the packaging step, not the upload.
 #
-# Neither platform is code-signed: `identity: null` in electron-builder.yml for
-# macOS, and no certificate for Windows. The artefacts therefore carry the usual
-# warnings — Gatekeeper wants right-click → Open on the first launch, SmartScreen
-# wants "More info" → "Run anyway". Signing is a paid certificate and a secret,
-# and neither exists yet.
+# macOS is signed with a Developer ID certificate, imported from the secrets on
+# the Package step. That is a requirement rather than a polish: Squirrel.Mac
+# validates the signature of every update before installing it, so an unsigned
+# macOS build cannot update itself at all.
+#
+# It is signed but **not notarized**, so Gatekeeper still wants right-click →
+# Open on the first launch — notarization is a separate step with its own
+# credentials. Windows has no certificate at all and SmartScreen still wants
+# "More info" → "Run anyway"; its updater does not check signatures
+# (`verifyUpdateCodeSignature: false`), so updating works regardless.
 
 name: build
 
@@ -122,14 +127,28 @@ jobs:
       - name: Package
         run: npm run ${{ matrix.script }} -- --publish never
         env:
-          # Without this electron-builder hunts the keychain for a signing
-          # identity and fails the build when it finds none. `identity: null`
-          # already says not to sign; this stops the search itself.
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+          # The macOS signing certificate, as a base64 `.p12`, and its password.
+          # Not a nicety: Squirrel.Mac validates the signature of every update
+          # before installing it, so an unsigned build cannot update itself. See
+          # the `mac:` block in electron-builder.yml for the whole story.
+          #
+          # Only the values are secret. GitHub decrypts them into this step for
+          # the length of the run and masks them in the log; there is no API that
+          # reads them back. Fork pull requests never get them, and this job does
+          # not run on pull requests at all — see the `if:` above.
+          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          # Without a certificate, electron-builder would hunt the keychain and
+          # fail on finding nothing. This keeps a run without the secret — a
+          # manual build, a fork — working, unsigned, instead of breaking.
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MACOS_CERTIFICATE_P12 != '' }}
 
       - name: Attach to the release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        # Pinned to a commit rather than a moving tag: this action runs in the
+        # same job as the signing certificate, so whoever controls the tag would
+        # control a step that can read it. (= v2, 2026-08)
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
           # Not win-unpacked/ or mac/: the same app again as loose files.
           #

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  What the hardened runtime has to be asked to allow.
+
+  Signing turns the hardened runtime on, and that forbids by default exactly the
+  things a Chromium engine does on purpose. Each of these is a JavaScript engine
+  requirement, not a convenience:
+
+  - allow-jit: V8 compiles JavaScript to machine code at runtime and needs pages
+    that are writable and then executable.
+  - allow-unsigned-executable-memory: the same story for the code V8 emits, which
+    by definition carries no signature of its own.
+  - disable-library-validation: Electron loads its own frameworks and helper
+    binaries, which are signed with this certificate rather than Apple's.
+
+  Nothing here weakens the app beyond what any Electron app needs; the list is
+  deliberately no longer than that.
+-->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+</dict>
+</plist>

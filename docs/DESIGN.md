@@ -792,9 +792,25 @@ exist inside the package, and without it there is no feed at all. And `latest.ym
 has to be among the release assets, because that file *is* the feed.
 
 `verifyUpdateCodeSignature` is off on Windows: electron-updater compares the
-download's signature against the running app's, and these builds are unsigned, so
-the check can only fail. It should be turned back on the day there is a
-certificate.
+download's signature against the running app's, and the Windows builds are
+unsigned, so the check can only fail. It should be turned back on the day there
+is a certificate for that platform.
+
+macOS has no such switch, and this is the single most expensive thing to learn
+about updating an Electron app late. Squirrel.Mac validates the signature of
+every update, always. With `identity: null` the bundle kept the ad-hoc signature
+Electron's own binary ships with — `Identifier=Electron`, no sealed resources —
+and Squirrel refused every update with *code has no resources but signature
+indicates they must be present*. Ad-hoc signing the bundle properly does not
+rescue it either: its designated requirement is the `cdhash` of that one build,
+so the next version can never satisfy the running one's. Only a real identity
+produces a requirement that holds across releases:
+
+    identifier "com.maxgiess.factorial-desktop" and anchor apple generic
+      and certificate leaf[subject.OU] = "<team>"
+
+Hence the Developer ID certificate, and hence `hardenedRuntime` with the
+entitlements in `build/`, which signing brings with it.
 
 ## Language
 
@@ -916,7 +932,8 @@ CI on Linux.
 
 `electron-vite` for dev and build, `electron-builder` for packaging.
 
-- **macOS:** DMG + ZIP, arm64, unsigned
+- **macOS:** DMG + ZIP, arm64, signed with a Developer ID certificate (required
+  by the updater; see "Updates"), not yet notarized
 - **Windows:** NSIS installer + portable exe, x64, unsigned
 
 Tagging `v*` builds both platforms in CI and attaches the artefacts to a GitHub

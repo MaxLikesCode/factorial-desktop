@@ -19,11 +19,12 @@ Grab the latest build from the [releases page](https://github.com/MaxLikesCode/f
 | **Windows** | `Factorial-Desktop.exe` | Runs from anywhere without installing. Handy for a USB stick or a locked-down machine. |
 | **macOS** | `Factorial-Desktop-<version>-arm64.dmg` | Apple Silicon. |
 
-The builds are not code-signed, so the first launch needs one extra step:
+The first launch needs one extra step:
 
-- **Windows:** SmartScreen shows a blue box. Click *More info* → *Run anyway*.
-- **macOS:** right-click the app → *Open*, then confirm. A double-click alone
-  gets refused by Gatekeeper.
+- **Windows:** the build is not signed, so SmartScreen shows a blue box. Click
+  *More info* → *Run anyway*.
+- **macOS:** the build is signed but not yet notarized, so Gatekeeper still
+  refuses a plain double-click. Right-click the app → *Open*, then confirm.
 
 ## Using it
 

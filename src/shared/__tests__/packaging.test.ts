@@ -41,9 +41,12 @@ type BuilderConfig = {
   mac: {
     category: string
     target: BuilderTarget[]
-    identity: string | null
+    identity?: string | null
     extendInfo: Record<string, unknown>
     artifactName: string
+    hardenedRuntime?: boolean
+    entitlements?: string
+    entitlementsInherit?: string
   }
   win: { target: BuilderTarget[] }
   dmg: Record<string, string>
@@ -114,14 +117,47 @@ describe('electron-builder.yml', () => {
     expect(config.files).toContain('package.json')
   })
 
-  it('builds an unsigned arm64 DMG and ZIP for macOS', () => {
+  it('builds an arm64 DMG and ZIP for macOS', () => {
     expect(config.mac.target).toEqual([
       { target: 'dmg', arch: ['arm64'] },
       { target: 'zip', arch: ['arm64'] },
     ])
-    // Unsigned by choice; see docs/DESIGN.md.
-    expect(config.mac.identity).toBeNull()
     expect(config.mac.category).toBe('public.app-category.productivity')
+  })
+
+  /**
+   * The line this guards against is `identity: null`, which used to stand in the
+   * mac block and is a one-word change away from returning — it silently turns
+   * signing off, and everything still builds.
+   *
+   * What it breaks is not obvious from here: Squirrel.Mac validates the code
+   * signature of every update before installing it, and an unsigned bundle keeps
+   * the ad-hoc signature Electron's own binary ships with. That one declares
+   * sealed resources the bundle does not have, so Squirrel rejects the update
+   * with "code has no resources but signature indicates they must be present" —
+   * and the app shows a download that never installs. Signing is therefore load
+   * bearing, not cosmetic.
+   */
+  it('signs macOS builds, because the updater cannot work otherwise', () => {
+    // `null` means "do not sign". Absent means "find the certificate", which is
+    // what CI does with the one it imports.
+    expect(config.mac.identity ?? undefined).toBeUndefined()
+    // Signing implies the hardened runtime, which needs the entitlements below
+    // or Chromium's JIT cannot allocate executable pages.
+    expect(config.mac.hardenedRuntime).toBe(true)
+    expect(config.mac.entitlements).toBe('build/entitlements.mac.plist')
+    expect(config.mac.entitlementsInherit).toBe('build/entitlements.mac.plist')
+  })
+
+  it('grants the hardened runtime exactly what a Chromium engine needs', () => {
+    const plist = readFileSync(join(ROOT, 'build/entitlements.mac.plist'), 'utf8')
+    for (const key of [
+      'com.apple.security.cs.allow-jit',
+      'com.apple.security.cs.allow-unsigned-executable-memory',
+      'com.apple.security.cs.disable-library-validation',
+    ]) {
+      expect(plist).toContain(key)
+    }
   })
 
   it('hides the dock icon, because this is a menubar app', () => {

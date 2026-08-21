@@ -41,8 +41,35 @@ mac:
       arch: [arm64]
     - target: zip
       arch: [arm64]
-  # No signing identity: the app is unsigned by choice for now.
-  identity: null
+  # Signed with a Developer ID Application certificate, and not out of politeness
+  # towards Gatekeeper: Squirrel.Mac validates the code signature of every update
+  # before installing it, and there is no way to switch that off.
+  #
+  # `identity: null` used to stand here. It meant electron-builder skipped
+  # signing altogether, which left the bundle carrying the ad-hoc signature that
+  # Electron's own prebuilt binary ships with — `Identifier=Electron`, and no
+  # sealed resources. Squirrel then refused every update with "code has no
+  # resources but signature indicates they must be present", which looked from
+  # the outside like a download button that did nothing.
+  #
+  # Ad-hoc signing the bundle properly would not have helped either. Its
+  # designated requirement is `cdhash H"…"` — the hash of that one build — so
+  # the next version can never satisfy the running one's requirement. A
+  # Developer ID certificate makes the requirement an *identity* instead:
+  #
+  #   identifier "com.maxgiess.factorial-desktop" and anchor apple generic
+  #     and certificate leaf[subject.OU] = "<team>"
+  #
+  # which is the same string across every release. That is the whole reason this
+  # certificate exists here.
+  #
+  # The identity itself is not pinned: electron-builder picks the Developer ID
+  # Application certificate out of the keychain, and CI imports exactly one from
+  # `CSC_LINK`.
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  # The helper processes inherit rather than repeat the list.
+  entitlementsInherit: build/entitlements.mac.plist
   # LSUIElement hides the dock icon — this is a menubar app.
   extendInfo:
     LSUIElement: 1
