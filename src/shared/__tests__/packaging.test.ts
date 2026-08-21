@@ -178,11 +178,27 @@ describe('electron-builder.yml', () => {
     expect(config.mac.extendInfo['LSUIElement']).toBe(1)
   })
 
-  it('configures an NSIS installer for Windows', () => {
+  /**
+   * `oneClick` is the setting that decides what *both* installs look like, which
+   * is why it is asserted rather than left to whoever edits the yml next. The
+   * same exe is what electron-updater spawns to apply an update, and while that
+   * run passes `/S` and shows nothing either way, an assisted installer is four
+   * pages in front of the one install somebody does deliberately — for a choice
+   * of directory that nobody was making.
+   *
+   * `allowToChangeInstallationDirectory` is asserted *absent* for a harder
+   * reason: electron-builder refuses the combination outright
+   * ("makes sense only for assisted installer"), so setting it again would not
+   * be a worse installer, it would be a build that does not run.
+   */
+  it('configures a one-click NSIS installer for Windows', () => {
     expect(config.win.target).toContainEqual({ target: 'nsis', arch: ['x64'] })
-    expect(config.nsis['oneClick']).toBe(false)
+    expect(config.nsis['oneClick']).toBe(true)
+    // Per user: no admin rights for the install, and none for the silent update
+    // later — `latest.yml` carries no `isAdminRightsRequired`, so electron-updater
+    // never reaches for elevate.exe.
     expect(config.nsis['perMachine']).toBe(false)
-    expect(config.nsis['allowToChangeInstallationDirectory']).toBe(true)
+    expect(config.nsis['allowToChangeInstallationDirectory']).toBeUndefined()
   })
 
   /**
