@@ -79,6 +79,7 @@ function noopActions(): TrayActions {
     setTheme: vi.fn(),
     setExpandDirection: vi.fn(),
     checkForUpdates: vi.fn(),
+    about: vi.fn(),
     setLanguage: vi.fn(),
     quit: vi.fn(),
   }
@@ -281,6 +282,29 @@ describe('buildTrayMenu', () => {
       label: 'Zum Installieren von 0.2.2 neu starten',
       enabled: true,
     })
+  })
+
+  it('offers the version right under the update check', () => {
+    const actions = noopActions()
+    const items = menu(base, { actions })
+    const submenu = items.find((i) => i.label === 'Einstellungen')?.submenu as {
+      label?: string
+      click?: () => void
+    }[]
+
+    const about = submenu.find((i) => i.label === 'Über Factorial Desktop …')
+    expect(about).toBeDefined()
+    about?.click?.()
+    expect(actions.about).toHaveBeenCalledTimes(1)
+
+    // Adjacency is the point: the version is what you check after an update
+    // claims to have applied.
+    const updateIndex = submenu.findIndex((i) => {
+      ;(actions.checkForUpdates as ReturnType<typeof vi.fn>).mockClear()
+      i.click?.()
+      return (actions.checkForUpdates as ReturnType<typeof vi.fn>).mock.calls.length === 1
+    })
+    expect(submenu.indexOf(about!)).toBe(updateIndex + 1)
   })
 
   it('starts with the status line as a disabled entry', () => {

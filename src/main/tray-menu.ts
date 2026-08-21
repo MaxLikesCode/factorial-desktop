@@ -65,6 +65,8 @@ export interface TrayActions {
    * that silently does nothing reads as broken.
    */
   checkForUpdates: () => void
+  /** Shows the version. Sits next to the update check, which is why it exists. */
+  about: () => void
   quit: () => void
 }
 
@@ -384,6 +386,10 @@ function settingsSubmenu(
     // Label and clickability come from the updater's state: idle asks, a
     // download reports its percentage, and a staged update offers the restart.
     { ...updateMenuEntry(t, updateStatus), click: () => actions.checkForUpdates() },
+    // Directly under the update entry: one says which version is running, the
+    // other fetches a newer one. Apart, the first would be a curiosity; here it
+    // is the answer to "did that update actually apply?".
+    { label: t('tray.about'), click: () => actions.about() },
   ]
 
   // With no session there is nothing to drop, and the top-level entry already

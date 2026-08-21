@@ -38,6 +38,8 @@ export const pt: Catalogue = {
   'settings.language': 'Idioma',
   'settings.languageSystem': 'Sistema',
   'settings.checkForUpdates': 'Procurar atualizações …',
+  'tray.about': 'Acerca do Factorial Desktop …',
+  'about.version': 'Versão {version}',
 
   'tray.breakWithTime': 'Pausa {time}',
   'tray.today': 'hoje {time}',

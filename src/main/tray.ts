@@ -25,6 +25,7 @@ import { resolveLocale } from '@shared/i18n'
 import { translatorFor } from '@shared/locales'
 import type { AppSettings } from '@shared/ipc-contract'
 import type { AttendanceStore, ClockInInput } from './attendance'
+import { showAbout } from './about'
 import type { Settings } from './settings'
 import type { UpdateStatus } from './update-policy'
 import {
@@ -211,6 +212,7 @@ export function createTray(deps: TrayDeps): Tray {
             startBreak: (id) => run(() => deps.store.startBreak(id)),
             endBreak: () => run(() => deps.store.endBreak()),
             clockOut: () => run(() => deps.store.clockOut()),
+            about: () => void showAbout(t),
             signIn: () => {
               lastActionError = null
               deps.onSignIn()

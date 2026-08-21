@@ -32,6 +32,8 @@ export const it: Catalogue = {
   'settings.language': 'Lingua',
   'settings.languageSystem': 'Sistema',
   'settings.checkForUpdates': 'Cerca aggiornamenti …',
+  'tray.about': 'Informazioni su Factorial Desktop …',
+  'about.version': 'Versione {version}',
 
   'tray.breakWithTime': 'Pausa {time}',
   'tray.today': 'oggi {time}',

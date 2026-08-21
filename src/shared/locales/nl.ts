@@ -32,6 +32,8 @@ export const nl: Catalogue = {
   'settings.language': 'Taal',
   'settings.languageSystem': 'Systeem',
   'settings.checkForUpdates': 'Controleren op updates …',
+  'tray.about': 'Over Factorial Desktop …',
+  'about.version': 'Versie {version}',
 
   'tray.breakWithTime': 'Pauze {time}',
   'tray.today': 'vandaag {time}',

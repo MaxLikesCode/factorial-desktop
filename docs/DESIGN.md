@@ -761,7 +761,10 @@ window.
 - Expand direction: right (default) or left
 - Appearance: system (default), light, dark
 - Language: system (default) or one of seven
-- Check for updates
+- Check for updates — doubles as the download's progress display
+- About: the app version and the Electron/Chromium it runs on. Deliberately next
+  to the update entry: it is how "did that update apply?" gets answered, and the
+  only place in the app that can answer it
 - Sign out (clears the partition's cookies)
 
 Persisted as JSON in `app.getPath('userData')`. The tray submenu is the only

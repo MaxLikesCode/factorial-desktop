@@ -109,6 +109,8 @@ export const en = {
   'settings.language': 'Language',
   'settings.languageSystem': 'System',
   'settings.checkForUpdates': 'Check for updates …',
+  'tray.about': 'About Factorial Desktop …',
+  'about.version': 'Version {version}',
 
   // Tray status line and tooltip. `{time}` is already formatted as H:MM.
   'tray.breakWithTime': 'Break {time}',

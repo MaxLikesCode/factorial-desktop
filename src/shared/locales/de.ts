@@ -41,6 +41,8 @@ export const de: Catalogue = {
   'settings.language': 'Sprache',
   'settings.languageSystem': 'Systemvorgabe',
   'settings.checkForUpdates': 'Nach Updates suchen …',
+  'tray.about': 'Über Factorial Desktop …',
+  'about.version': 'Version {version}',
 
   'tray.breakWithTime': 'Pause {time}',
   'tray.today': 'heute {time}',
