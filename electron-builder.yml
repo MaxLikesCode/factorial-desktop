@@ -120,7 +120,17 @@ win:
       arch: [x64]
 nsis:
   artifactName: Factorial-Desktop-Setup-${version}.${ext}
+  # An assisted installer — pages, and a choice of directory — which is worth
+  # having for the one install somebody does deliberately. It is emphatically
+  # *not* what an update should look like, and for a long time it was: this same
+  # exe is what electron-updater spawns to apply one, and "Restart now" walked
+  # people through the whole wizard again. The fix is on the calling side rather
+  # than here (`restartModeFor` in src/main/update-policy.ts): the update run
+  # gets `/S`, so it skips every page below and reads the installation path out
+  # of the registry instead of asking for it. Changing anything in this block
+  # means checking that an update still applies without showing a window.
   oneClick: false
+  # Per user, so no UAC prompt — neither on install nor on the silent update.
   perMachine: false
   allowToChangeInstallationDirectory: true
 portable:

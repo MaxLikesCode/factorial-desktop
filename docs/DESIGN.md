@@ -786,6 +786,29 @@ expressed as testable arithmetic in `update-policy.ts`:
    unpacks to `%TEMP%` on every start and the file the user keeps is elsewhere. It
    checks anyway and offers the download page.
 
+A fourth rule is Windows-only and lives in `restartModeFor`: **the installer is
+never shown twice.** electron-updater does not install anything itself on
+Windows — it spawns the downloaded `Factorial-Desktop-Setup-<version>.exe` with
+`--updated` and hands it two flags that both default to *off*. With them off,
+"Restart now" ran the setup wizard again — welcome, install mode, directory,
+finish — for a version the user had already agreed to install, and 0.2.10 and
+everything before it shipped that way. `silent` adds `/S`, which drops the pages
+and takes the installation path out of the registry (`InstallLocation`) instead
+of asking for it, so the silent run replaces exactly the copy that is running.
+`runAfter` adds `--force-run`, and is not optional next to it: the assisted
+installer starts the app from its finish page, and `/S` is what removed that
+page, so without it a "restart" ends with nothing running.
+
+macOS gets neither flag. `MacUpdater.quitAndInstall` ignores both — the swap and
+the relaunch are ShipIt's — so passing Windows' answer there would only be
+misleading.
+
+The one thing this does not touch is SmartScreen. It appears on the *first*
+install because the setup exe was downloaded by a browser, which marks it, and
+the build is unsigned; the update installer is fetched by the app itself, never
+gets that mark, and so is never asked about. Signing is the only thing that
+removes the first prompt.
+
 Two build-configuration pieces are easy to get wrong. `publish:` in
 `electron-builder.yml` is not an upload target — it is what makes `app-update.yml`
 exist inside the package, and without it there is no feed at all. And `latest.yml`

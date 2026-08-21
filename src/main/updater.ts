@@ -34,6 +34,7 @@ import {
   type UpdateStatus,
   capabilityFor,
   installKind,
+  restartModeFor,
   shouldOffer,
 } from './update-policy'
 import type { UpdateLogger } from './update-log'
@@ -165,7 +166,11 @@ export function createUpdater(deps: UpdaterDeps): Updater {
     })
     if (response === 0) {
       const updater = resolveUpdater()
-      updater?.quitAndInstall()
+      // The two arguments are the whole difference between an update that
+      // applies itself and one that hands the setup wizard back to the user;
+      // `restartModeFor` carries the reasoning.
+      const mode = restartModeFor(process.platform)
+      updater?.quitAndInstall(mode.silent, mode.runAfter)
       // `quitAndInstall()` is not enough on its own, and the reason is a
       // collision between two reasonable designs. Electron's version closes
       // every window and calls `app.quit()` only once they are all closed. This

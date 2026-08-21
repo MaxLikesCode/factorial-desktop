@@ -5,6 +5,7 @@ import {
   FIRST_CHECK_DELAY_MS,
   capabilityFor,
   installKind,
+  restartModeFor,
   shouldOffer,
   updateMenuEntry,
 } from '../update-policy'
@@ -127,5 +128,28 @@ describe('updateMenuEntry', () => {
       label: 'Zum Installieren von 0.2.1 neu starten',
       enabled: true,
     })
+  })
+})
+
+/**
+ * The flags that decide whether "Restart now" restarts or reopens the setup
+ * wizard. Windows-only behaviour, which is exactly why it is arithmetic here
+ * rather than something to try on a Windows box.
+ */
+describe('restartModeFor', () => {
+  it('installs silently and relaunches on Windows', () => {
+    // `silent` becomes `/S` and `runAfter` becomes `--force-run` on the
+    // installer electron-updater spawns. Both, or neither is any use: without
+    // `/S` the user gets the whole wizard again, and without `--force-run` the
+    // silent install finishes with no app running, because the only thing that
+    // would have started it is the finish page `/S` removed.
+    expect(restartModeFor('win32')).toEqual({ silent: true, runAfter: true })
+  })
+
+  it('leaves macOS to Squirrel', () => {
+    // MacUpdater ignores both arguments — the swap and the relaunch are ShipIt's
+    // — so passing Windows' answer there would only be misleading.
+    expect(restartModeFor('darwin')).toEqual({ silent: false, runAfter: false })
+    expect(restartModeFor('linux')).toEqual({ silent: false, runAfter: false })
   })
 })

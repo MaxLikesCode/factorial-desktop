@@ -142,3 +142,40 @@ export function updateMenuEntry(
       return { label: t('settings.checkForUpdates'), enabled: true }
   }
 }
+
+/**
+ * How `quitAndInstall` has to be called, per platform.
+ *
+ * PLATFORM: this is a Windows problem with a Windows answer. electron-updater's
+ * NSIS path does not install anything itself — it spawns the downloaded
+ * `Factorial-Desktop-Setup-<version>.exe` and lets it do the work, passing
+ * `--updated` plus whatever these two flags say:
+ *
+ *   silent   -> `/S`, which is what turns the setup wizard off
+ *   runAfter -> `--force-run`, which is what starts the app again afterwards
+ *
+ * Both default to `false`, and that default is what made "Restart now" hand
+ * people the whole installer a second time: welcome page, install-mode page,
+ * directory page, finish page — for a version they had already agreed to
+ * install. With `/S` the installer takes the existing installation out of the
+ * registry (`InstallLocation` under the per-user or per-machine key) instead of
+ * asking for it, so the silent run replaces exactly the copy that is running.
+ *
+ * `runAfter` is not optional alongside it. The assisted installer only starts
+ * the app from its finish page — the page `/S` just removed — and without
+ * `--force-run` a silent update ends with no app at all, which reads as a crash.
+ *
+ * macOS gets neither. There the installing is Squirrel's, `quitAndInstall`
+ * takes no arguments it would use, and the relaunch is part of what ShipIt does.
+ */
+export interface RestartMode {
+  /** Suppress the installer UI. */
+  silent: boolean
+  /** Start the app again once the installer is done. */
+  runAfter: boolean
+}
+
+export function restartModeFor(platform: NodeJS.Platform): RestartMode {
+  if (platform === 'win32') return { silent: true, runAfter: true }
+  return { silent: false, runAfter: false }
+}
