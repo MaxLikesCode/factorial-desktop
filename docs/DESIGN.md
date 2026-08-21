@@ -803,6 +803,22 @@ macOS gets neither flag. `MacUpdater.quitAndInstall` ignores both — the swap a
 the relaunch are ShipIt's — so passing Windows' answer there would only be
 misleading.
 
+The installer itself is one-click (`nsis.oneClick`), which is the same argument
+applied to the other end: the pages were what made an update feel like a
+reinstall, and there was nothing on them worth the clicks for the deliberate
+install either. It costs the choice of directory — electron-builder refuses
+`allowToChangeInstallationDirectory` for a one-click installer — and it changes
+the default directory *name* for fresh installs, from `Factorial Desktop` to
+`factorial-desktop`, because that name comes from `name` rather than
+`productName` in this mode. Upgrades keep the path they already have; it is read
+from the registry.
+
+The edge worth knowing: a copy installed *for all users* back when the wizard
+offered the choice is not adopted. The one-click `initMultiUser` sets per-user
+unconditionally, where the assisted one looked in `HKLM` first — so such a
+machine ends up with a second, per-user installation on the next update, and the
+old per-machine one stays until somebody uninstalls it.
+
 The one thing this does not touch is SmartScreen. It appears on the *first*
 install because the setup exe was downloaded by a browser, which marks it, and
 the build is unsigned; the update installer is fetched by the app itself, never

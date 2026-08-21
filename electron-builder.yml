@@ -120,19 +120,33 @@ win:
       arch: [x64]
 nsis:
   artifactName: Factorial-Desktop-Setup-${version}.${ext}
-  # An assisted installer — pages, and a choice of directory — which is worth
-  # having for the one install somebody does deliberately. It is emphatically
-  # *not* what an update should look like, and for a long time it was: this same
-  # exe is what electron-updater spawns to apply one, and "Restart now" walked
-  # people through the whole wizard again. The fix is on the calling side rather
-  # than here (`restartModeFor` in src/main/update-policy.ts): the update run
-  # gets `/S`, so it skips every page below and reads the installation path out
-  # of the registry instead of asking for it. Changing anything in this block
-  # means checking that an update still applies without showing a window.
-  oneClick: false
-  # Per user, so no UAC prompt — neither on install nor on the silent update.
+  # No wizard: double-click, a progress bar, and the app is open. This used to be
+  # an assisted installer — welcome page, install-mode page, directory page,
+  # finish page — and the pages were the whole reason updating felt like
+  # reinstalling, because this same exe is what electron-updater spawns to apply
+  # an update. That half is fixed on the calling side (`restartModeFor` in
+  # src/main/update-policy.ts passes `/S`, which suppresses the UI whatever is
+  # set here); this is the other half, the one deliberate install somebody does,
+  # and there was nothing on those pages worth the four clicks.
+  #
+  # What it costs: `allowToChangeInstallationDirectory` is not available for a
+  # one-click installer — electron-builder rejects the combination outright —
+  # so the location is now fixed. Per-user installs land in
+  # %LOCALAPPDATA%\Programs\, and the directory name comes from `name` rather
+  # than `productName` in this mode, i.e. `factorial-desktop` and not
+  # `Factorial Desktop`. Only for *new* installs: an upgrade reads the path it
+  # already uses out of the registry and stays there.
+  oneClick: true
+  # Per user, so nothing here needs admin rights — not the install, and not the
+  # silent update that runs later.
+  #
+  # One migration edge, from back when the wizard offered the choice: a copy that
+  # was installed *for all users* is not adopted by a one-click installer. Its
+  # `initMultiUser` sets per-user unconditionally, where the assisted one looked
+  # in HKLM first. Such a machine gets a second, per-user installation on the
+  # next update — which runs and updates itself normally, while the old
+  # per-machine one sits there until it is uninstalled by hand.
   perMachine: false
-  allowToChangeInstallationDirectory: true
 portable:
   # Without this the file is called "Factorial Desktop 0.1.0.exe" and the
   # version travels into every shortcut somebody makes of it. Spelled out for

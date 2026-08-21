@@ -186,8 +186,9 @@ jobs:
           body: |
             Unsigned builds — the first launch needs one extra step.
 
-            - **Windows:** `Factorial-Desktop-Setup-<version>.exe` installs for
-              the current user (Start-menu entry, uninstaller, optional
+            - **Windows:** `Factorial-Desktop-Setup-<version>.exe` installs
+              for the current user and starts the app — no questions, no admin
+              rights (Start-menu entry, uninstaller, optional
               start-with-Windows). `Factorial-Desktop.exe` runs without
               installing. SmartScreen: *More info* → *Run anyway*.
             - **macOS:** `.dmg` or `.zip`, Apple Silicon. Right-click → *Open*
