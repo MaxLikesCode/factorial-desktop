@@ -81,7 +81,10 @@ export const de: Catalogue = {
   'stale.unknown': 'Aktualisierung fehlgeschlagen',
 
   'auth.failedTitle': 'Factorial Desktop',
-  'auth.failed': 'Anmeldung nicht möglich: {reason}',
+  'auth.unreachable': 'Factorial hat nicht geantwortet.',
+  'auth.unreachableDetail':
+    'Deine Anmeldung ist davon nicht betroffen — das sieht nach einem vorübergehenden Netzwerkproblem aus.\n\n{reason}',
+  'auth.retry': 'Erneut versuchen',
 
   'update.availableTitle': 'Update verfügbar',
   'update.available': 'Version {version} ist verfügbar.',

@@ -16,10 +16,11 @@ import type { ExpandDirection } from '@shared/widget-size'
 import { resolveUserDataPath } from './app-identity'
 import { createAttendanceStore, type ClockInInput } from './attendance'
 import { ensureAuthenticated, openLoginWindow } from './auth'
+import { classifySignInFailure } from './auth-flow'
 import { installNetDebug } from './debug-net'
 import { createClient } from './factorial/client'
-import { createOperations } from './factorial/operations'
-import { isLocationType } from './factorial/types'
+import { createOperations, type Operations } from './factorial/operations'
+import { isLocationType, type Identity } from './factorial/types'
 import { registerIpc } from './ipc'
 import { applyBrowserUserAgent, clearSession, createNetFetch, getFactorialSession } from './session'
 import { buildLoginItemSettings, createSettings, type Settings } from './settings'
@@ -118,6 +119,54 @@ function applyLoginItem(openAtLogin: boolean): void {
   )
 }
 
+/**
+ * Signs in, and offers another go when the answer simply never arrived.
+ *
+ * This used to end the app on any failure, with "Anmeldung nicht möglich" and
+ * the raw reason. For a closed login window that is right. For a timeout it is
+ * both wrong and misleading: `auth-flow.ts` is built on the rule that "the
+ * server says no" is not "the server did not answer", and quitting here broke
+ * that rule one layer up — a fifteen-second hiccup on a network that was fine a
+ * minute later left an app that would not start, and a message blaming the
+ * sign-in for it.
+ *
+ * Returns `null` when the app has been told to quit, so the caller stops.
+ */
+async function signInOrOfferAnother(ops: Operations): Promise<Identity | null> {
+  // The stored language preference lives in settings, which are not loaded this
+  // early — there is no session yet to load them for. The OS language is the
+  // best answer available at this point, and the same one a first run gets.
+  const t = translatorFor(resolveLocale('system', app.getLocale()))
+
+  for (;;) {
+    try {
+      return await ensureAuthenticated(ops)
+    } catch (error) {
+      const reason = describeError(error)
+      if (classifySignInFailure(reason) === 'aborted') {
+        // The user closed the login window. Telling them that they are not
+        // signed in would be reporting their own decision back at them.
+        app.quit()
+        return null
+      }
+
+      const { response } = await dialog.showMessageBox({
+        type: 'warning',
+        buttons: [t('auth.retry'), t('tray.quit')],
+        defaultId: 0,
+        cancelId: 1,
+        title: t('auth.failedTitle'),
+        message: t('auth.unreachable'),
+        detail: t('auth.unreachableDetail', { reason }),
+      })
+      if (response !== 0) {
+        app.quit()
+        return null
+      }
+    }
+  }
+}
+
 async function bootstrap(): Promise<void> {
   const factorialSession = getFactorialSession()
   // Before anything touches the network: Factorial's sign-in refuses to verify
@@ -128,19 +177,13 @@ async function bootstrap(): Promise<void> {
   installNetDebug(factorialSession)
   const ops = createOperations(createClient(createNetFetch(factorialSession)))
 
-  let employeeId: number
-  try {
-    const identity = await ensureAuthenticated(ops)
-    employeeId = identity.employeeId
-    console.log('[auth] signed in as', identity.fullName, '/', identity.companyName)
-  } catch (error) {
-    // Nothing this app does works without a session, and it has no offline mode
-    // by design. Say so and stop, rather than opening a window that can only
-    // show wrong data.
-    dialog.showErrorBox('Factorial Desktop', `Anmeldung nicht möglich: ${describeError(error)}`)
-    app.quit()
-    return
-  }
+  const identity = await signInOrOfferAnother(ops)
+  // Nothing this app does works without a session, and it has no offline mode by
+  // design: opening a window that can only show wrong data would be worse than
+  // not opening one. `signInOrOfferAnother` has already quit in that case.
+  if (identity === null) return
+  const employeeId = identity.employeeId
+  console.log('[auth] signed in as', identity.fullName, '/', identity.companyName)
 
   const store = createAttendanceStore({ ops, employeeId })
 

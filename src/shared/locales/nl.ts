@@ -72,7 +72,10 @@ export const nl: Catalogue = {
   'stale.unknown': 'Vernieuwen mislukt',
 
   'auth.failedTitle': 'Factorial Desktop',
-  'auth.failed': 'Aanmelden niet mogelijk: {reason}',
+  'auth.unreachable': 'Factorial heeft niet geantwoord.',
+  'auth.unreachableDetail':
+    'Je aanmelding is niet aangetast — dit lijkt een tijdelijk netwerkprobleem.\n\n{reason}',
+  'auth.retry': 'Opnieuw proberen',
 
   'update.availableTitle': 'Update beschikbaar',
   'update.available': 'Versie {version} is beschikbaar.',

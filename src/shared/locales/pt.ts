@@ -78,7 +78,10 @@ export const pt: Catalogue = {
   'stale.unknown': 'Falha ao atualizar',
 
   'auth.failedTitle': 'Factorial Desktop',
-  'auth.failed': 'Não foi possível iniciar sessão: {reason}',
+  'auth.unreachable': 'O Factorial não respondeu.',
+  'auth.unreachableDetail':
+    'A tua sessão não é afetada — parece um problema de rede temporário.\n\n{reason}',
+  'auth.retry': 'Tentar novamente',
 
   'update.availableTitle': 'Atualização disponível',
   'update.available': 'A versão {version} está disponível.',

@@ -82,7 +82,10 @@ export const es: Catalogue = {
   'stale.unknown': 'Error al actualizar',
 
   'auth.failedTitle': 'Factorial Desktop',
-  'auth.failed': 'No se ha podido iniciar sesión: {reason}',
+  'auth.unreachable': 'Factorial no ha respondido.',
+  'auth.unreachableDetail':
+    'Tu sesión no se ve afectada: parece un problema de red temporal.\n\n{reason}',
+  'auth.retry': 'Intentarlo de nuevo',
 
   'update.availableTitle': 'Actualización disponible',
   'update.available': 'La versión {version} está disponible.',

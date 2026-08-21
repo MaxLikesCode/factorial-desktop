@@ -39,6 +39,24 @@ import type { Identity } from './factorial/types'
 /** German on purpose: this message reaches the user. */
 export const LOGIN_ABORTED_MESSAGE = 'Anmeldung abgebrochen'
 
+/**
+ * Why a sign-in that reached this module still failed.
+ *
+ * `ensureAuthenticated` only ever throws for the two things a login window
+ * cannot fix, and they deserve opposite treatment:
+ *
+ * - `aborted` — the user closed the window. They chose not to sign in; there is
+ *   nothing to report back at them and nothing to retry.
+ * - `unreachable` — the server did not answer. That is the case this module's
+ *   header is about: it says nothing about the session, so ending the app over
+ *   it turns a fifteen-second hiccup into an app that will not start.
+ */
+export type SignInFailure = 'aborted' | 'unreachable'
+
+export function classifySignInFailure(reason: string): SignInFailure {
+  return reason === LOGIN_ABORTED_MESSAGE ? 'aborted' : 'unreachable'
+}
+
 /** `null` means "not logged in". Anything else failed and is thrown. */
 export type SessionProbe = () => Promise<Identity | null>
 

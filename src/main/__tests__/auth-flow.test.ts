@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import { FactorialError } from '../factorial/client'
 import type { Identity } from '../factorial/types'
-import { authenticate, createSessionProbe, LOGIN_ABORTED_MESSAGE, type LoginWindowHandle } from '../auth-flow'
+import {
+  authenticate,
+  classifySignInFailure,
+  createSessionProbe,
+  LOGIN_ABORTED_MESSAGE,
+  type LoginWindowHandle,
+} from '../auth-flow'
 
 const IDENTITY: Identity = {
   email: 'max@example.test',
@@ -279,5 +285,30 @@ describe('authenticate', () => {
 
     window.navigate(`${APP_HOST}/dashboard`)
     await expect(pending).resolves.toEqual(IDENTITY)
+  })
+})
+
+/**
+ * The two ways a sign-in can fail after this module has done its job, and why
+ * telling them apart matters: one is a decision, the other is weather.
+ *
+ * Getting it wrong is not theoretical. Startup used to end the app on either,
+ * with "Anmeldung nicht möglich" — so a fifteen-second timeout on a network
+ * that was fine a minute later produced an app that would not start and a
+ * message blaming the session for it.
+ */
+describe('classifySignInFailure', () => {
+  it('treats a closed login window as the user’s decision', () => {
+    expect(classifySignInFailure(LOGIN_ABORTED_MESSAGE)).toBe('aborted')
+  })
+
+  it('treats a timeout as the server not answering, not as a logout', () => {
+    expect(classifySignInFailure('request timed out after 15000 ms')).toBe('unreachable')
+  })
+
+  it('says nothing about the session for any other failure either', () => {
+    for (const reason of ['fetch failed', 'getaddrinfo ENOTFOUND', 'socket hang up', '']) {
+      expect(classifySignInFailure(reason)).toBe('unreachable')
+    }
   })
 })

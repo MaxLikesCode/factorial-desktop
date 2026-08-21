@@ -72,7 +72,10 @@ export const fr: Catalogue = {
   'stale.unknown': 'Échec de l’actualisation',
 
   'auth.failedTitle': 'Factorial Desktop',
-  'auth.failed': 'Connexion impossible : {reason}',
+  'auth.unreachable': 'Factorial n’a pas répondu.',
+  'auth.unreachableDetail':
+    'Votre connexion n’est pas affectée — cela ressemble à un problème réseau passager.\n\n{reason}',
+  'auth.retry': 'Réessayer',
 
   'update.availableTitle': 'Mise à jour disponible',
   'update.available': 'La version {version} est disponible.',

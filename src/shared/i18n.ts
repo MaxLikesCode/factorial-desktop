@@ -157,7 +157,10 @@ export const en = {
 
   // Sign-in failure at startup, shown as a system dialog.
   'auth.failedTitle': 'Factorial Desktop',
-  'auth.failed': 'Cannot sign in: {reason}',
+  'auth.unreachable': 'Factorial did not answer.',
+  'auth.unreachableDetail':
+    'Your sign-in is not affected — this looks like a temporary network problem.\n\n{reason}',
+  'auth.retry': 'Try again',
 
   // Updates.
   'update.availableTitle': 'Update available',

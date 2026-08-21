@@ -72,7 +72,10 @@ export const it: Catalogue = {
   'stale.unknown': 'Aggiornamento non riuscito',
 
   'auth.failedTitle': 'Factorial Desktop',
-  'auth.failed': 'Accesso non possibile: {reason}',
+  'auth.unreachable': 'Factorial non ha risposto.',
+  'auth.unreachableDetail':
+    'Il tuo accesso non è compromesso: sembra un problema di rete temporaneo.\n\n{reason}',
+  'auth.retry': 'Riprova',
 
   'update.availableTitle': 'Aggiornamento disponibile',
   'update.available': 'La versione {version} è disponibile.',
