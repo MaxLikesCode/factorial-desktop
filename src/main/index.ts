@@ -23,7 +23,8 @@ import { isLocationType } from './factorial/types'
 import { registerIpc } from './ipc'
 import { applyBrowserUserAgent, clearSession, createNetFetch, getFactorialSession } from './session'
 import { buildLoginItemSettings, createSettings, type Settings } from './settings'
-import { createTray, hasTray } from './tray'
+import { createTray, hasTray, refreshTray } from './tray'
+import { createUpdateLog } from './update-log'
 import { createUpdater } from './updater'
 import { resolveLocale } from '@shared/i18n'
 import { translatorFor } from '@shared/locales'
@@ -227,6 +228,11 @@ async function bootstrap(): Promise<void> {
   const updater = createUpdater({
     getStateKind: () => store.getSnapshot().state.kind,
     getTranslate: () => translatorFor(resolveLocale(settings.get().language, app.getLocale())),
+    // The tray is built below, and `refreshTray()` is a no-op until it exists —
+    // which is exactly the right behaviour for a status change that arrives
+    // before there is anywhere to show it.
+    onStatusChange: () => refreshTray(),
+    logger: createUpdateLog(app.getPath('userData')),
   })
 
   createTray({
@@ -237,6 +243,7 @@ async function bootstrap(): Promise<void> {
       void signInAgain()
     },
     onCheckForUpdates: () => void updater.checkNow(true),
+    getUpdateStatus: () => updater.getStatus(),
     onQuit: () => app.quit(),
   })
 

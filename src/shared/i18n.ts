@@ -171,6 +171,9 @@ export const en = {
   'update.ready': 'Version {version} has been downloaded.',
   'update.readyDetail': 'Restarting takes a moment. You stay signed in.',
   'update.restartNow': 'Restart now',
+  'update.downloading': 'Downloading update … {percent}%',
+  'update.preparing': 'Preparing update …',
+  'update.restartToInstall': 'Restart to install {version}',
   'update.onNextQuit': 'When I next quit',
   'update.duringShiftDetail':
     'A shift is running, so nothing will restart now. The update is installed automatically the next time you quit.',

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { translatorFor } from '@shared/locales'
 import {
   CHECK_INTERVAL_MS,
   FIRST_CHECK_DELAY_MS,
@@ -6,6 +7,7 @@ import {
   installKind,
   mayRestart,
   shouldOffer,
+  updateMenuEntry,
 } from '../update-policy'
 
 /**
@@ -108,5 +110,51 @@ describe('timing', () => {
     expect(FIRST_CHECK_DELAY_MS).toBeGreaterThan(5_000)
     expect(CHECK_INTERVAL_MS).toBeGreaterThan(FIRST_CHECK_DELAY_MS)
     expect(CHECK_INTERVAL_MS).toBeGreaterThanOrEqual(60 * 60 * 1000)
+  })
+})
+
+/**
+ * The tray entry is the only place a download is visible at all, so what it
+ * says is part of the fix rather than decoration: an update that reports
+ * nothing for the minutes it takes reads as an entry that did nothing.
+ */
+describe('updateMenuEntry', () => {
+  const t = translatorFor('de')
+
+  it('asks when there is nothing in flight', () => {
+    expect(updateMenuEntry(t, { kind: 'idle' })).toEqual({
+      label: 'Nach Updates suchen …',
+      enabled: true,
+    })
+  })
+
+  it('reports whole percentages while downloading, and refuses a second click', () => {
+    // electron-updater reports fractions; a menu that renders 41.83871 % is
+    // reporting the wrong thing about itself.
+    expect(updateMenuEntry(t, { kind: 'downloading', percent: 41.83871 })).toEqual({
+      label: 'Update wird geladen … 42%',
+      enabled: false,
+    })
+    expect(updateMenuEntry(t, { kind: 'downloading', percent: 0 }).label).toContain('0%')
+  })
+
+  /**
+   * The second half of a macOS update — Squirrel refetching the archive from
+   * the local server — reports no progress at all. Showing 100 % through it
+   * would claim the thing is finished while the restart still does nothing,
+   * which is the exact confusion this whole change exists to remove.
+   */
+  it('says it is preparing rather than claiming 100 %', () => {
+    expect(updateMenuEntry(t, { kind: 'preparing' })).toEqual({
+      label: 'Update wird vorbereitet …',
+      enabled: false,
+    })
+  })
+
+  it('offers the restart, and names the version, once one is staged', () => {
+    expect(updateMenuEntry(t, { kind: 'ready', version: '0.2.1' })).toEqual({
+      label: 'Zum Installieren von 0.2.1 neu starten',
+      enabled: true,
+    })
   })
 })

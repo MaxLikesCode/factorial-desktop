@@ -85,6 +85,9 @@ export const it: Catalogue = {
   'update.ready': 'La versione {version} è stata scaricata.',
   'update.readyDetail': 'Il riavvio richiede un attimo. Resti connesso.',
   'update.restartNow': 'Riavvia ora',
+  'update.downloading': 'Download dell’aggiornamento … {percent}%',
+  'update.preparing': 'Preparazione dell’aggiornamento …',
+  'update.restartToInstall': 'Riavvia per installare {version}',
   'update.onNextQuit': 'Alla prossima chiusura',
   'update.duringShiftDetail':
     'È in corso un turno, quindi ora non verrà riavviato nulla. L’aggiornamento sarà installato automaticamente alla prossima chiusura.',

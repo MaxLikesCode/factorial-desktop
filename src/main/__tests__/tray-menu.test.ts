@@ -241,9 +241,47 @@ describe('buildTrayMenu', () => {
       lastActionError: null,
       settings,
       actions: noopActions(),
+      updateStatus: { kind: 'idle' },
       ...overrides,
     })
   }
+
+  /**
+   * The update entry lives inside the settings submenu, and it is the only
+   * surface a download has. Asserted through the built menu rather than through
+   * `updateMenuEntry` alone, because the wiring between the two is the part
+   * that was missing.
+   */
+  it('turns the update entry into the download progress, and back into an offer', () => {
+    // Found by what it does rather than by what it says: the label is the very
+    // thing under test, so matching on it would stop working exactly where it
+    // matters.
+    const entry = (status: Parameters<typeof buildTrayMenu>[0]['updateStatus']) => {
+      const actions = noopActions()
+      const items = menu(base, { updateStatus: status, actions })
+      const settingsItem = items.find((i) => i.label === 'Einstellungen')
+      const submenu = settingsItem?.submenu as {
+        label?: string
+        enabled?: boolean
+        click?: () => void
+      }[]
+      return submenu.find((item) => {
+        ;(actions.checkForUpdates as ReturnType<typeof vi.fn>).mockClear()
+        item.click?.()
+        return (actions.checkForUpdates as ReturnType<typeof vi.fn>).mock.calls.length === 1
+      })
+    }
+
+    expect(entry({ kind: 'idle' })).toMatchObject({ enabled: true })
+    expect(entry({ kind: 'downloading', percent: 42 })).toMatchObject({
+      label: 'Update wird geladen … 42%',
+      enabled: false,
+    })
+    expect(entry({ kind: 'ready', version: '0.2.2' })).toMatchObject({
+      label: 'Zum Installieren von 0.2.2 neu starten',
+      enabled: true,
+    })
+  })
 
   it('starts with the status line as a disabled entry', () => {
     // This entry is where Windows reads the running time.

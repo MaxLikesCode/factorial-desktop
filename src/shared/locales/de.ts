@@ -94,6 +94,9 @@ export const de: Catalogue = {
   'update.ready': 'Version {version} ist heruntergeladen.',
   'update.readyDetail': 'Der Neustart dauert einen Moment. Deine Anmeldung bleibt erhalten.',
   'update.restartNow': 'Jetzt neu starten',
+  'update.downloading': 'Update wird geladen … {percent}%',
+  'update.preparing': 'Update wird vorbereitet …',
+  'update.restartToInstall': 'Zum Installieren von {version} neu starten',
   'update.onNextQuit': 'Beim nächsten Beenden',
   'update.duringShiftDetail':
     'Weil gerade eine Schicht läuft, wird jetzt nicht neu gestartet. Das Update wird automatisch installiert, sobald du die App das nächste Mal beendest.',

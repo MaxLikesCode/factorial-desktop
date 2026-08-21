@@ -12,6 +12,8 @@
  * is that the timer is right. Everything below follows from that.
  */
 
+import type { Translate } from '@shared/i18n'
+
 /** How the running copy was installed, which decides what an update can do. */
 export type InstallKind =
   /** NSIS install under Programs. The only kind electron-updater can replace. */
@@ -105,4 +107,46 @@ export const FIRST_CHECK_DELAY_MS = 30 * 1000
  */
 export function shouldOffer(version: string, declined: string | null): boolean {
   return version !== declined
+}
+
+/**
+ * What the updater is doing, as far as the tray needs to say so.
+ *
+ * `preparing` is not padding between `downloading` and `ready`. On macOS
+ * electron-updater's own download only writes the archive into a cache and
+ * starts a local HTTP server; Squirrel then fetches the whole thing *again*
+ * from that server, and the update is installable only when that second pass
+ * finishes. Nothing reports progress for it, so it gets a state of its own
+ * rather than a percentage that would sit at 100 and be a lie.
+ */
+export type UpdateStatus =
+  | { kind: 'idle' }
+  | { kind: 'downloading'; percent: number }
+  | { kind: 'preparing' }
+  | { kind: 'ready'; version: string }
+
+/**
+ * The tray's update entry, which doubles as the progress display.
+ *
+ * Disabled while something is in flight: a second click cannot help, and an
+ * entry that stays clickable invites one. `ready` stays clickable because there
+ * the click is the whole point.
+ */
+export function updateMenuEntry(
+  t: Translate,
+  status: UpdateStatus,
+): { label: string; enabled: boolean } {
+  switch (status.kind) {
+    case 'downloading':
+      return {
+        label: t('update.downloading', { percent: String(Math.round(status.percent)) }),
+        enabled: false,
+      }
+    case 'preparing':
+      return { label: t('update.preparing'), enabled: false }
+    case 'ready':
+      return { label: t('update.restartToInstall', { version: status.version }), enabled: true }
+    case 'idle':
+      return { label: t('settings.checkForUpdates'), enabled: true }
+  }
 }

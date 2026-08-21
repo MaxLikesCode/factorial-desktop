@@ -26,6 +26,7 @@ import { translatorFor } from '@shared/locales'
 import type { AppSettings } from '@shared/ipc-contract'
 import type { AttendanceStore, ClockInInput } from './attendance'
 import type { Settings } from './settings'
+import type { UpdateStatus } from './update-policy'
 import {
   buildTrayMenu,
   trayActionErrorText,
@@ -69,6 +70,12 @@ export interface TrayDeps {
   onSignIn: () => void
   /** Looks for a new version now and reports either way. See `updater.ts`. */
   onCheckForUpdates: () => void
+  /**
+   * What the updater is doing, read per render. Pulled rather than pushed so
+   * the menu cannot show a percentage that has since moved on; `refreshTray()`
+   * is what makes it move at download speed instead of at `RENDER_INTERVAL_MS`.
+   */
+  getUpdateStatus: () => UpdateStatus
   onQuit: () => void
 }
 
@@ -129,6 +136,19 @@ function iconFor(tone: TrayTone): NativeImage {
 
 let tray: Tray | null = null
 
+/**
+ * The live tray's render function, so something outside can ask for a redraw.
+ *
+ * The updater needs this: a download advances several times a second, and the
+ * store — which drives every other render — knows nothing about it.
+ */
+let renderTray: (() => void) | null = null
+
+/** Redraws the tray now. Does nothing when there is no tray. */
+export function refreshTray(): void {
+  renderTray?.()
+}
+
 /** Whether a tray exists — `index.ts` keeps the app alive only while one does. */
 export function hasTray(): boolean {
   return tray !== null && !tray.isDestroyed()
@@ -185,6 +205,7 @@ export function createTray(deps: TrayDeps): Tray {
           // the same store, and a checkbox may not keep showing a value that has
           // since been changed elsewhere.
           settings: deps.settings.get(),
+          updateStatus: deps.getUpdateStatus(),
           actions: {
             clockIn: () => run(() => deps.store.clockIn(deps.clockInInput())),
             startBreak: (id) => run(() => deps.store.startBreak(id)),
@@ -294,6 +315,7 @@ export function createTray(deps: TrayDeps): Tray {
   created.on('double-click', () => showWidget())
 
   render()
+  renderTray = render
   const unsubscribe = deps.store.subscribe(render)
   const timer = setInterval(render, RENDER_INTERVAL_MS)
 
@@ -304,6 +326,7 @@ export function createTray(deps: TrayDeps): Tray {
     unsubscribe()
     if (!created.isDestroyed()) created.destroy()
     if (tray === created) tray = null
+    if (renderTray === render) renderTray = null
   })
 
   return created

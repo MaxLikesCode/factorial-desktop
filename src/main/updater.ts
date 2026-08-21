@@ -22,17 +22,19 @@
  *    action with no response reads as broken.
  */
 
-import { app, dialog, shell } from 'electron'
+import { app, autoUpdater as nativeUpdater, dialog, shell } from 'electron'
 import type { AppUpdater, UpdateInfo } from 'electron-updater'
 import type { Translate } from '@shared/i18n'
 import {
   CHECK_INTERVAL_MS,
   FIRST_CHECK_DELAY_MS,
+  type UpdateStatus,
   capabilityFor,
   installKind,
   mayRestart,
   shouldOffer,
 } from './update-policy'
+import type { UpdateLogger } from './update-log'
 
 /** Where a portable build sends people, since it cannot update itself. */
 const RELEASES_URL = 'https://github.com/MaxLikesCode/factorial-desktop/releases/latest'
@@ -47,6 +49,17 @@ export interface UpdaterDeps {
   getTranslate: () => Translate
   /** Injected for tests; the real one is electron-updater's singleton. */
   updater?: AppUpdater
+  /**
+   * Called whenever `getStatus()` starts returning something else, so the tray
+   * can redraw. The tray polls slowly on its own; a download would otherwise
+   * advance in fifteen-second jumps.
+   */
+  onStatusChange?: () => void
+  /**
+   * Where the updater writes what happened. Handed to electron-updater as well,
+   * so its own internals land in the same file — see `update-log.ts`.
+   */
+  logger?: UpdateLogger
 }
 
 export interface Updater {
@@ -59,6 +72,8 @@ export interface Updater {
    * answers.
    */
   checkNow(manual: boolean): Promise<void>
+  /** What the tray should be saying right now. */
+  getStatus(): UpdateStatus
 }
 
 export function createUpdater(deps: UpdaterDeps): Updater {
@@ -76,6 +91,14 @@ export function createUpdater(deps: UpdaterDeps): Updater {
   let busy = false
   /** Downloaded and waiting for a quit; used to answer a manual re-check. */
   let staged: string | null = null
+  /** The version currently being fetched, so the second phase can name it. */
+  let pending: string | null = null
+  let status: UpdateStatus = { kind: 'idle' }
+
+  function setStatus(next: UpdateStatus): void {
+    status = next
+    deps.onStatusChange?.()
+  }
 
   // Loaded lazily so that `npm test` and the dev run never pull the module in;
   // it reads app-update.yml at import time and complains when there is none.
@@ -105,6 +128,8 @@ export function createUpdater(deps: UpdaterDeps): Updater {
       declined = info.version
       return
     }
+    pending = info.version
+    setStatus({ kind: 'downloading', percent: 0 })
     await updater.downloadUpdate()
   }
 
@@ -127,6 +152,7 @@ export function createUpdater(deps: UpdaterDeps): Updater {
 
   async function offerRestart(version: string): Promise<void> {
     staged = version
+    setStatus({ kind: 'ready', version })
     const t = deps.getTranslate()
     if (!mayRestart(deps.getStateKind())) {
       // Clocked in: the update is on disk and will apply on the next quit. Said
@@ -242,16 +268,54 @@ export function createUpdater(deps: UpdaterDeps): Updater {
 
     const updater = resolveUpdater()
     if (updater !== null && can.install) {
+      if (deps.logger) updater.logger = deps.logger
       updater.autoDownload = false
       updater.autoInstallOnAppQuit = true
+
+      updater.on('download-progress', (progress: { percent: number }) => {
+        setStatus({ kind: 'downloading', percent: progress.percent })
+      })
+
       updater.on('update-downloaded', (info: UpdateInfo) => {
+        pending = info.version
+        // PLATFORM: on macOS this does *not* mean the update can be installed.
+        // electron-updater has only written the archive into its cache and
+        // started a local HTTP server; Squirrel still has to fetch the whole
+        // thing from that server, and only Squirrel's own `update-downloaded`
+        // means "installable". Offering a restart here is what made "Restart
+        // now" do nothing at all: `quitAndInstall()` finds Squirrel not ready,
+        // quietly registers a listener and returns — no quit, no message, and
+        // `autoInstallOnAppQuit` cannot save it either, because there is still
+        // nothing staged when the app is quit by hand.
+        if (process.platform === 'darwin') {
+          setStatus({ kind: 'preparing' })
+          return
+        }
         void offerRestart(info.version)
       })
+
       // Without a listener electron-updater treats an error as unhandled and
       // takes the process down with it — over a failed network request.
       updater.on('error', (error: Error) => {
+        deps.logger?.error(`electron-updater: ${describe(error)}`)
         console.error('[update] error:', describe(error))
+        setStatus({ kind: 'idle' })
       })
+
+      if (process.platform === 'darwin') {
+        // Squirrel's own events, which are the truthful ones on this platform.
+        // Attaching a listener is safe on an unsigned build; only calling into
+        // it would not be.
+        nativeUpdater.on('update-downloaded', () => {
+          deps.logger?.info('Squirrel staged the update; a restart now installs it')
+          void offerRestart(pending ?? app.getVersion())
+        })
+        nativeUpdater.on('error', (error: Error) => {
+          deps.logger?.error(`Squirrel: ${describe(error)}`)
+          console.error('[update] squirrel error:', describe(error))
+          setStatus({ kind: 'idle' })
+        })
+      }
     }
 
     firstTimer = setTimeout(() => void checkNow(false), FIRST_CHECK_DELAY_MS)
@@ -265,7 +329,7 @@ export function createUpdater(deps: UpdaterDeps): Updater {
     timer = null
   }
 
-  return { start, stop, checkNow }
+  return { start, stop, checkNow, getStatus: () => status }
 }
 
 function describe(error: unknown): string {

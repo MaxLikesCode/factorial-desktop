@@ -85,6 +85,9 @@ export const nl: Catalogue = {
   'update.ready': 'Versie {version} is gedownload.',
   'update.readyDetail': 'Herstarten duurt even. Je blijft aangemeld.',
   'update.restartNow': 'Nu herstarten',
+  'update.downloading': 'Update downloaden … {percent}%',
+  'update.preparing': 'Update voorbereiden …',
+  'update.restartToInstall': 'Opnieuw starten om {version} te installeren',
   'update.onNextQuit': 'Bij het volgende afsluiten',
   'update.duringShiftDetail':
     'Er loopt een dienst, dus er wordt nu niet herstart. De update wordt automatisch geïnstalleerd zodra je de app afsluit.',

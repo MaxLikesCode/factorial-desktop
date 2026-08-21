@@ -91,6 +91,9 @@ export const pt: Catalogue = {
   'update.ready': 'A versão {version} foi transferida.',
   'update.readyDetail': 'Reiniciar demora um momento. A tua sessão mantém-se.',
   'update.restartNow': 'Reiniciar agora',
+  'update.downloading': 'A transferir a atualização … {percent}%',
+  'update.preparing': 'A preparar a atualização …',
+  'update.restartToInstall': 'Reiniciar para instalar {version}',
   'update.onNextQuit': 'Da próxima vez que sair',
   'update.duringShiftDetail':
     'Está um turno a decorrer, por isso nada será reiniciado agora. A atualização será instalada automaticamente da próxima vez que saíres.',

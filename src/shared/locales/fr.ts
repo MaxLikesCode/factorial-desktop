@@ -85,6 +85,9 @@ export const fr: Catalogue = {
   'update.ready': 'La version {version} a été téléchargée.',
   'update.readyDetail': 'Le redémarrage prend un instant. Vous restez connecté.',
   'update.restartNow': 'Redémarrer maintenant',
+  'update.downloading': 'Téléchargement de la mise à jour … {percent}%',
+  'update.preparing': 'Préparation de la mise à jour …',
+  'update.restartToInstall': 'Redémarrer pour installer {version}',
   'update.onNextQuit': 'À la prochaine fermeture',
   'update.duringShiftDetail':
     'Un pointage est en cours, rien ne redémarrera maintenant. La mise à jour sera installée automatiquement à la prochaine fermeture.',

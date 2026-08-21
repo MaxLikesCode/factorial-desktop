@@ -34,6 +34,7 @@ import {
 import type { AppSettings, AppSnapshot, ThemeSetting } from '@shared/ipc-contract'
 import type { ExpandDirection } from '@shared/widget-size'
 import { classifyActionError } from './ipc-handlers'
+import { type UpdateStatus, updateMenuEntry } from './update-policy'
 
 /** Drives the colour-coded Windows icon; macOS uses one template icon for all. */
 export type TrayTone = 'idle' | 'active' | 'paused' | 'alert'
@@ -78,6 +79,12 @@ export interface TrayMenuInput {
   actions: TrayActions
   /** Read per render, so a language change shows on the next one. */
   t: Translate
+  /**
+   * What the updater is doing. The "check for updates" entry doubles as the
+   * progress display — a 119 MB download that reports nothing looks like an
+   * entry that did nothing.
+   */
+  updateStatus: UpdateStatus
 }
 
 const STATE_KEY = {
@@ -352,6 +359,7 @@ function settingsSubmenu(
   snapshot: AppSnapshot,
   settings: AppSettings,
   actions: TrayActions,
+  updateStatus: UpdateStatus,
 ): MenuItemConstructorOptions[] {
   const items: MenuItemConstructorOptions[] = [
     {
@@ -373,7 +381,9 @@ function settingsSubmenu(
     // Not next to "Refresh" one level up on purpose: that one reloads the times,
     // this one looks for a new program. Two very different things that would
     // read as the same one if they sat together.
-    { label: t('settings.checkForUpdates'), click: () => actions.checkForUpdates() },
+    // Label and clickability come from the updater's state: idle asks, a
+    // download reports its percentage, and a staged update offers the restart.
+    { ...updateMenuEntry(t, updateStatus), click: () => actions.checkForUpdates() },
   ]
 
   // With no session there is nothing to drop, and the top-level entry already
@@ -394,6 +404,7 @@ export function buildTrayMenu({
   settings,
   actions,
   t,
+  updateStatus,
 }: TrayMenuInput): MenuItemConstructorOptions[] {
   const { state } = snapshot
 
@@ -458,7 +469,10 @@ export function buildTrayMenu({
       click: () => actions.toggleWindow(),
     },
     { label: t('tray.refresh'), click: () => actions.refresh() },
-    { label: t('tray.settings'), submenu: settingsSubmenu(t, snapshot, settings, actions) },
+    {
+      label: t('tray.settings'),
+      submenu: settingsSubmenu(t, snapshot, settings, actions, updateStatus),
+    },
     { type: 'separator' },
     // Always present, in every state: closing the widget only hides it and the
     // window is kept out of the taskbar, so this is the only way out of the app
