@@ -23,8 +23,7 @@ The first launch needs one extra step:
 
 - **Windows:** the build is not signed, so SmartScreen shows a blue box. Click
   *More info* → *Run anyway*.
-- **macOS:** the build is signed but not yet notarized, so Gatekeeper still
-  refuses a plain double-click. Right-click the app → *Open*, then confirm.
+- **macOS:** nothing. The build is signed and notarized.
 
 ## Using it
 

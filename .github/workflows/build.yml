@@ -149,6 +149,14 @@ jobs:
           # instead of breaking.
           CSC_IDENTITY_AUTO_DISCOVERY:
             ${{ startsWith(matrix.os, 'macos') && secrets.MACOS_CERTIFICATE_P12 != '' }}
+          # Notarization: Apple has to see the signed build before macOS will
+          # start it. Same runner guard as above — these mean nothing on Windows.
+          # The password is an app-specific one from appleid.apple.com, not the
+          # Apple ID password, and can be revoked on its own.
+          APPLE_ID: ${{ startsWith(matrix.os, 'macos') && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD:
+            ${{ startsWith(matrix.os, 'macos') && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ startsWith(matrix.os, 'macos') && secrets.APPLE_TEAM_ID || '' }}
 
       - name: Attach to the release
         if: startsWith(github.ref, 'refs/tags/v')

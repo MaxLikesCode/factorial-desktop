@@ -47,6 +47,7 @@ type BuilderConfig = {
     hardenedRuntime?: boolean
     entitlements?: string
     entitlementsInherit?: string
+    notarize?: boolean
   }
   win: { target: BuilderTarget[] }
   dmg: Record<string, string>
@@ -147,6 +148,19 @@ describe('electron-builder.yml', () => {
     expect(config.mac.hardenedRuntime).toBe(true)
     expect(config.mac.entitlements).toBe('build/entitlements.mac.plist')
     expect(config.mac.entitlementsInherit).toBe('build/entitlements.mac.plist')
+  })
+
+  /**
+   * Signing and notarization buy two different things, and losing either one
+   * looks like a different bug. Signing is what lets the app *update* itself,
+   * because Squirrel validates the signature. Notarization is what lets it
+   * *start*: Gatekeeper reports a signed-but-un-notarized build as
+   * `source=Unnotarized Developer ID` and refuses it, and since macOS 15 the
+   * right-click → Open bypass is gone — the dialog's blue button says "Move to
+   * Trash".
+   */
+  it('notarizes, without which macOS refuses to start the signed build', () => {
+    expect(config.mac.notarize).toBe(true)
   })
 
   it('grants the hardened runtime exactly what a Chromium engine needs', () => {

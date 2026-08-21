@@ -70,6 +70,21 @@ mac:
   entitlements: build/entitlements.mac.plist
   # The helper processes inherit rather than repeat the list.
   entitlementsInherit: build/entitlements.mac.plist
+  # Signing alone is not enough to start the app. Gatekeeper reports a signed
+  # but un-notarized build as `source=Unnotarized Developer ID` and refuses it,
+  # and since macOS 15 the right-click → Open escape hatch is gone: what is left
+  # is a dialog whose blue button says "Move to Trash". Notarization is what
+  # removes it.
+  #
+  # Distinct from signing in what it buys: signing is what lets the app *update*
+  # itself (Squirrel validates it), notarization is what lets it *start*. Both
+  # are needed, for different reasons.
+  #
+  # Credentials come from the environment — APPLE_ID,
+  # APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID. Without them electron-builder
+  # logs "skipped macOS notarization" and carries on, which is what a local
+  # build does.
+  notarize: true
   # LSUIElement hides the dock icon — this is a menubar app.
   extendInfo:
     LSUIElement: 1

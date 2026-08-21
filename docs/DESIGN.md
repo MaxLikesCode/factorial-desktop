@@ -932,8 +932,11 @@ CI on Linux.
 
 `electron-vite` for dev and build, `electron-builder` for packaging.
 
-- **macOS:** DMG + ZIP, arm64, signed with a Developer ID certificate (required
-  by the updater; see "Updates"), not yet notarized
+- **macOS:** DMG + ZIP, arm64, signed with a Developer ID certificate and
+  notarized. Both are required and for different reasons: signing is what lets
+  the app update itself (Squirrel validates it), notarization is what lets it
+  start at all — Gatekeeper refuses a signed-but-un-notarized build, and since
+  macOS 15 there is no right-click → Open around it
 - **Windows:** NSIS installer + portable exe, x64, unsigned
 
 Tagging `v*` builds both platforms in CI and attaches the artefacts to a GitHub
