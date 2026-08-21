@@ -849,11 +849,24 @@ The script writes both `icon.ico` and `icon.icns` with Pillow and therefore runs
 on any platform. It used to shell out to `iconutil` for the `.icns`, which exists
 only on macOS — so the two files could not be regenerated from one machine.
 
-**The tray icon is deliberately not the logo.** On Windows the tray has no text
-beside it, so the icon's colour *is* the state: grey clocked out, green clocked
-in, amber on a break, red signed out. A brand mark tinted four ways would be
-neither a good state indicator nor the brand's colour. `resources/make-tray-icons.py`
-draws a clock instead, in those four tones.
+**The tray icon is the same mark, recoloured.** `resources/make-tray-icons.py`
+reads the same source file and tints it: grey clocked out, emerald clocked in,
+amber on a break, red when the session is gone — the widget's status-dot colours,
+so the two surfaces agree.
+
+Tinting rather than badging, because on Windows the icon's colour *is* the state:
+there is no text beside it. Leaving the mark its own red in every state would
+mean the tray says nothing about whether you are clocked in, which is the one
+thing it is there to say. A coloured dot in the corner was the alternative and
+loses at 16 px, where the whole icon is sixteen pixels and a badge would be four.
+
+Recolouring is exact rather than approximate: the mark is a single flat colour,
+so replacing every pixel's colour while keeping its alpha preserves the shape
+*and* the antialiased edge, which is what makes the small sizes legible.
+
+macOS gets the same mark as a monochrome template, and the system tints it for
+light mode, dark mode and the highlighted menu bar. The state there is carried by
+`tray.setTitle()` next to the icon, so one template is enough.
 
 ## Platform differences
 
@@ -864,7 +877,7 @@ them all. The substantive ones:
 | Topic | Difference |
 |---|---|
 | Tray title | `tray.setTitle()` is macOS-only; Windows uses tooltip, colour-coded icon and a disabled menu entry |
-| Tray icon | macOS: monochrome template PNG, tinted by the system. Windows: coloured `.ico` at 16/32/48 px |
+| Tray icon | The same mark either way. macOS: monochrome template, tinted by the system. Windows: four coloured `.ico` at 16/32/48 px, because there the colour is the state |
 | Tray visibility | Windows 11 hides new tray icons behind the overflow chevron until the user drags one out |
 | Click-through | `setIgnoreMouseEvents(… { forward: true })` delivers no mouse moves on Windows; a cursor poll in the main process stands in |
 | Transparency | macOS draws rounded corners and a soft shadow itself; Windows needs a fully transparent background colour |
