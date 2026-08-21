@@ -16,7 +16,10 @@
  *    prompt was withheld while somebody was clocked in. But the shift is
  *    Factorial's record, not this app's, so a restart never stopped it — the
  *    rule only forced people to clock out to install an update.
- * 3. **Silence when nobody asked.** A background check that fails (no network,
+ * 3. **The app quits itself.** `quitAndInstall()` leaves that to Electron, and
+ *    Electron waits for every window to close first — which this app's windows
+ *    never do. See the note at the call.
+ * 4. **Silence when nobody asked.** A background check that fails (no network,
  *    GitHub down, a release without the metadata) writes to the log and stops.
  *    A check somebody clicked reports what happened, success or not, because an
  *    action with no response reads as broken.
@@ -163,6 +166,23 @@ export function createUpdater(deps: UpdaterDeps): Updater {
     if (response === 0) {
       const updater = resolveUpdater()
       updater?.quitAndInstall()
+      // `quitAndInstall()` is not enough on its own, and the reason is a
+      // collision between two reasonable designs. Electron's version closes
+      // every window and calls `app.quit()` only once they are all closed. This
+      // app's windows do not close: `windows.ts` hides them and calls
+      // `preventDefault()`, because closing the widget is not meant to end the
+      // app (DESIGN.md, "Tray"). The guard it uses — `quitting` — is set by
+      // `before-quit`, which nothing has fired yet at this point.
+      //
+      // So the widget vanished, the tray survived, "all windows closed" never
+      // happened, `app.quit()` was never called, and the update sat staged
+      // until the app was quit by hand. Squirrel had done its part; nobody
+      // ever left.
+      //
+      // Quitting here takes the app's own route out — `before-quit` sets
+      // `quitting`, the windows then really close, the process exits, and
+      // ShipIt, already armed by the call above, swaps the bundle and relaunches.
+      app.quit()
     }
   }
 
