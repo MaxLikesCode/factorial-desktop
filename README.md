@@ -104,15 +104,17 @@ pull request. Tagging `v*` builds both platforms and attaches the files to a
 GitHub release; macOS runners are billed at ten times the Linux rate, so the
 builds do not run on every push.
 
-**Releasing.** Bump `version` in `package.json`, commit, then tag:
+**Releasing.** One command produces the version commit and its tag, and pushing
+the tag is what starts a release build:
 
 ```
-git tag -a v0.1.2 -m "..."
-git push origin v0.1.2
+npm version patch          # or minor / major
+git push origin main --follow-tags
 ```
 
-The release must keep `latest.yml` among its assets — that file is the feed the
-installed app reads to notice a new version.
+Pushing to `main` on its own is not a release; only a `v*` tag is. The full
+procedure, how to pick the number, and the handful of things that have gone
+wrong before are in [`docs/RELEASING.md`](docs/RELEASING.md).
 
 ## Documentation
 
@@ -120,3 +122,5 @@ installed app reads to notice a new version.
   verified against the live API. Where anything disagrees, this wins.
 - [`docs/api-discovery.md`](docs/api-discovery.md) — how the Factorial API was
   mapped out, and how to find a query nobody has needed yet.
+- [`docs/RELEASING.md`](docs/RELEASING.md) — how to cut a release, when not to,
+  and why signing and notarization are not optional on macOS.
