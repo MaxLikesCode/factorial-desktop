@@ -99,9 +99,6 @@ export const es: Catalogue = {
   'update.preparing': 'Preparando la actualización …',
   'update.restartToInstall': 'Reiniciar para instalar {version}',
   'update.onNextQuit': 'Al salir la próxima vez',
-  'update.duringShiftDetail':
-    'Hay una jornada en curso, así que no se reiniciará ahora. La actualización se instalará automáticamente la próxima vez que salgas.',
-  'update.understood': 'Entendido',
   'update.noneTitle': 'Sin actualizaciones',
   'update.none': 'Tienes la versión más reciente.',
   'update.noneDetail': 'Tienes la {current}.',

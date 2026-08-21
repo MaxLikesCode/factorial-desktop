@@ -98,9 +98,6 @@ export const de: Catalogue = {
   'update.preparing': 'Update wird vorbereitet …',
   'update.restartToInstall': 'Zum Installieren von {version} neu starten',
   'update.onNextQuit': 'Beim nächsten Beenden',
-  'update.duringShiftDetail':
-    'Weil gerade eine Schicht läuft, wird jetzt nicht neu gestartet. Das Update wird automatisch installiert, sobald du die App das nächste Mal beendest.',
-  'update.understood': 'Verstanden',
   'update.noneTitle': 'Kein Update',
   'update.none': 'Du verwendest die neueste Version.',
   'update.noneDetail': 'Installiert ist {current}.',

@@ -89,9 +89,6 @@ export const nl: Catalogue = {
   'update.preparing': 'Update voorbereiden …',
   'update.restartToInstall': 'Opnieuw starten om {version} te installeren',
   'update.onNextQuit': 'Bij het volgende afsluiten',
-  'update.duringShiftDetail':
-    'Er loopt een dienst, dus er wordt nu niet herstart. De update wordt automatisch geïnstalleerd zodra je de app afsluit.',
-  'update.understood': 'Begrepen',
   'update.noneTitle': 'Geen update',
   'update.none': 'Je gebruikt de nieuwste versie.',
   'update.noneDetail': 'Je hebt {current}.',

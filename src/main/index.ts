@@ -226,7 +226,6 @@ async function bootstrap(): Promise<void> {
   // acceptable depends on whether a shift is running *at that moment*, not on
   // what was true when the app started.
   const updater = createUpdater({
-    getStateKind: () => store.getSnapshot().state.kind,
     getTranslate: () => translatorFor(resolveLocale(settings.get().language, app.getLocale())),
     // The tray is built below, and `refreshTray()` is a no-op until it exists —
     // which is exactly the right behaviour for a status change that arrives

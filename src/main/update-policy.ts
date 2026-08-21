@@ -6,10 +6,14 @@
  * here takes what it needs as an argument rather than reading it from the
  * process, which is why the Windows-only cases can be checked from any machine.
  *
- * The one rule worth stating up front: **this app must never restart itself
- * while somebody is clocked in.** A restart mid-shift is not a lost window, it
- * is a running timer that stops being watched, and the whole point of the thing
- * is that the timer is right. Everything below follows from that.
+ * This module used to open with a rule: never restart while somebody is clocked
+ * in. It has been dropped, because the premise was wrong. The shift does not
+ * live here — `clockIn` and `fetchOpenShift` are calls to Factorial, and the
+ * app is a display and a remote control for a record kept on their server. A
+ * restart therefore stops nothing; it re-reads the shift on the way back up.
+ * What the old rule actually protected was the *view* of the timer, for the few
+ * seconds an update takes, at the price of making people clock out to install
+ * one.
  */
 
 import type { Translate } from '@shared/i18n'
@@ -70,18 +74,6 @@ export function capabilityFor(kind: InstallKind): UpdateCapability {
     case 'development':
       return { check: false, install: false }
   }
-}
-
-/**
- * Whether now is a moment where a restart is acceptable.
- *
- * Only `out` and `unauthenticated` qualify. `in` and `break` are a running
- * shift, and `unknown` means the app does not yet know — which is not the same
- * as knowing nobody is clocked in, and is treated as the more careful of the
- * two.
- */
-export function mayRestart(stateKind: string): boolean {
-  return stateKind === 'out' || stateKind === 'unauthenticated'
 }
 
 /** Milliseconds between checks. Six hours: releases are not that frequent. */

@@ -773,11 +773,12 @@ settings surface; the card is 300 px wide and shows time, not configuration.
 expressed as testable arithmetic in `update-policy.ts`:
 
 1. **Nothing downloads unasked.** `autoDownload` is off.
-2. **Nothing restarts a running shift.** A restart mid-shift is a timer that stops
-   being watched, which is the failure this app exists to avoid. The prompt is
-   gated on the attendance state, and `unknown` counts as a running shift — not
-   yet knowing is not the same as knowing nobody is clocked in. While clocked in
-   the update is staged and applied on the next quit.
+2. **A running shift is not in the way.** This used to be the opposite rule: the
+   restart was withheld while clocked in, and the update waited for the next
+   quit. The premise was wrong. The shift is Factorial's record — `clockIn` and
+   `fetchOpenShift` are calls to their API — so a restart stops no timer, it
+   only re-reads the shift on the way back up. The old rule protected a few
+   seconds of *view* at the price of making people clock out to install.
 3. **Nothing pretends.** The portable Windows build cannot replace itself: it
    unpacks to `%TEMP%` on every start and the file the user keeps is elsewhere. It
    checks anyway and offers the download page.

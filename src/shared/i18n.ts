@@ -175,9 +175,6 @@ export const en = {
   'update.preparing': 'Preparing update …',
   'update.restartToInstall': 'Restart to install {version}',
   'update.onNextQuit': 'When I next quit',
-  'update.duringShiftDetail':
-    'A shift is running, so nothing will restart now. The update is installed automatically the next time you quit.',
-  'update.understood': 'Got it',
   'update.noneTitle': 'No update',
   'update.none': 'You are on the latest version.',
   'update.noneDetail': 'You have {current}.',

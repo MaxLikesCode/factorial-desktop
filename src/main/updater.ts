@@ -12,10 +12,10 @@
  * 1. **Nothing downloads without being asked.** `autoDownload` is off. An app
  *    that pulls 100 MB on a metered connection because it felt like it is not a
  *    good citizen, and the dialog costs one click.
- * 2. **Nothing restarts a running shift.** `mayRestart` gates the restart
- *    prompt on the attendance state. If somebody is clocked in, the update is
- *    staged and applied the next time they quit — `autoInstallOnAppQuit` — and
- *    they are told so rather than being nagged.
+ * 2. **A running shift does not stand in the way.** It used to: the restart
+ *    prompt was withheld while somebody was clocked in. But the shift is
+ *    Factorial's record, not this app's, so a restart never stopped it — the
+ *    rule only forced people to clock out to install an update.
  * 3. **Silence when nobody asked.** A background check that fails (no network,
  *    GitHub down, a release without the metadata) writes to the log and stops.
  *    A check somebody clicked reports what happened, success or not, because an
@@ -31,7 +31,6 @@ import {
   type UpdateStatus,
   capabilityFor,
   installKind,
-  mayRestart,
   shouldOffer,
 } from './update-policy'
 import type { UpdateLogger } from './update-log'
@@ -40,8 +39,6 @@ import type { UpdateLogger } from './update-log'
 const RELEASES_URL = 'https://github.com/MaxLikesCode/factorial-desktop/releases/latest'
 
 export interface UpdaterDeps {
-  /** The attendance state's `kind`, read per prompt — never captured once. */
-  getStateKind: () => string
   /**
    * The translator, resolved per prompt for the same reason as the state: a
    * dialog opened after the language changed must speak the new one.
@@ -154,19 +151,6 @@ export function createUpdater(deps: UpdaterDeps): Updater {
     staged = version
     setStatus({ kind: 'ready', version })
     const t = deps.getTranslate()
-    if (!mayRestart(deps.getStateKind())) {
-      // Clocked in: the update is on disk and will apply on the next quit. Said
-      // once, not asked repeatedly.
-      await dialog.showMessageBox({
-        type: 'info',
-        buttons: [t('update.understood')],
-        title: t('update.readyTitle'),
-        message: t('update.ready', { version }),
-        detail: t('update.duringShiftDetail'),
-      })
-      return
-    }
-
     const { response } = await dialog.showMessageBox({
       type: 'info',
       buttons: [t('update.restartNow'), t('update.onNextQuit')],

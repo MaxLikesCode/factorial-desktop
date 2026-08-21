@@ -89,9 +89,6 @@ export const fr: Catalogue = {
   'update.preparing': 'Préparation de la mise à jour …',
   'update.restartToInstall': 'Redémarrer pour installer {version}',
   'update.onNextQuit': 'À la prochaine fermeture',
-  'update.duringShiftDetail':
-    'Un pointage est en cours, rien ne redémarrera maintenant. La mise à jour sera installée automatiquement à la prochaine fermeture.',
-  'update.understood': 'Compris',
   'update.noneTitle': 'Aucune mise à jour',
   'update.none': 'Vous utilisez la dernière version.',
   'update.noneDetail': 'Vous avez la {current}.',

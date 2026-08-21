@@ -5,7 +5,6 @@ import {
   FIRST_CHECK_DELAY_MS,
   capabilityFor,
   installKind,
-  mayRestart,
   shouldOffer,
   updateMenuEntry,
 } from '../update-policy'
@@ -57,34 +56,6 @@ describe('capabilityFor', () => {
 
   it('does neither in development', () => {
     expect(capabilityFor('development')).toEqual({ check: false, install: false })
-  })
-})
-
-describe('mayRestart', () => {
-  /**
-   * The rule the whole feature is built around: never restart out from under a
-   * running shift. A stopped timer nobody is watching is the expensive failure
-   * this app exists to avoid.
-   */
-  it('refuses while a shift or a break is running', () => {
-    expect(mayRestart('in')).toBe(false)
-    expect(mayRestart('break')).toBe(false)
-  })
-
-  it('allows it when nothing is running', () => {
-    expect(mayRestart('out')).toBe(true)
-    expect(mayRestart('unauthenticated')).toBe(true)
-  })
-
-  /**
-   * `unknown` is "the app has not read the state yet", which is not the same as
-   * "nobody is clocked in" — and the difference is exactly the case where
-   * guessing wrong costs somebody their afternoon.
-   */
-  it('treats an unknown state as if a shift were running', () => {
-    expect(mayRestart('unknown')).toBe(false)
-    expect(mayRestart('')).toBe(false)
-    expect(mayRestart('something-new')).toBe(false)
   })
 })
 

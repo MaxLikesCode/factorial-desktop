@@ -89,9 +89,6 @@ export const it: Catalogue = {
   'update.preparing': 'Preparazione dell’aggiornamento …',
   'update.restartToInstall': 'Riavvia per installare {version}',
   'update.onNextQuit': 'Alla prossima chiusura',
-  'update.duringShiftDetail':
-    'È in corso un turno, quindi ora non verrà riavviato nulla. L’aggiornamento sarà installato automaticamente alla prossima chiusura.',
-  'update.understood': 'Ho capito',
   'update.noneTitle': 'Nessun aggiornamento',
   'update.none': 'Stai usando la versione più recente.',
   'update.noneDetail': 'Hai la {current}.',
