@@ -19,7 +19,22 @@ files:
   - resources/**/*
   - package.json
 
+# The names of the artefacts, spelled out rather than built from
+# `${productName}` — because that name contains a space, and a space is spelled
+# differently by everyone who touches it. electron-builder would write
+# `Factorial Desktop-0.2.1-arm64-mac.zip` into release/; GitHub turns the space
+# into a *dot* when the workflow uploads the file; and `latest*.yml`, which is
+# the only name the updater ever asks for, carries electron-builder's own
+# space-free form with a *dash*. Three names for one file, and the update dies
+# on a 404 — which is how v0.2.1 shipped. Keeping the space out entirely makes
+# the file, the release asset and the feed entry the same string.
+#
+# The dashed spelling matches what the feed already used, so it is also what the
+# release notes in .github/workflows/build.yml tell people to download.
 mac:
+  # Applies to the zip; the dmg gets its own name below. Both mirror
+  # electron-builder's defaults, only without the space.
+  artifactName: Factorial-Desktop-${version}-${arch}-mac.${ext}
   category: public.app-category.productivity
   target:
     - target: dmg
@@ -31,6 +46,11 @@ mac:
   # LSUIElement hides the dock icon — this is a menubar app.
   extendInfo:
     LSUIElement: 1
+
+dmg:
+  # Target-specific config wins over the `mac` block above; the dmg is the one
+  # macOS artefact whose default name carries no `-mac` suffix.
+  artifactName: Factorial-Desktop-${version}-${arch}.${ext}
 
 # PLATFORM: the signature check exists only on Windows.
 # The installer builds, installs without admin rights, and the Run-key entry it
@@ -57,10 +77,13 @@ win:
     - target: portable
       arch: [x64]
 nsis:
+  artifactName: Factorial-Desktop-Setup-${version}.${ext}
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
 portable:
   # Without this the file is called "Factorial Desktop 0.1.0.exe" and the
-  # version travels into every shortcut somebody makes of it.
-  artifactName: ${productName}.${ext}
+  # version travels into every shortcut somebody makes of it. Spelled out for
+  # the same reason as the others: "Factorial Desktop.exe" reached the release
+  # as "Factorial.Desktop.exe".
+  artifactName: Factorial-Desktop.${ext}

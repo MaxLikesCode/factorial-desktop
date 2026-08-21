@@ -43,9 +43,11 @@ type BuilderConfig = {
     target: BuilderTarget[]
     identity: string | null
     extendInfo: Record<string, unknown>
+    artifactName: string
   }
   win: { target: BuilderTarget[] }
-  nsis: Record<string, boolean>
+  dmg: Record<string, string>
+  nsis: Record<string, boolean | string>
   portable: Record<string, string>
 }
 
@@ -142,7 +144,51 @@ describe('electron-builder.yml', () => {
   it('also ships Windows as a single portable file, named without the version', () => {
     expect(config.win.target).toContainEqual({ target: 'portable', arch: ['x64'] })
     // Otherwise every shortcut anybody makes carries 0.1.0 in its name.
-    expect(config.portable['artifactName']).toBe('${productName}.${ext}')
+    expect(config.portable['artifactName']).toBe('Factorial-Desktop.${ext}')
+  })
+
+  /**
+   * The updater downloads by the name written in `latest*.yml`, and that is not
+   * necessarily the name of the file on disk. `productName` contains a space,
+   * and three parties spell it three ways: electron-builder writes
+   * `Factorial Desktop-0.2.1-arm64-mac.zip` into `release/`, GitHub turns the
+   * space into a *dot* when the workflow uploads it
+   * (`Factorial.Desktop-0.2.1-arm64-mac.zip`), and the feed names
+   * electron-builder's own space-free form, which uses a *dash*
+   * (`Factorial-Desktop-0.2.1-arm64-mac.zip`). The download then 404s, which is
+   * exactly how v0.2.1 shipped.
+   *
+   * The fix is to keep the space out of the artefact names entirely, so that
+   * the file, the asset and the feed entry are one string. `${productName}` is
+   * therefore never interpolated into a name — the dashed form is spelled out.
+   */
+  describe('artefact names the updater can resolve', () => {
+    const artifactNames: Record<string, string | undefined> = {
+      'mac zip': config.mac?.artifactName,
+      dmg: config.dmg?.['artifactName'],
+      nsis: config.nsis?.['artifactName'] as string | undefined,
+      portable: config.portable?.['artifactName'],
+    }
+
+    it('is worth guarding at all: productName really does contain a space', () => {
+      expect(config.productName).toContain(' ')
+    })
+
+    for (const [target, name] of Object.entries(artifactNames)) {
+      it(`names the ${target} artefact without a space`, () => {
+        expect(name).toBeDefined()
+        // Interpolating it would put the space back.
+        expect(name).not.toContain('${productName}')
+        expect(name).not.toContain(' ')
+      })
+    }
+
+    it('spells the names the way the feed spells them', () => {
+      expect(artifactNames['mac zip']).toBe('Factorial-Desktop-${version}-${arch}-mac.${ext}')
+      expect(artifactNames.dmg).toBe('Factorial-Desktop-${version}-${arch}.${ext}')
+      expect(artifactNames.nsis).toBe('Factorial-Desktop-Setup-${version}.${ext}')
+      expect(artifactNames.portable).toBe('Factorial-Desktop.${ext}')
+    })
   })
 })
 
