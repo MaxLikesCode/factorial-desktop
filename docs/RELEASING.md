@@ -121,12 +121,14 @@ macOS 15 there is no right-click → Open around that. The dialog's blue button
 says "Move to Trash".
 
 **The release notes are shown to users, in the app.** The update window
-renders the GitHub release's body — the `body:` block in the workflow plus
-whatever `generate_release_notes` adds — as the "release notes" of the offer.
-Whatever stands there is what somebody reads before deciding to install. Keep
-the body about the release; the install instructions for a first download
-belong on the release page, not in the update offer. To see the window
-without a release to show in it, run the app with
+renders the GitHub release's body as the "release notes" of the offer, and
+that body is written by `scripts/release-notes.sh` from the commit subjects
+since the previous tag: `feat:` under "New", `fix:` under "Fixes", anything
+else a user could notice under "Other changes". `docs:`, `test:`, `chore:`,
+`ci:`, `refactor:` and the version bump are left out. So the commit subject
+is the sentence somebody reads before deciding to install — write it for
+them. Preview the notes for the next tag with
+`scripts/release-notes.sh v0.3.4`, and the window itself with
 `FACTORIAL_PREVIEW_UPDATE=1 npm run dev` — see `src/main/update-preview.ts`.
 
 **A fix to the updater only takes effect one release later.** The restart is

@@ -116,6 +116,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The release notes are written from the commits since the previous
+          # tag, which a shallow clone does not have.
+          fetch-depth: 0
+          fetch-tags: true
 
       - uses: actions/setup-node@v4
         with:
@@ -158,6 +163,14 @@ jobs:
             ${{ startsWith(matrix.os, 'macos') && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ startsWith(matrix.os, 'macos') && secrets.APPLE_TEAM_ID || '' }}
 
+      - name: Write the release notes
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        # What changed, from the commit subjects — see the script. This is the
+        # text the app's update window shows before somebody decides to
+        # install, so it lists changes and nothing else.
+        run: scripts/release-notes.sh "${GITHUB_REF_NAME}" > release-notes.md
+
       - name: Attach to the release
         if: startsWith(github.ref, 'refs/tags/v')
         # Pinned to a commit rather than a moving tag: this action runs in the
@@ -180,23 +193,11 @@ jobs:
             release/latest*.yml
             release/*.blockmap
           fail_on_unmatched_files: false
-          # A plain release. What is and is not signed belongs in the notes,
-          # which people read, rather than in a flag nobody sees.
-          generate_release_notes: true
-          body: |
-            Unsigned builds — the first launch needs one extra step.
-
-            - **Windows:** `Factorial-Desktop-Setup-<version>.exe` installs
-              for the current user and starts the app — no questions, no admin
-              rights (Start-menu entry, uninstaller, optional
-              start-with-Windows). `Factorial-Desktop.exe` runs without
-              installing. SmartScreen: *More info* → *Run anyway*.
-            - **macOS:** `.dmg` or `.zip`, Apple Silicon. Right-click → *Open*
-              on first launch, or Gatekeeper refuses it.
-
-            The installed build updates itself: it checks for new versions and
-            asks before downloading, and never restarts while a shift is
-            running.
+          # The notes come from the step above. GitHub's own generated notes
+          # are switched off: with commits pushed straight to main they hold
+          # nothing but a compare link, and that link is already in ours.
+          body_path: release-notes.md
+          generate_release_notes: false
 
       - name: Collect artefacts
         # Only where there is no release to publish to. See the note at the top.
