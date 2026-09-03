@@ -89,6 +89,15 @@ export function WidgetCard({
   const cardRef = useRef<HTMLDivElement>(null)
 
   /**
+   * Where the pointer went down, and whether that has become a drag yet.
+   *
+   * A ref rather than state: nothing here is rendered, and re-rendering the card
+   * on every pointer move during a drag would be the one thing guaranteed to
+   * make the drag stutter.
+   */
+  const drag = useRef<{ x: number; y: number; moving: boolean } | null>(null)
+
+  /**
    * Lets the desktop behind the transparent margin be clicked.
    *
    * The window is bigger than the card and always on top, so without this it
@@ -113,6 +122,12 @@ export function WidgetCard({
 
     function at(x: number, y: number): void {
       if (element === null) return
+      // Never while the pointer is held down on the card. The window follows
+      // the cursor a tick behind, so a quick pull puts the cursor outside the
+      // card's box for a frame — and going click-through at that moment loses
+      // the `pointerup` that would end the drag. The window is then glued to
+      // the cursor for good; this was reported on Windows.
+      if (drag.current !== null) return
       const box = element.getBoundingClientRect()
       setInteractive(x >= box.left && x <= box.right && y >= box.top && y <= box.bottom)
     }
@@ -141,15 +156,6 @@ export function WidgetCard({
       void window.factorial.setWindowInteractive(true).catch(() => {})
     }
   }, [])
-
-  /**
-   * Where the pointer went down, and whether that has become a drag yet.
-   *
-   * A ref rather than state: nothing here is rendered, and re-rendering the card
-   * on every pointer move during a drag would be the one thing guaranteed to
-   * make the drag stutter.
-   */
-  const drag = useRef<{ x: number; y: number; moving: boolean } | null>(null)
 
   /** Below this the gesture is still a click, not a drag. */
   const DRAG_THRESHOLD_PX = 3
@@ -193,10 +199,16 @@ export function WidgetCard({
   function onPointerUp(event: ReactPointerEvent<HTMLDivElement>): void {
     const started = drag.current
     drag.current = null
+    if (started === null) return
     // Ending the drag comes first. A drag left running in the main process would
     // glue the window to the cursor with no way to put it down, so nothing may
     // come between the pointer going up and that being said.
-    if (started?.moving === true) void window.factorial.setWindowDragging(false).catch(() => {})
+    //
+    // Said for every press, not only one that became a drag: if an earlier
+    // `pointerup` was lost — the window went click-through under the cursor —
+    // the next click on the card is the user's only way to end that drag, and
+    // it must work whether or not the pointer travelled first.
+    void window.factorial.setWindowDragging(false).catch(() => {})
     withCapture(event.currentTarget, event.pointerId, false)
   }
 
@@ -218,6 +230,7 @@ export function WidgetCard({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
+      onLostPointerCapture={onPointerUp}
       className={`morph-card absolute top-0 overflow-hidden rounded-xl border bg-background/95 backdrop-blur ${
         // Pinned against the edge it does not grow into, so the transparent
         // remainder of the window is exactly the room the expansion moves into.

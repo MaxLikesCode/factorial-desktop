@@ -183,7 +183,7 @@ export function createWidgetWindow(deps: {
       displays.map((d) => d.bounds),
       windowSize(),
     )
-    if (next.x !== cx || next.y !== cy) win.setPosition(next.x, next.y)
+    placeWindow(win, next)
   }
 
   screen.on('display-removed', revalidatePosition)
@@ -225,6 +225,45 @@ export function createWidgetWindow(deps: {
   return win
 }
 
+/**
+ * Puts the window at `target`, and re-asserts its size while doing so.
+ *
+ * `setPosition` alone would do on a single display. PLATFORM: on Windows with
+ * displays at different scale factors it does not. Electron's `setPosition`
+ * re-sends the window's *current* size, read back through the scale factor of
+ * whichever display the window overlaps most at that instant, so a window
+ * halfway onto a 100 % display next to a 150 % one is placed with a size that
+ * belongs to neither — it visibly grew on every crossing. Passing the intended
+ * DIP size with every placement keeps the size a constant the platform scales
+ * for the display it lands on, instead of a value that drifts with each call.
+ *
+ * `target` is in DIP. When the window's own display and the display the
+ * target lies on disagree about the scale factor, the rect is placed via
+ * physical pixels: the point is scaled by its own display and the rect back by
+ * the window's, which is exactly the pair of conversions `setBounds` applies in
+ * reverse. Elsewhere the two agree and the detour is the identity.
+ */
+function placeWindow(win: BrowserWindow, target: Point): void {
+  const size = windowSize()
+  let { x, y } = target
+  if (process.platform === 'win32') {
+    const physical = screen.dipToScreenPoint(target)
+    const local = screen.screenToDipRect(win, { x: physical.x, y: physical.y, ...size })
+    x = local.x
+    y = local.y
+  }
+  const bounds = win.getBounds()
+  if (
+    bounds.x === x &&
+    bounds.y === y &&
+    bounds.width === size.width &&
+    bounds.height === size.height
+  ) {
+    return
+  }
+  win.setBounds({ x, y, ...size })
+}
+
 /** Roughly one frame; the cursor is sampled this often while a drag runs. */
 const DRAG_INTERVAL_MS = 16
 
@@ -257,6 +296,14 @@ function stopDragLoop(): void {
  * The position is not clamped per tick: fighting the cursor mid-drag feels
  * broken. It is clamped once when the drag ends, which is also when the position
  * is written down.
+ *
+ * The window is only placed when the cursor has actually moved since the last
+ * tick. PLATFORM: on Windows with display scaling other than 100 % a placement
+ * is not idempotent — the DIP-to-pixel rounding depends on which display the
+ * window currently overlaps most — so placing a still window at the same
+ * coordinates sixty times a second walked it sideways across the screen and
+ * off it. A still cursor now means no call at all, and `placeWindow` does the
+ * scale-factor bookkeeping for the calls that remain.
  */
 export function setWidgetDragging(dragging: boolean): void {
   stopDragLoop()
@@ -269,7 +316,7 @@ export function setWidgetDragging(dragging: boolean): void {
       currentDisplays().map((d) => d.bounds),
       windowSize(),
     )
-    if (next.x !== x || next.y !== y) widget.setPosition(next.x, next.y)
+    placeWindow(widget, next)
     return
   }
 
@@ -277,6 +324,7 @@ export function setWidgetDragging(dragging: boolean): void {
   const bounds = widget.getBounds()
   const offsetX = bounds.x - start.x
   const offsetY = bounds.y - start.y
+  let last: Point = start
 
   dragTimer = setInterval(() => {
     if (!widget || widget.isDestroyed()) {
@@ -284,7 +332,9 @@ export function setWidgetDragging(dragging: boolean): void {
       return
     }
     const cursor = screen.getCursorScreenPoint()
-    widget.setPosition(cursor.x + offsetX, cursor.y + offsetY)
+    if (cursor.x === last.x && cursor.y === last.y) return
+    last = cursor
+    placeWindow(widget, { x: cursor.x + offsetX, y: cursor.y + offsetY })
   }, DRAG_INTERVAL_MS)
 }
 
@@ -371,6 +421,11 @@ function startCursorLoop(): void {
  */
 export function setWidgetInteractive(interactive: boolean): void {
   if (!widget || widget.isDestroyed()) return
+  // A window that goes click-through mid-drag never receives the `pointerup`
+  // that ends the drag, and is then glued to the cursor with no way to put it
+  // down. The renderer already refuses to ask for this while the pointer is
+  // held; this is the same refusal from the side that actually runs the drag.
+  if (!interactive && dragTimer !== null) return
   widget.setIgnoreMouseEvents(!interactive, { forward: true })
 
   // PLATFORM: the stand-in for forwarding that never arrives. Only while the
@@ -408,7 +463,7 @@ export function setWidgetExpandDirection(direction: ExpandDirection): void {
     currentDisplays().map((d) => d.bounds),
     windowSize(),
   )
-  if (next.x !== bounds.x || next.y !== bounds.y) widget.setPosition(next.x, next.y)
+  placeWindow(widget, next)
 }
 
 /**

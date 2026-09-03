@@ -193,11 +193,51 @@ describe('dragging the card', () => {
     expect(bridge.setWindowDragging).not.toHaveBeenCalled()
   })
 
-  it('reports no end for a drag that never began', async () => {
+  /**
+   * The way out of a drag whose `pointerup` was lost. The window is stuck to
+   * the cursor, so the next click lands on the card — and that click must end
+   * the drag even though it never travelled. Reported on Windows.
+   */
+  it('ends the drag on any release, even one that never travelled', async () => {
     const bridge = await mount()
     down(card(), 40, 20)
     fireEvent.pointerUp(card(), { pointerId: 1 })
+    expect(bridge.setWindowDragging).toHaveBeenCalledTimes(1)
+    expect(bridge.setWindowDragging).toHaveBeenLastCalledWith(false)
+  })
+
+  it('reports nothing for a release with no press on the card', async () => {
+    const bridge = await mount()
+    fireEvent.pointerUp(card(), { pointerId: 1 })
     expect(bridge.setWindowDragging).not.toHaveBeenCalled()
+  })
+
+  /**
+   * The window follows the cursor a tick behind, so mid-drag the cursor is
+   * regularly outside the card for a frame. Going click-through then loses the
+   * `pointerup`, and the window is glued to the cursor for good.
+   */
+  it('never lets the desktop through while the pointer is held on the card', async () => {
+    const bridge = await mount()
+    card().getBoundingClientRect = () => ({ left: 0, top: 0, right: 156, bottom: 44 }) as DOMRect
+    await act(async () => {
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX: 40, clientY: 20 }))
+    })
+    expect(bridge.setWindowInteractive).toHaveBeenLastCalledWith(true)
+
+    down(card(), 40, 20)
+    fireEvent.pointerMove(card(), { pointerId: 1, clientX: 60, clientY: 20 })
+    await act(async () => {
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX: 300, clientY: 20 }))
+      bridge.pushCursor({ x: 300, y: 20 })
+    })
+    expect(bridge.setWindowInteractive).toHaveBeenLastCalledWith(true)
+
+    fireEvent.pointerUp(card(), { pointerId: 1 })
+    await act(async () => {
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX: 300, clientY: 20 }))
+    })
+    expect(bridge.setWindowInteractive).toHaveBeenLastCalledWith(false)
   })
 
   /**
