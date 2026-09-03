@@ -26,6 +26,7 @@ describe('updateWindowSizeFor', () => {
     expect(offer.height).toBeGreaterThan(progress.height)
     expect(updateWindowSizeFor('ready')).toEqual(progress)
     expect(updateWindowSizeFor('failed')).toEqual(progress)
+    expect(updateWindowSizeFor('upToDate').height).toBeGreaterThan(progress.height)
   })
 })
 

@@ -151,7 +151,15 @@ export function pushUpdateView(next: UpdateWindowView): boolean {
     const size = updateWindowSizeFor(next.state.kind)
     const [width, height] = win.getSize()
     if (width !== size.width || height !== size.height) {
+      // PLATFORM: on Windows a non-resizable window ignores `setSize` — the
+      // fixed size is enforced as a min/max constraint equal to the current
+      // one, and the call is clamped back to it. Lifting the flag for the
+      // duration of the call is the documented way around it.
+      win.setResizable(true)
+      win.setMinimumSize(size.width, size.height)
+      win.setMaximumSize(size.width, size.height)
       win.setSize(size.width, size.height)
+      win.setResizable(false)
       win.center()
     }
   }

@@ -129,6 +129,16 @@ describe('the download', () => {
   })
 })
 
+describe('up to date', () => {
+  it('names the installed version and closes on OK', async () => {
+    const bridge = await mount({ locale: 'en', state: { kind: 'upToDate', current: '0.3.0' } })
+    expect(screen.getByText('You’re up to date!')).toBeTruthy()
+    expect(screen.getByText(/0\.3\.0 is currently the newest/)).toBeTruthy()
+    fireEvent.click(screen.getByText('OK'))
+    expect(bridge.respond).toHaveBeenLastCalledWith({ kind: 'close' })
+  })
+})
+
 describe('closing', () => {
   it('sends close for the X and for Escape, and leaves the meaning to the main process', async () => {
     const bridge = await mount(OFFER)

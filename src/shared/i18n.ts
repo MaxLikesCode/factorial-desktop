@@ -173,9 +173,6 @@ export const en = {
   'update.downloading': 'Downloading update … {percent}%',
   'update.preparing': 'Preparing update …',
   'update.restartToInstall': 'Restart to install {version}',
-  'update.noneTitle': 'No update',
-  'update.none': 'You are on the latest version.',
-  'update.noneDetail': 'You have {current}.',
   'update.disabledTitle': 'Updates unavailable',
   'update.disabled': 'This build does not check for updates.',
   'update.disabledDetail': 'Update checks are switched off in development mode.',
@@ -200,6 +197,9 @@ export const en = {
   'updateWindow.installAndRelaunch': 'Install and relaunch',
   'updateWindow.failedTitle': 'The update could not be downloaded',
   'updateWindow.close': 'Close',
+  'updateWindow.upToDate': 'You’re up to date!',
+  'updateWindow.upToDateDetail': 'Factorial Desktop {current} is currently the newest version available.',
+  'updateWindow.ok': 'OK',
 } as const
 
 /** The shape every other language has to match, key for key. */

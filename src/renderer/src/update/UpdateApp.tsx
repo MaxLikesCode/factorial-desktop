@@ -13,8 +13,8 @@ import icon from './app-icon.png'
 import { isBlank, sanitiseReleaseNotes } from './release-notes'
 
 /**
- * The update window. One page, five states, drawn from whatever the main
- * process last said — see `UpdateWindowState` for the five.
+ * The update window. One page, six states, drawn from whatever the main
+ * process last said — see `UpdateWindowState` for the six.
  *
  * Nothing is decided here. Every button sends its action across and waits for
  * the next view; the page never guesses that "install" has started a download,
@@ -69,6 +69,8 @@ export function UpdateApp(): React.JSX.Element | null {
       </button>
       {state.kind === 'available' ? (
         <Offer state={state} t={t} />
+      ) : state.kind === 'upToDate' ? (
+        <UpToDate current={state.current} t={t} />
       ) : (
         <Progress state={state} t={t} />
       )}
@@ -164,11 +166,29 @@ function Offer({
   )
 }
 
+/** The answer to a manual check that found nothing: a card, one button. */
+function UpToDate({ current, t }: { current: string; t: Translate }): React.JSX.Element {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-between gap-5 px-8 pt-10 pb-6 text-center">
+      <img src={icon} alt="" className="size-20 rounded-2xl" draggable={false} />
+      <div className="flex flex-col gap-3">
+        <h1 className="text-xl font-semibold leading-tight">{t('updateWindow.upToDate')}</h1>
+        <p className="text-sm text-muted-foreground">
+          {t('updateWindow.upToDateDetail', { current })}
+        </p>
+      </div>
+      <Button autoFocus className="w-full" size="lg" onClick={() => respond({ kind: 'close' })}>
+        {t('updateWindow.ok')}
+      </Button>
+    </div>
+  )
+}
+
 function Progress({
   state,
   t,
 }: {
-  state: Exclude<UpdateWindowState, { kind: 'available' }>
+  state: Exclude<UpdateWindowState, { kind: 'available' | 'upToDate' }>
   t: Translate
 }): React.JSX.Element {
   const title =

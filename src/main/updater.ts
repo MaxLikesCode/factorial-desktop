@@ -362,16 +362,7 @@ export function createUpdater(deps: UpdaterDeps): Updater {
       const result = await updater.checkForUpdates()
       const info = result?.updateInfo
       if (!info || info.version === app.getVersion()) {
-        if (manual) {
-          const t = deps.getTranslate()
-          await dialog.showMessageBox({
-            type: 'info',
-            buttons: ['OK'],
-            title: t('update.noneTitle'),
-            message: t('update.none'),
-            detail: t('update.noneDetail', { current: app.getVersion() }),
-          })
-        }
+        if (manual) show({ kind: 'upToDate', current: app.getVersion() })
         return
       }
 

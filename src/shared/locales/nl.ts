@@ -87,9 +87,6 @@ export const nl: Catalogue = {
   'update.downloading': 'Update downloaden … {percent}%',
   'update.preparing': 'Update voorbereiden …',
   'update.restartToInstall': 'Opnieuw starten om {version} te installeren',
-  'update.noneTitle': 'Geen update',
-  'update.none': 'Je gebruikt de nieuwste versie.',
-  'update.noneDetail': 'Je hebt {current}.',
   'update.disabledTitle': 'Updates niet beschikbaar',
   'update.disabled': 'Deze versie zoekt niet naar updates.',
   'update.disabledDetail': 'Het zoeken naar updates staat uit in ontwikkelmodus.',
@@ -112,4 +109,7 @@ export const nl: Catalogue = {
   'updateWindow.installAndRelaunch': 'Installeren en opnieuw starten',
   'updateWindow.failedTitle': 'De update kon niet worden gedownload',
   'updateWindow.close': 'Sluiten',
+  'updateWindow.upToDate': 'Je bent up-to-date!',
+  'updateWindow.upToDateDetail': 'Factorial Desktop {current} is momenteel de nieuwste beschikbare versie.',
+  'updateWindow.ok': 'OK',
 }

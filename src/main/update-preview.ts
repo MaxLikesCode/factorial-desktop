@@ -84,10 +84,9 @@ export function maybePreviewUpdateWindow(getLocale: () => Locale): void {
         pushUpdateView(view(offer()))
         return
       case 'restart':
+        // Nothing to install in a preview; show the remaining card instead.
         stopTicker()
-        pushUpdateView(
-          view({ kind: 'failed', version: '9.9.9', reason: 'Preview: nothing to install.' }),
-        )
+        pushUpdateView(view({ kind: 'upToDate', current: app.getVersion() }))
         return
       default:
         stopTicker()

@@ -87,9 +87,6 @@ export const fr: Catalogue = {
   'update.downloading': 'Téléchargement de la mise à jour … {percent}%',
   'update.preparing': 'Préparation de la mise à jour …',
   'update.restartToInstall': 'Redémarrer pour installer {version}',
-  'update.noneTitle': 'Aucune mise à jour',
-  'update.none': 'Vous utilisez la dernière version.',
-  'update.noneDetail': 'Vous avez la {current}.',
   'update.disabledTitle': 'Mises à jour indisponibles',
   'update.disabled': 'Cette version ne recherche pas de mises à jour.',
   'update.disabledDetail': 'La recherche de mises à jour est désactivée en mode développement.',
@@ -112,4 +109,7 @@ export const fr: Catalogue = {
   'updateWindow.installAndRelaunch': 'Installer et relancer',
   'updateWindow.failedTitle': 'La mise à jour n’a pas pu être téléchargée',
   'updateWindow.close': 'Fermer',
+  'updateWindow.upToDate': 'Vous êtes à jour !',
+  'updateWindow.upToDateDetail': 'Factorial Desktop {current} est actuellement la version la plus récente disponible.',
+  'updateWindow.ok': 'OK',
 }

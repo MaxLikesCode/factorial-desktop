@@ -49,6 +49,8 @@ export type UpdateWindowState =
   | { kind: 'preparing'; version: string; transferred: number; total: number | null }
   | { kind: 'ready'; version: string; transferred: number; total: number | null }
   | { kind: 'failed'; version: string; reason: string }
+  /** The answer to a check the user asked for that found nothing. */
+  | { kind: 'upToDate'; current: string }
 
 /** What the window draws: a state, and the language to draw it in. */
 export interface UpdateWindowView {
@@ -104,15 +106,18 @@ export interface UpdateBridge {
 /**
  * The window's size for each state, in DIP.
  *
- * Two sizes rather than one: the offer carries release notes and wants room to
- * show them, the download is a progress bar and a number and would look lost in
- * that room. The window is resized in place as the state moves on.
+ * Three sizes rather than one: the offer carries release notes and wants room
+ * to show them, the download is a progress bar and a number and would look lost
+ * in that room, and "up to date" is a card with a centred icon. The window is
+ * resized in place as the state moves on.
  */
 export function updateWindowSizeFor(kind: UpdateWindowState['kind']): {
   width: number
   height: number
 } {
-  return kind === 'available' ? { width: 620, height: 560 } : { width: 460, height: 210 }
+  if (kind === 'available') return { width: 620, height: 560 }
+  if (kind === 'upToDate') return { width: 440, height: 330 }
+  return { width: 460, height: 210 }
 }
 
 /**

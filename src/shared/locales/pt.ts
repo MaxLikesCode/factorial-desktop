@@ -93,9 +93,6 @@ export const pt: Catalogue = {
   'update.downloading': 'A transferir a atualização … {percent}%',
   'update.preparing': 'A preparar a atualização …',
   'update.restartToInstall': 'Reiniciar para instalar {version}',
-  'update.noneTitle': 'Sem atualizações',
-  'update.none': 'Estás na versão mais recente.',
-  'update.noneDetail': 'Tens a {current}.',
   'update.disabledTitle': 'Atualizações indisponíveis',
   'update.disabled': 'Esta versão não procura atualizações.',
   'update.disabledDetail': 'A procura de atualizações está desativada em modo de desenvolvimento.',
@@ -118,4 +115,7 @@ export const pt: Catalogue = {
   'updateWindow.installAndRelaunch': 'Instalar e reiniciar',
   'updateWindow.failedTitle': 'Não foi possível transferir a atualização',
   'updateWindow.close': 'Fechar',
+  'updateWindow.upToDate': 'Estás atualizado!',
+  'updateWindow.upToDateDetail': 'O Factorial Desktop {current} é atualmente a versão mais recente disponível.',
+  'updateWindow.ok': 'OK',
 }
