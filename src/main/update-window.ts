@@ -108,7 +108,14 @@ export function showUpdateWindow(
   created.center()
 
   created.once('ready-to-show', () => {
-    if (!created.isDestroyed()) created.show()
+    if (created.isDestroyed()) return
+    created.show()
+    // Most offers come from a background timer, not a click. PLATFORM: on
+    // Windows a window opened by a process that is not in the foreground can
+    // land behind the one the user is working in — which is what the old
+    // native message box did, and what made an offer look like it never
+    // came. `moveTop` raises it without stealing the keyboard.
+    created.moveTop()
   })
 
   // The platform's close — Alt+F4, the red button — lands on the same handler
