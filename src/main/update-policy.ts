@@ -96,9 +96,17 @@ export const FIRST_CHECK_DELAY_MS = 30 * 1000
  * version shows up. It deliberately does not persist across restarts: the
  * question is cheap once per session, and a stored "never ask again" tends to
  * outlive the reason it was set.
+ *
+ * `skipped` is the one that does persist — the offer's "skip this version",
+ * kept in settings. It is still bounded to a version: the next release is
+ * offered again, so the setting cannot outlive its reason either.
  */
-export function shouldOffer(version: string, declined: string | null): boolean {
-  return version !== declined
+export function shouldOffer(
+  version: string,
+  declined: string | null,
+  skipped: string | null = null,
+): boolean {
+  return version !== declined && version !== skipped
 }
 
 /**
@@ -178,4 +186,25 @@ export interface RestartMode {
 export function restartModeFor(platform: NodeJS.Platform): RestartMode {
   if (platform === 'win32') return { silent: true, runAfter: true }
   return { silent: false, runAfter: false }
+}
+
+/**
+ * The release's notes as one HTML string, or null when there are none.
+ *
+ * The GitHub provider hands over the release body as rendered HTML — a string
+ * for the latest release, or one entry per skipped release when
+ * `fullChangelog` is on. Both shapes are folded to one string here so the
+ * window has a single thing to sanitise.
+ */
+export function notesOf(info: { releaseNotes?: string | Array<{ note?: string | null }> | null }): string | null {
+  const notes = info.releaseNotes
+  if (typeof notes === 'string') return notes.trim() === '' ? null : notes
+  if (Array.isArray(notes)) {
+    const joined = notes
+      .map((entry) => entry.note ?? '')
+      .filter((note) => note.trim() !== '')
+      .join('\n<hr>\n')
+    return joined === '' ? null : joined
+  }
+  return null
 }

@@ -44,6 +44,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   // The direction that shipped first; the alternative is opt-in.
   expandDirection: 'right',
   language: 'system',
+  autoInstallUpdates: false,
+  skippedUpdateVersion: null,
 }
 
 export interface SettingsDeps {
@@ -101,6 +103,16 @@ function sanitise(raw: unknown, base: AppSettings): AppSettings {
       typeof r.language === 'string' && isLanguageSetting(r.language)
         ? r.language
         : base.language,
+    autoInstallUpdates:
+      typeof r.autoInstallUpdates === 'boolean' ? r.autoInstallUpdates : base.autoInstallUpdates,
+    // `null` is the real value here — "nothing skipped" — and the empty string
+    // is treated the same way: it could never name a release.
+    skippedUpdateVersion:
+      r.skippedUpdateVersion === null
+        ? null
+        : typeof r.skippedUpdateVersion === 'string' && r.skippedUpdateVersion !== ''
+          ? r.skippedUpdateVersion
+          : base.skippedUpdateVersion,
   }
 }
 

@@ -186,6 +186,11 @@ function asSettingsPatch(payload: unknown): Partial<AppSettings> {
   if (typeof raw.expandDirection === 'string' && isExpandDirection(raw.expandDirection)) {
     patch.expandDirection = raw.expandDirection
   }
+  if (typeof raw.autoInstallUpdates === 'boolean') {
+    patch.autoInstallUpdates = raw.autoInstallUpdates
+  }
+  // `skippedUpdateVersion` is deliberately not accepted from here. Only the
+  // update window writes it, and that window has its own bridge.
   return patch
 }
 

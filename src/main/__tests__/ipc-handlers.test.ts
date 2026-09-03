@@ -24,6 +24,8 @@ const SETTINGS: AppSettings = {
   theme: 'system',
   expandDirection: 'right',
   language: 'en',
+  autoInstallUpdates: false,
+  skippedUpdateVersion: null,
 }
 
 function fakeStore(overrides: Partial<IpcStore> = {}): IpcStore & { listeners: (() => void)[] } {

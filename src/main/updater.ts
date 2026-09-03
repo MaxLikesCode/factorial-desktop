@@ -7,11 +7,19 @@
  * build, clocked in, dev mode) are checked by unit tests rather than by
  * remembering to try them.
  *
- * Three deliberate choices:
+ * The conversation with the user happens in the update window
+ * (`update-window.ts`): one window that offers the release with its notes,
+ * shows the download, and offers the restart. Native message boxes remain
+ * for the answers that are one sentence long — "you are up to date", "this
+ * copy cannot update itself", "the check failed".
+ *
+ * Four deliberate choices:
  *
  * 1. **Nothing downloads without being asked.** `autoDownload` is off. An app
  *    that pulls 100 MB on a metered connection because it felt like it is not a
- *    good citizen, and the dialog costs one click.
+ *    good citizen, and the dialog costs one click. The one exception is the
+ *    user's own: the offer's "automatically download and install" checkbox,
+ *    which is a stored setting and is undone from the tray.
  * 2. **A running shift does not stand in the way.** It used to: the restart
  *    prompt was withheld while somebody was clocked in. But the shift is
  *    Factorial's record, not this app's, so a restart never stopped it — the
@@ -26,8 +34,9 @@
  */
 
 import { app, autoUpdater as nativeUpdater, dialog, shell } from 'electron'
-import type { AppUpdater, UpdateInfo } from 'electron-updater'
-import type { Translate } from '@shared/i18n'
+import type { AppUpdater, CancellationToken, UpdateInfo } from 'electron-updater'
+import type { Locale, Translate } from '@shared/i18n'
+import type { UpdateWindowAction, UpdateWindowState, UpdateWindowView } from '@shared/update-window'
 import {
   CHECK_INTERVAL_MS,
   FIRST_CHECK_DELAY_MS,
@@ -35,12 +44,27 @@ import {
   capabilityFor,
   installKind,
   restartModeFor,
+  notesOf,
   shouldOffer,
 } from './update-policy'
 import type { UpdateLogger } from './update-log'
+import type { Settings } from './settings'
+import {
+  closeUpdateWindow,
+  installUpdateWindowIpc,
+  isUpdateWindowOpen,
+  pushUpdateView,
+  showUpdateWindow,
+} from './update-window'
 
 /** Where a portable build sends people, since it cannot update itself. */
 const RELEASES_URL = 'https://github.com/MaxLikesCode/factorial-desktop/releases/latest'
+
+/** What the lazily loaded module hands back; see `resolveModule`. */
+interface UpdaterModule {
+  autoUpdater: AppUpdater
+  CancellationToken: new () => CancellationToken
+}
 
 export interface UpdaterDeps {
   /**
@@ -48,6 +72,14 @@ export interface UpdaterDeps {
    * dialog opened after the language changed must speak the new one.
    */
   getTranslate: () => Translate
+  /** The language the update window draws in, resolved per view for the same reason. */
+  getLocale: () => Locale
+  /**
+   * Where "skip this version" and "install automatically" are kept. The
+   * broadcasting wrapper from `index.ts`, so the tray's checkbox follows a tick
+   * in the window.
+   */
+  settings: Settings
   /** Injected for tests; the real one is electron-updater's singleton. */
   updater?: AppUpdater
   /**
@@ -83,10 +115,11 @@ export function createUpdater(deps: UpdaterDeps): Updater {
     portableExecutable: process.env.PORTABLE_EXECUTABLE_FILE,
   })
   const can = capabilityFor(kind)
+  installUpdateWindowIpc()
 
   let timer: NodeJS.Timeout | null = null
   let firstTimer: NodeJS.Timeout | null = null
-  /** The version the user said no to, so the same one is not offered twice. */
+  /** The version the user said "later" to, so the same one is not offered twice this session. */
   let declined: string | null = null
   /** Guards against a second check while one is in flight. */
   let busy = false
@@ -94,6 +127,14 @@ export function createUpdater(deps: UpdaterDeps): Updater {
   let staged: string | null = null
   /** The version currently being fetched, so the second phase can name it. */
   let pending: string | null = null
+  /** The release the window is about, so a button press knows which one. */
+  let offered: UpdateInfo | null = null
+  /** The running download's cancel handle, or null when none runs. */
+  let token: CancellationToken | null = null
+  /** What the window was last told to show; `close` is interpreted against it. */
+  let shown: UpdateWindowState | null = null
+  /** Bytes so far, kept for the states after `downloading` that still show them. */
+  let bytes: { transferred: number; total: number | null } = { transferred: 0, total: null }
   let status: UpdateStatus = { kind: 'idle' }
 
   function setStatus(next: UpdateStatus): void {
@@ -103,35 +144,90 @@ export function createUpdater(deps: UpdaterDeps): Updater {
 
   // Loaded lazily so that `npm test` and the dev run never pull the module in;
   // it reads app-update.yml at import time and complains when there is none.
-  function resolveUpdater(): AppUpdater | null {
-    if (deps.updater) return deps.updater
+  function resolveModule(): UpdaterModule | null {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      return (require('electron-updater') as { autoUpdater: AppUpdater }).autoUpdater
+      const loaded = require('electron-updater') as UpdaterModule
+      return deps.updater ? { ...loaded, autoUpdater: deps.updater } : loaded
     } catch (error) {
       console.error('[update] electron-updater not available:', describe(error))
       return null
     }
   }
 
-  async function offerDownload(updater: AppUpdater, info: UpdateInfo): Promise<void> {
-    const t = deps.getTranslate()
-    const { response } = await dialog.showMessageBox({
-      type: 'info',
-      buttons: [t('update.download'), t('update.later')],
-      defaultId: 0,
-      cancelId: 1,
-      title: t('update.availableTitle'),
-      message: t('update.available', { version: info.version }),
-      detail: t('update.availableDetail', { current: app.getVersion() }),
-    })
-    if (response !== 0) {
-      declined = info.version
+  function resolveUpdater(): AppUpdater | null {
+    return deps.updater ?? resolveModule()?.autoUpdater ?? null
+  }
+
+  function view(state: UpdateWindowState): UpdateWindowView {
+    shown = state
+    return { locale: deps.getLocale(), state }
+  }
+
+  /** Shows the state, opening the window if it is closed. */
+  function show(state: UpdateWindowState): void {
+    showUpdateWindow(view(state), handleAction)
+  }
+
+  /** Updates an open window; a closed one is left closed. */
+  function push(state: UpdateWindowState): void {
+    pushUpdateView(view(state))
+  }
+
+  function offerDownload(updater: AppUpdater, info: UpdateInfo, manual: boolean): void {
+    offered = info
+    const settings = deps.settings.get()
+    // The user's standing answer. Only for checks nobody asked for: a manual
+    // check is a request to be shown the offer, whatever the checkbox says.
+    if (!manual && settings.autoInstallUpdates) {
+      void download(updater, info, true)
       return
     }
+    show({
+      kind: 'available',
+      version: info.version,
+      current: app.getVersion(),
+      notes: notesOf(info),
+      autoInstall: settings.autoInstallUpdates,
+    })
+  }
+
+  /**
+   * Fetches the release. `quiet` is the automatic path: no window unless
+   * something goes wrong or the download finishes, at which point the restart
+   * has to be offered by somebody.
+   */
+  async function download(updater: AppUpdater, info: UpdateInfo, quiet: boolean): Promise<void> {
+    const module = resolveModule()
+    if (module === null) return
+    if (token !== null) return
+    offered = info
     pending = info.version
+    bytes = { transferred: 0, total: null }
+    token = new module.CancellationToken()
     setStatus({ kind: 'downloading', percent: 0 })
-    await updater.downloadUpdate()
+    if (!quiet) show({ kind: 'downloading', version: info.version, ...bytes })
+    try {
+      await updater.downloadUpdate(token)
+    } catch (error) {
+      // electron-updater rejects a cancelled download with a CancellationError
+      // and, unlike every other failure, does not emit `error` for it.
+      const cancelled = token.cancelled
+      setStatus({ kind: 'idle' })
+      if (cancelled) {
+        declined = info.version
+        closeUpdateWindow()
+        return
+      }
+      deps.logger?.error(`download failed: ${describe(error)}`)
+      // A failure nobody was watching is a log line; one they were watching, or
+      // one they asked for, is a message.
+      if (!quiet || isUpdateWindowOpen()) {
+        show({ kind: 'failed', version: info.version, reason: describe(error) })
+      }
+    } finally {
+      token = null
+    }
   }
 
   async function offerLink(info: UpdateInfo): Promise<void> {
@@ -151,43 +247,76 @@ export function createUpdater(deps: UpdaterDeps): Updater {
     else declined = info.version
   }
 
-  async function offerRestart(version: string): Promise<void> {
+  function offerRestart(version: string): void {
     staged = version
     setStatus({ kind: 'ready', version })
-    const t = deps.getTranslate()
-    const { response } = await dialog.showMessageBox({
-      type: 'info',
-      buttons: [t('update.restartNow'), t('update.onNextQuit')],
-      defaultId: 0,
-      cancelId: 1,
-      title: t('update.readyTitle'),
-      message: t('update.ready', { version }),
-      detail: t('update.readyDetail'),
-    })
-    if (response === 0) {
-      const updater = resolveUpdater()
-      // The two arguments are the whole difference between an update that
-      // applies itself and one that hands the setup wizard back to the user;
-      // `restartModeFor` carries the reasoning.
-      const mode = restartModeFor(process.platform)
-      updater?.quitAndInstall(mode.silent, mode.runAfter)
-      // `quitAndInstall()` is not enough on its own, and the reason is a
-      // collision between two reasonable designs. Electron's version closes
-      // every window and calls `app.quit()` only once they are all closed. This
-      // app's windows do not close: `windows.ts` hides them and calls
-      // `preventDefault()`, because closing the widget is not meant to end the
-      // app (DESIGN.md, "Tray"). The guard it uses — `quitting` — is set by
-      // `before-quit`, which nothing has fired yet at this point.
-      //
-      // So the widget vanished, the tray survived, "all windows closed" never
-      // happened, `app.quit()` was never called, and the update sat staged
-      // until the app was quit by hand. Squirrel had done its part; nobody
-      // ever left.
-      //
-      // Quitting here takes the app's own route out — `before-quit` sets
-      // `quitting`, the windows then really close, the process exits, and
-      // ShipIt, already armed by the call above, swaps the bundle and relaunches.
-      app.quit()
+    // Shown whether or not the window is open: on the automatic path this is
+    // the first the user hears of it, and a restart needs somebody to press it.
+    show({ kind: 'ready', version, ...bytes })
+  }
+
+  function installNow(): void {
+    const updater = resolveUpdater()
+    // The two arguments are the whole difference between an update that
+    // applies itself and one that hands the setup wizard back to the user;
+    // `restartModeFor` carries the reasoning.
+    const mode = restartModeFor(process.platform)
+    updater?.quitAndInstall(mode.silent, mode.runAfter)
+    // `quitAndInstall()` is not enough on its own, and the reason is a
+    // collision between two reasonable designs. Electron's version closes
+    // every window and calls `app.quit()` only once they are all closed. This
+    // app's windows do not close: `windows.ts` hides them and calls
+    // `preventDefault()`, because closing the widget is not meant to end the
+    // app (DESIGN.md, "Tray"). The guard it uses — `quitting` — is set by
+    // `before-quit`, which nothing has fired yet at this point.
+    //
+    // So the widget vanished, the tray survived, "all windows closed" never
+    // happened, `app.quit()` was never called, and the update sat staged
+    // until the app was quit by hand. Squirrel had done its part; nobody
+    // ever left.
+    //
+    // Quitting here takes the app's own route out — `before-quit` sets
+    // `quitting`, the windows then really close, the process exits, and
+    // ShipIt, already armed by the call above, swaps the bundle and relaunches.
+    app.quit()
+  }
+
+  /** Every button in the window ends up here. */
+  function handleAction(action: UpdateWindowAction): void {
+    switch (action.kind) {
+      case 'skip':
+        // Persisted, unlike "later": a skip is meant to outlast the session.
+        if (offered !== null) deps.settings.set({ skippedUpdateVersion: offered.version })
+        closeUpdateWindow()
+        return
+      case 'later':
+        if (offered !== null) declined = offered.version
+        closeUpdateWindow()
+        return
+      case 'install': {
+        const updater = resolveUpdater()
+        if (updater !== null && offered !== null) void download(updater, offered, false)
+        return
+      }
+      case 'autoInstall':
+        deps.settings.set({ autoInstallUpdates: action.value })
+        return
+      case 'cancel':
+        // The download's own catch closes the window once the cancel lands.
+        if (token !== null) token.cancel()
+        else closeUpdateWindow()
+        return
+      case 'restart':
+        installNow()
+        return
+      case 'close':
+        // The X means whatever "no" means in the state it was pressed in. A
+        // downloaded update is not thrown away by it: it stays staged for the
+        // next quit, and the tray keeps offering the restart.
+        if (shown?.kind === 'available') handleAction({ kind: 'later' })
+        else if (shown?.kind === 'downloading') handleAction({ kind: 'cancel' })
+        else closeUpdateWindow()
+        return
     }
   }
 
@@ -212,7 +341,12 @@ export function createUpdater(deps: UpdaterDeps): Updater {
       // Already downloaded and waiting: answer from what is known rather than
       // asking GitHub again.
       if (staged !== null) {
-        await offerRestart(staged)
+        offerRestart(staged)
+        return
+      }
+      // Mid-download: the answer is the window that shows it.
+      if (token !== null) {
+        if (manual && shown !== null) show(shown)
         return
       }
 
@@ -241,15 +375,17 @@ export function createUpdater(deps: UpdaterDeps): Updater {
         return
       }
 
-      // A version already declined this session is not offered again unless the
-      // user asked for the check themselves.
-      if (!manual && !shouldOffer(info.version, declined)) return
+      // A version already declined this session, or skipped for good, is not
+      // offered again unless the user asked for the check themselves.
+      if (!manual && !shouldOffer(info.version, declined, deps.settings.get().skippedUpdateVersion)) {
+        return
+      }
 
       if (!can.install) {
         await offerLink(info)
         return
       }
-      await offerDownload(updater, info)
+      offerDownload(updater, info, manual)
     } catch (error) {
       console.error('[update] check failed:', describe(error))
       if (manual) await reportFailure(describe(error))
@@ -281,9 +417,14 @@ export function createUpdater(deps: UpdaterDeps): Updater {
       updater.autoDownload = false
       updater.autoInstallOnAppQuit = true
 
-      updater.on('download-progress', (progress: { percent: number }) => {
-        setStatus({ kind: 'downloading', percent: progress.percent })
-      })
+      updater.on(
+        'download-progress',
+        (progress: { percent: number; transferred: number; total: number }) => {
+          bytes = { transferred: progress.transferred, total: progress.total }
+          setStatus({ kind: 'downloading', percent: progress.percent })
+          push({ kind: 'downloading', version: pending ?? '', ...bytes })
+        },
+      )
 
       updater.on('update-downloaded', (info: UpdateInfo) => {
         pending = info.version
@@ -298,9 +439,10 @@ export function createUpdater(deps: UpdaterDeps): Updater {
         // nothing staged when the app is quit by hand.
         if (process.platform === 'darwin') {
           setStatus({ kind: 'preparing' })
+          push({ kind: 'preparing', version: info.version, ...bytes })
           return
         }
-        void offerRestart(info.version)
+        offerRestart(info.version)
       })
 
       // Without a listener electron-updater treats an error as unhandled and
@@ -317,12 +459,15 @@ export function createUpdater(deps: UpdaterDeps): Updater {
         // it would not be.
         nativeUpdater.on('update-downloaded', () => {
           deps.logger?.info('Squirrel staged the update; a restart now installs it')
-          void offerRestart(pending ?? app.getVersion())
+          offerRestart(pending ?? app.getVersion())
         })
         nativeUpdater.on('error', (error: Error) => {
           deps.logger?.error(`Squirrel: ${describe(error)}`)
           console.error('[update] squirrel error:', describe(error))
           setStatus({ kind: 'idle' })
+          if (isUpdateWindowOpen()) {
+            show({ kind: 'failed', version: pending ?? '', reason: describe(error) })
+          }
         })
       }
     }

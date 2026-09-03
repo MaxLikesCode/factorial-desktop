@@ -1,0 +1,58 @@
+/*
+ * The update window is an ordinary window, not the widget: it has a
+ * background, and its text may be selected. Both are undone from `styles.css`
+ * here, which is imported after it so these rules win.
+ */
+html,
+body,
+#root {
+    background: var(--background);
+    user-select: text;
+}
+
+/*
+ * The release notes arrive as HTML from GitHub's release feed, already
+ * sanitised by `release-notes.ts`, and are rendered as a block of prose.
+ * Tailwind's preflight strips every default from headings and lists, which is
+ * right for the widget and wrong for a document, so the few that matter are
+ * put back — scoped, so nothing else in the window picks them up.
+ */
+.release-notes h1,
+.release-notes h2,
+.release-notes h3,
+.release-notes h4 {
+    font-weight: 600;
+    margin: 1em 0 0.4em;
+}
+.release-notes h1 { font-size: 1.15rem; }
+.release-notes h2 { font-size: 1.05rem; }
+.release-notes h3,
+.release-notes h4 { font-size: 0.95rem; }
+.release-notes > :first-child { margin-top: 0; }
+.release-notes p { margin: 0.4em 0; }
+.release-notes ul,
+.release-notes ol { margin: 0.4em 0; padding-left: 1.4em; }
+.release-notes ul { list-style: disc; }
+.release-notes ol { list-style: decimal; }
+.release-notes li { margin: 0.2em 0; }
+.release-notes code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.85em;
+    background: color-mix(in oklch, var(--foreground) 8%, transparent);
+    padding: 0.1em 0.35em;
+    border-radius: 0.3em;
+}
+.release-notes pre {
+    overflow-x: auto;
+    padding: 0.6em 0.8em;
+    border-radius: 0.5em;
+    background: color-mix(in oklch, var(--foreground) 8%, transparent);
+}
+.release-notes pre code { background: none; padding: 0; }
+.release-notes a { text-decoration: underline; text-underline-offset: 2px; }
+.release-notes blockquote {
+    border-left: 3px solid var(--border);
+    padding-left: 0.8em;
+    color: var(--muted-foreground);
+}
+.release-notes hr { border-color: var(--border); margin: 0.8em 0; }

@@ -109,6 +109,7 @@ export const en = {
   'settings.language': 'Language',
   'settings.languageSystem': 'System',
   'settings.checkForUpdates': 'Check for updates …',
+  'settings.autoInstallUpdates': 'Install updates automatically',
   'tray.about': 'About Factorial Desktop …',
   'about.version': 'Version {version}',
 
@@ -165,21 +166,13 @@ export const en = {
   // Updates.
   'update.availableTitle': 'Update available',
   'update.available': 'Version {version} is available.',
-  'update.availableDetail':
-    'You have {current}. The update will be downloaded now; it is only installed once you agree.',
   'update.availablePortableDetail':
     'You have {current}. This copy runs without being installed and cannot replace itself — download the new file and swap it out.',
-  'update.download': 'Download',
   'update.openDownloads': 'Open downloads page',
   'update.later': 'Later',
-  'update.readyTitle': 'Update ready',
-  'update.ready': 'Version {version} has been downloaded.',
-  'update.readyDetail': 'Restarting takes a moment. You stay signed in.',
-  'update.restartNow': 'Restart now',
   'update.downloading': 'Downloading update … {percent}%',
   'update.preparing': 'Preparing update …',
   'update.restartToInstall': 'Restart to install {version}',
-  'update.onNextQuit': 'When I next quit',
   'update.noneTitle': 'No update',
   'update.none': 'You are on the latest version.',
   'update.noneDetail': 'You have {current}.',
@@ -188,6 +181,25 @@ export const en = {
   'update.disabledDetail': 'Update checks are switched off in development mode.',
   'update.failedTitle': 'Update check failed',
   'update.failed': 'Could not check for updates.',
+
+  // The update window — see src/renderer/src/update.
+  'updateWindow.title': 'A new version of Factorial Desktop is available!',
+  'updateWindow.summary':
+    'Factorial Desktop {version} is now available — you have {current}. Would you like to download it now?',
+  'updateWindow.releaseNotes': 'Release notes:',
+  'updateWindow.noReleaseNotes': 'This release has no notes.',
+  'updateWindow.autoInstall': 'Automatically download and install updates in the future',
+  'updateWindow.skip': 'Skip this version',
+  'updateWindow.later': 'Remind me later',
+  'updateWindow.install': 'Install update',
+  'updateWindow.downloading': 'Downloading update …',
+  'updateWindow.preparing': 'Preparing update …',
+  'updateWindow.ready': 'Ready to install',
+  'updateWindow.progress': '{transferred} of {total}',
+  'updateWindow.cancel': 'Cancel',
+  'updateWindow.installAndRelaunch': 'Install and relaunch',
+  'updateWindow.failedTitle': 'The update could not be downloaded',
+  'updateWindow.close': 'Close',
 } as const
 
 /** The shape every other language has to match, key for key. */

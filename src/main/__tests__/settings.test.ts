@@ -95,6 +95,8 @@ describe('createSettings', () => {
       theme: DEFAULT_SETTINGS.theme,
       expandDirection: DEFAULT_SETTINGS.expandDirection,
       language: DEFAULT_SETTINGS.language,
+      autoInstallUpdates: DEFAULT_SETTINGS.autoInstallUpdates,
+      skippedUpdateVersion: DEFAULT_SETTINGS.skippedUpdateVersion,
     })
   })
 

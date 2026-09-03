@@ -224,6 +224,7 @@ export function createTray(deps: TrayDeps): Tray {
             },
             setOpenAtLogin: (value) => applySetting({ openAtLogin: value }),
             setAlwaysOnTop: (value) => applySetting({ alwaysOnTop: value }),
+            setAutoInstallUpdates: (value) => applySetting({ autoInstallUpdates: value }),
             setTheme: (value) => applySetting({ theme: value }),
             setExpandDirection: (value) => applySetting({ expandDirection: value }),
             setLanguage: (value) => applySetting({ language: value }),

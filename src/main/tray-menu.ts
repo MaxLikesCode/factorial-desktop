@@ -53,6 +53,7 @@ export interface TrayActions {
   refresh: () => void
   setOpenAtLogin: (value: boolean) => void
   setAlwaysOnTop: (value: boolean) => void
+  setAutoInstallUpdates: (value: boolean) => void
   setTheme: (value: ThemeSetting) => void
   setExpandDirection: (value: ExpandDirection) => void
   /** Switches the language; `system` follows the OS. */
@@ -380,6 +381,14 @@ function settingsSubmenu(
     { label: t('settings.appearance'), submenu: themeSubmenu(t, settings, actions) },
     { label: t('settings.language'), submenu: languageSubmenu(t, settings, actions) },
     { type: 'separator' },
+    // Above the update entry, because it is about the same thing: the offer's
+    // own checkbox switches this on, and this is where it is switched off.
+    {
+      label: t('settings.autoInstallUpdates'),
+      type: 'checkbox',
+      checked: settings.autoInstallUpdates,
+      click: () => actions.setAutoInstallUpdates(!settings.autoInstallUpdates),
+    },
     // Not next to "Refresh" one level up on purpose: that one reloads the times,
     // this one looks for a new program. Two very different things that would
     // read as the same one if they sat together.

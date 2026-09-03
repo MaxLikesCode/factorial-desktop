@@ -54,6 +54,8 @@ const settings: AppSettings = {
   theme: 'system',
   expandDirection: 'right',
   language: 'en',
+  autoInstallUpdates: false,
+  skippedUpdateVersion: null,
 }
 
 function clockedIn(since: Date): AppSnapshot['state'] {
@@ -70,6 +72,7 @@ function noopActions(): TrayActions {
     startBreak: vi.fn(),
     endBreak: vi.fn(),
     clockOut: vi.fn(),
+    setAutoInstallUpdates: vi.fn(),
     signIn: vi.fn(),
     signOut: vi.fn(),
     toggleWindow: vi.fn(),

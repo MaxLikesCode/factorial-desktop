@@ -11,6 +11,17 @@ export default defineConfig({
   preload: {
     plugins: [externalizeDepsPlugin()],
     resolve: { alias: { '@shared': resolve('src/shared') } },
+    // Two preloads for two windows: the widget's, and the update window's much
+    // smaller one. Named inputs so the files come out as `index.mjs` and
+    // `update.mjs`, which is what `windows.ts` and `update-window.ts` load.
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve('src/preload/index.ts'),
+          update: resolve('src/preload/update.ts'),
+        },
+      },
+    },
   },
   renderer: {
     root: 'src/renderer',
@@ -21,6 +32,14 @@ export default defineConfig({
         '@renderer': resolve('src/renderer/src'),
       },
     },
-    build: { rollupOptions: { input: resolve('src/renderer/index.html') } },
+    // Two pages, same bundle: the widget and the update window.
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve('src/renderer/index.html'),
+          update: resolve('src/renderer/update.html'),
+        },
+      },
+    },
   },
 })

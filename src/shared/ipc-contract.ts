@@ -238,6 +238,18 @@ export interface AppSettings {
    * rather than on a channel of its own.
    */
   language: LanguageSetting
+  /**
+   * Download a new version without asking and offer the restart once it is
+   * in. Off by default: the first offer's checkbox is where this is switched
+   * on, and the tray's settings submenu is where it is switched off again.
+   */
+  autoInstallUpdates: boolean
+  /**
+   * A version the user said "skip" to. Held until a *different* version shows
+   * up — unlike "later", which only lasts the session — and ignored by a check
+   * the user asks for by hand, since that is a request to see it again.
+   */
+  skippedUpdateVersion: string | null
 }
 
 /**

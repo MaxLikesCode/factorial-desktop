@@ -5,6 +5,7 @@ import {
   FIRST_CHECK_DELAY_MS,
   capabilityFor,
   installKind,
+  notesOf,
   restartModeFor,
   shouldOffer,
   updateMenuEntry,
@@ -151,5 +152,32 @@ describe('restartModeFor', () => {
     // — so passing Windows' answer there would only be misleading.
     expect(restartModeFor('darwin')).toEqual({ silent: false, runAfter: false })
     expect(restartModeFor('linux')).toEqual({ silent: false, runAfter: false })
+  })
+})
+
+describe('shouldOffer with a skipped version', () => {
+  it('holds a skip until a different version shows up', () => {
+    expect(shouldOffer('0.3.0', null, '0.3.0')).toBe(false)
+    expect(shouldOffer('0.3.1', null, '0.3.0')).toBe(true)
+  })
+
+  it('treats "later" and "skip" alike, and either alone is enough', () => {
+    expect(shouldOffer('0.3.0', '0.3.0', null)).toBe(false)
+    expect(shouldOffer('0.3.0', '0.2.9', '0.2.8')).toBe(true)
+  })
+})
+
+describe('notesOf', () => {
+  it('passes a string through and treats blank as none', () => {
+    expect(notesOf({ releaseNotes: '<p>Hi</p>' })).toBe('<p>Hi</p>')
+    expect(notesOf({ releaseNotes: '   ' })).toBeNull()
+    expect(notesOf({ releaseNotes: null })).toBeNull()
+    expect(notesOf({})).toBeNull()
+  })
+
+  it('folds a full changelog into one document', () => {
+    expect(
+      notesOf({ releaseNotes: [{ note: '<p>b</p>' }, { note: '' }, { note: '<p>a</p>' }] }),
+    ).toBe('<p>b</p>\n<hr>\n<p>a</p>')
   })
 })

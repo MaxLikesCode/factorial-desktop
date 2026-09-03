@@ -26,6 +26,7 @@ import { applyBrowserUserAgent, clearSession, createNetFetch, getFactorialSessio
 import { buildLoginItemSettings, createSettings, type Settings } from './settings'
 import { createTray, hasTray, refreshTray } from './tray'
 import { createUpdateLog } from './update-log'
+import { maybePreviewUpdateWindow } from './update-preview'
 import { createUpdater } from './updater'
 import { resolveLocale } from '@shared/i18n'
 import { translatorFor } from '@shared/locales'
@@ -270,6 +271,10 @@ async function bootstrap(): Promise<void> {
   // what was true when the app started.
   const updater = createUpdater({
     getTranslate: () => translatorFor(resolveLocale(settings.get().language, app.getLocale())),
+    getLocale: () => resolveLocale(settings.get().language, app.getLocale()),
+    // The broadcasting wrapper, so a tick in the update window's checkbox
+    // reaches the tray's copy of the same setting.
+    settings: settingsWithWindowEffects,
     // The tray is built below, and `refreshTray()` is a no-op until it exists —
     // which is exactly the right behaviour for a status change that arrives
     // before there is anywhere to show it.
@@ -298,6 +303,9 @@ async function bootstrap(): Promise<void> {
   // After the store, not before: the first update check waits half a minute and
   // has no business competing with the first attendance read for the network.
   updater.start()
+
+  // Development only, and only when asked for — see update-preview.ts.
+  maybePreviewUpdateWindow(() => resolveLocale(settings.get().language, app.getLocale()))
 
   // The timer is recomputed from the shift's start on every render, so it cannot
   // drift while the machine sleeps — but `todayMinutes` and the state itself

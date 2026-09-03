@@ -120,6 +120,15 @@ reports `source=Unnotarized Developer ID` and refuses to open it — and since
 macOS 15 there is no right-click → Open around that. The dialog's blue button
 says "Move to Trash".
 
+**The release notes are shown to users, in the app.** The update window
+renders the GitHub release's body — the `body:` block in the workflow plus
+whatever `generate_release_notes` adds — as the "release notes" of the offer.
+Whatever stands there is what somebody reads before deciding to install. Keep
+the body about the release; the install instructions for a first download
+belong on the release page, not in the update offer. To see the window
+without a release to show in it, run the app with
+`FACTORIAL_PREVIEW_UPDATE=1 npm run dev` — see `src/main/update-preview.ts`.
+
 **A fix to the updater only takes effect one release later.** The restart is
 performed by the code in the *running* version. Shipping a fix for it in
 `0.2.8` does nothing for somebody on `0.2.7`; they need `0.2.8` installed before

@@ -39,6 +39,8 @@ export const TEST_SETTINGS: AppSettings = {
   // as a check that the German catalogue still says those words. The
   // switching itself is covered in i18n.test.ts.
   language: 'de',
+  autoInstallUpdates: false,
+  skippedUpdateVersion: null,
 }
 
 export interface FakeBridge extends FactorialBridge {
