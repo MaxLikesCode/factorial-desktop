@@ -31,9 +31,22 @@ const FAKE_NOTES = `
 
 const TOTAL = 59_000_000
 
+function previewEnabled(): boolean {
+  return !app.isPackaged && process.env.FACTORIAL_PREVIEW_UPDATE === '1'
+}
+
+/** Opens the preview at start, so the window is on screen without a click. */
 export function maybePreviewUpdateWindow(getLocale: () => Locale): void {
-  if (app.isPackaged) return
-  if (process.env.FACTORIAL_PREVIEW_UPDATE !== '1') return
+  previewUpdateOffer(getLocale)
+}
+
+/**
+ * Shows the made-up offer if the preview is on. Returns whether it did, so
+ * the updater's manual check can hand over to it instead of saying "this
+ * build does not check for updates".
+ */
+export function previewUpdateOffer(getLocale: () => Locale): boolean {
+  if (!previewEnabled()) return false
 
   let ticker: NodeJS.Timeout | null = null
   let autoInstall = false
@@ -95,4 +108,5 @@ export function maybePreviewUpdateWindow(getLocale: () => Locale): void {
   }
 
   showUpdateWindow(view(offer()), onAction)
+  return true
 }

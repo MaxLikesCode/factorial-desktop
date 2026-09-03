@@ -34,6 +34,7 @@
  */
 
 import { app, autoUpdater as nativeUpdater, dialog, shell } from 'electron'
+import { previewUpdateOffer } from './update-preview'
 import type { AppUpdater, CancellationToken, UpdateInfo } from 'electron-updater'
 import type { Locale, Translate } from '@shared/i18n'
 import type { UpdateWindowAction, UpdateWindowState, UpdateWindowView } from '@shared/update-window'
@@ -323,13 +324,14 @@ export function createUpdater(deps: UpdaterDeps): Updater {
   async function checkNow(manual: boolean): Promise<void> {
     if (!can.check) {
       if (manual) {
+        // A development run with FACTORIAL_PREVIEW_UPDATE=1 gets the made-up
+        // offer here, so the whole flow can be walked from the tray.
+        if (previewUpdateOffer(deps.getLocale)) return
         const t = deps.getTranslate()
-        await dialog.showMessageBox({
-          type: 'info',
-          buttons: ['OK'],
+        show({
+          kind: 'notice',
           title: t('update.disabledTitle'),
-          message: t('update.disabled'),
-          detail: t('update.disabledDetail'),
+          lines: [t('update.disabled'), t('update.disabledDetail')],
         })
       }
       return
@@ -387,13 +389,7 @@ export function createUpdater(deps: UpdaterDeps): Updater {
 
   async function reportFailure(detail: string): Promise<void> {
     const t = deps.getTranslate()
-    await dialog.showMessageBox({
-      type: 'warning',
-      buttons: ['OK'],
-      title: t('update.failedTitle'),
-      message: t('update.failed'),
-      detail,
-    })
+    show({ kind: 'notice', title: t('update.failedTitle'), lines: [t('update.failed'), detail] })
   }
 
   function start(): void {

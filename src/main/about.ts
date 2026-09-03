@@ -12,8 +12,9 @@
  * Info.plist. One click is cheaper for everyone.
  */
 
-import { app, dialog } from 'electron'
-import type { Translate } from '@shared/i18n'
+import { app } from 'electron'
+import type { Locale, Translate } from '@shared/i18n'
+import { closeUpdateWindow, showUpdateWindow } from './update-window'
 
 export interface AboutVersions {
   /** The app's own version — `package.json`, via `app.getVersion()`. */
@@ -35,16 +36,26 @@ export function aboutDetail(t: Translate, versions: AboutVersions): string {
   ].join('\n')
 }
 
-export async function showAbout(t: Translate): Promise<void> {
-  await dialog.showMessageBox({
-    type: 'info',
-    buttons: ['OK'],
-    // Never translated: it is the product's name, not a word.
-    message: 'Factorial Desktop',
-    detail: aboutDetail(t, {
-      app: app.getVersion(),
-      electron: process.versions.electron,
-      chromium: process.versions.chrome,
-    }),
-  })
+/**
+ * Shown as a card in the update window rather than as a native message box,
+ * so it looks like the rest of what the tray opens. The window's only button
+ * closes it, whichever way it is pressed.
+ */
+export function showAbout(t: Translate, locale: Locale): void {
+  showUpdateWindow(
+    {
+      locale,
+      state: {
+        kind: 'notice',
+        // Never translated: it is the product's name, not a word.
+        title: 'Factorial Desktop',
+        lines: aboutDetail(t, {
+          app: app.getVersion(),
+          electron: process.versions.electron,
+          chromium: process.versions.chrome,
+        }).split('\n'),
+      },
+    },
+    () => closeUpdateWindow(),
+  )
 }

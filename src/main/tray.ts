@@ -178,7 +178,8 @@ export function createTray(deps: TrayDeps): Tray {
     // Resolved per render rather than captured: switching the language rebuilds
     // the menu through this same path, and a captured translator would keep
     // producing the old language until something else forced a render.
-    const t = translatorFor(resolveLocale(deps.settings.get().language, app.getLocale()))
+    const locale = resolveLocale(deps.settings.get().language, app.getLocale())
+    const t = translatorFor(locale)
 
     // PLATFORM: `setTitle` is macOS-only — it is the live timer in the menubar
     // (DESIGN.md, "Tray"). The leading space separates the text from the icon.
@@ -212,7 +213,7 @@ export function createTray(deps: TrayDeps): Tray {
             startBreak: (id) => run(() => deps.store.startBreak(id)),
             endBreak: () => run(() => deps.store.endBreak()),
             clockOut: () => run(() => deps.store.clockOut()),
-            about: () => void showAbout(t),
+            about: () => showAbout(t, locale),
             signIn: () => {
               lastActionError = null
               deps.onSignIn()

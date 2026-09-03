@@ -25,7 +25,7 @@ export const UPDATE_IPC = {
 } as const
 
 /**
- * The five things the window can be showing.
+ * The seven things the window can be showing.
  *
  * `transferred` and `total` are bytes. `total` is null until the first progress
  * event names it — and stays null on macOS's second pass (see `preparing` in
@@ -51,6 +51,13 @@ export type UpdateWindowState =
   | { kind: 'failed'; version: string; reason: string }
   /** The answer to a check the user asked for that found nothing. */
   | { kind: 'upToDate'; current: string }
+  /**
+   * A card with a title, a few lines and OK — already translated, because the
+   * main process is the one that knows what happened. Used for the About box
+   * and for the answers that used to be native message boxes: "this copy
+   * cannot update", "the check failed".
+   */
+  | { kind: 'notice'; title: string; lines: string[] }
 
 /** What the window draws: a state, and the language to draw it in. */
 export interface UpdateWindowView {
@@ -116,7 +123,7 @@ export function updateWindowSizeFor(kind: UpdateWindowState['kind']): {
   height: number
 } {
   if (kind === 'available') return { width: 620, height: 560 }
-  if (kind === 'upToDate') return { width: 440, height: 330 }
+  if (kind === 'upToDate' || kind === 'notice') return { width: 440, height: 330 }
   return { width: 460, height: 210 }
 }
 

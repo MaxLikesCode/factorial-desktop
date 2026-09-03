@@ -139,6 +139,20 @@ describe('up to date', () => {
   })
 })
 
+describe('a notice', () => {
+  it('shows the lines it was given and closes on OK', async () => {
+    const bridge = await mount({
+      locale: 'de',
+      state: { kind: 'notice', title: 'Factorial Desktop', lines: ['Version 0.3.1', 'Electron 43'] },
+    })
+    expect(screen.getByText('Factorial Desktop')).toBeTruthy()
+    expect(screen.getByText('Version 0.3.1')).toBeTruthy()
+    expect(screen.getByText('Electron 43')).toBeTruthy()
+    fireEvent.click(screen.getByText('OK'))
+    expect(bridge.respond).toHaveBeenLastCalledWith({ kind: 'close' })
+  })
+})
+
 describe('closing', () => {
   it('sends close for the X and for Escape, and leaves the meaning to the main process', async () => {
     const bridge = await mount(OFFER)
