@@ -11,6 +11,14 @@ import { describeActionError } from '@renderer/lib/errors'
 import { DayEditor } from './DayEditor'
 
 /**
+ * Months already read this session, so coming back to the page shows the
+ * last state at once while the fresh read runs behind it. Module scope on
+ * purpose: the page unmounts when another section is shown, and the cache
+ * is meant to outlive that. Keyed `year-month`.
+ */
+const loadedMonths = new Map<string, TimesheetMonth>()
+
+/**
  * A month of days, one row each, and an editor that opens under the row
  * that was clicked.
  *
@@ -33,20 +41,25 @@ export function TimesheetPage({ headerSlot }: { headerSlot: HTMLElement | null }
     const d = new Date()
     return { year: d.getFullYear(), month: d.getMonth() + 1 }
   })
-  const [month, setMonth] = useState<TimesheetMonth | null>(null)
+  const [month, setMonth] = useState<TimesheetMonth | null>(() => loadedMonths.get(monthKey(cursor)) ?? null)
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setError(null)
+    // What was seen last, immediately; the read below replaces it.
+    const remembered = loadedMonths.get(monthKey(cursor))
+    if (remembered !== undefined) setMonth(remembered)
     try {
       const loaded = await window.factorial.getTimesheetMonth(cursor.year, cursor.month)
+      loadedMonths.set(monthKey(cursor), loaded)
       setMonth(loaded)
       // Today is open on arrival: it is the day most edits are about, and
       // the one the tray's "Timesheet …" and the overview's "Edit today" mean.
       setOpen((current) => current ?? (loaded.days.some((d) => d.date === today) ? today : null))
     } catch (e) {
-      setMonth(null)
+      // A failed refresh keeps what was shown; the message says it is old.
+      if (remembered === undefined) setMonth(null)
       setError(t('timesheet.loadFailed', { reason: describeActionError(t, e) }))
     }
   }, [cursor, t, today])
@@ -187,9 +200,12 @@ export function TimesheetPage({ headerSlot }: { headerSlot: HTMLElement | null }
                   breakOptions={snapshot.breakOptions}
                   now={now}
                   onSaved={(saved) =>
-                    setMonth((current) =>
-                      current === null ? current : { ...current, days: current.days.map((d) => (d.date === saved.date ? saved : d)) },
-                    )
+                    setMonth((current) => {
+                      if (current === null) return current
+                      const next = { ...current, days: current.days.map((d) => (d.date === saved.date ? saved : d)) }
+                      loadedMonths.set(monthKey(cursor), next)
+                      return next
+                    })
                   }
                 />
               )}
@@ -199,6 +215,10 @@ export function TimesheetPage({ headerSlot }: { headerSlot: HTMLElement | null }
       </section>
     </div>
   )
+}
+
+function monthKey(cursor: { year: number; month: number }): string {
+  return `${cursor.year}-${cursor.month}`
 }
 
 function isCurrentMonth(cursor: { year: number; month: number }): boolean {

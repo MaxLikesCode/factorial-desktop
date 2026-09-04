@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { LogInIcon, PauseIcon, PlayIcon, SquareIcon } from 'lucide-react'
 import { formatDuration, formatHoursMinutes } from '@shared/time'
-import { breakMinutes, type DaySegment } from '@shared/day-timeline'
+import { breakMinutes, buildDayBar, type DaySegment } from '@shared/day-timeline'
 import { useAttendance, useTicker } from '@renderer/hooks/useAttendance'
 import { useSettings } from '@renderer/hooks/useSettings'
 import { useTranslate } from '@renderer/hooks/useTranslate'
@@ -136,30 +136,22 @@ function Stat({ label, value, first = false }: { label: string; value: string; f
   )
 }
 
-/** Today as a strip against its target; the bar is the target's length. */
+/** Today as a strip against its target — the widget's own bar arithmetic (`buildDayBar`). */
 function DayBar({ segments, target }: { segments: DaySegment[]; target: number | null }): React.JSX.Element {
   const label = useTranslate()('overview.target')
-  const total = Math.max(target ?? 0, segments.reduce((s, x) => s + x.minutes, 0))
-  let offset = 0
+  const parts = buildDayBar(segments, target)
   return (
     <div className="flex flex-col gap-2.5">
-      <div className="relative h-2.5 overflow-hidden rounded-full" style={{ background: 'var(--app-fill-strong)' }}>
-        {total > 0 &&
-          segments.map((segment, index) => {
-            const left = (offset / total) * 100
-            offset += segment.minutes
-            return (
-              <span
-                key={index}
-                className="absolute inset-y-0"
-                style={{
-                  left: `${left}%`,
-                  width: `${(segment.minutes / total) * 100}%`,
-                  background: segment.kind === 'work' ? 'var(--app-work-2)' : 'var(--app-break)',
-                }}
-              />
-            )
-          })}
+      <div className="flex h-2.5 overflow-hidden rounded-full" style={{ background: 'var(--app-fill-strong)' }}>
+        {parts.map((part, index) => (
+          <span
+            key={index}
+            style={{
+              width: `${part.percent}%`,
+              background: part.kind === 'work' ? 'var(--app-work-2)' : part.kind === 'break' ? 'var(--app-break)' : 'transparent',
+            }}
+          />
+        ))}
       </div>
       <div className="app-faint flex justify-between text-xs" style={{ fontVariantNumeric: 'tabular-nums' }}>
         <span />
