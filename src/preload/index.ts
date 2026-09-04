@@ -16,6 +16,7 @@ import {
   IPC,
   type AppSettings,
   type FactorialBridge,
+  type MainWindowPage,
   type SerialisedSnapshot,
 } from '@shared/ipc-contract'
 
@@ -69,6 +70,18 @@ const bridge: FactorialBridge = {
   setWindowDragging: (dragging: boolean) =>
     ipcRenderer.invoke(IPC.setWindowDragging, dragging),
   popupMenu: (items, anchor) => ipcRenderer.invoke(IPC.popupMenu, { items, anchor }),
+  getTimesheetMonth: (year, month) => ipcRenderer.invoke(IPC.getTimesheetMonth, { year, month }),
+  saveTimesheetDay: (edit) => ipcRenderer.invoke(IPC.saveTimesheetDay, edit),
+  openMainWindow: (page) => ipcRenderer.invoke(IPC.openMainWindow, page ?? null),
+  onNavigate: (callback) => {
+    const handler = (_event: unknown, page: MainWindowPage): void => callback(page)
+    ipcRenderer.on(IPC.navigate, handler)
+    return () => {
+      ipcRenderer.off(IPC.navigate, handler)
+    }
+  },
+  getAppInfo: () => ipcRenderer.invoke(IPC.getAppInfo),
+  checkForUpdates: () => ipcRenderer.invoke(IPC.checkForUpdates),
 }
 
 contextBridge.exposeInMainWorld('factorial', bridge)

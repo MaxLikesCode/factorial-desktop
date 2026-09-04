@@ -8,6 +8,7 @@ import { useSettings } from '@renderer/hooks/useSettings'
 import { useTranslate } from '@renderer/hooks/useTranslate'
 import { ActionBar } from './ActionBar'
 import { LocationSelect } from './LocationSelect'
+import { clockInFromButton } from '@renderer/lib/clock-in'
 import { WidgetCard } from './WidgetCard'
 import type { WidgetView } from './WidgetView'
 
@@ -267,12 +268,17 @@ export function StatusWidget(): React.JSX.Element {
       <ActionBar
         snapshot={snapshot}
         busy={busy}
-        onClockIn={() =>
+        onClockIn={(anchor) =>
           void run(() =>
-            window.factorial.clockIn({
-              locationType: settings?.lastLocationType ?? 'office',
+            // Asks where the work happens first when the setting says so —
+            // see `clock-in.ts`; the app window's button does the same.
+            clockInFromButton({
+              ask: settings?.askLocationOnClockIn ?? false,
+              lastLocationType: settings?.lastLocationType ?? 'office',
               workplaceId: settings?.lastWorkplaceId ?? null,
-            }),
+              anchor,
+              t,
+            }).then(() => undefined),
           )
         }
         onClockOut={() => void run(() => window.factorial.clockOut())}

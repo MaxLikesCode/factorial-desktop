@@ -20,12 +20,10 @@
 
 import { Menu, Tray, app, nativeImage, type NativeImage } from 'electron'
 import { join } from 'node:path'
-import { describeSettingsWriteFailure } from '@shared/errors'
 import { resolveLocale } from '@shared/i18n'
+import type { MainWindowPage } from '@shared/ipc-contract'
 import { translatorFor } from '@shared/locales'
-import type { AppSettings } from '@shared/ipc-contract'
 import type { AttendanceStore, ClockInInput } from './attendance'
-import { showAbout } from './about'
 import type { Settings } from './settings'
 import type { UpdateStatus } from './update-policy'
 import {
@@ -71,6 +69,8 @@ export interface TrayDeps {
   onSignIn: () => void
   /** Looks for a new version now and reports either way. See `updater.ts`. */
   onCheckForUpdates: () => void
+  /** Opens the app window at a section. See `main-window.ts`. */
+  onOpenWindow: (page: MainWindowPage) => void
   /**
    * What the updater is doing, read per render. Pulled rather than pushed so
    * the menu cannot show a percentage that has since moved on; `refreshTray()`
@@ -206,14 +206,12 @@ export function createTray(deps: TrayDeps): Tray {
           // Read per render, not captured once: the widget's IPC path writes to
           // the same store, and a checkbox may not keep showing a value that has
           // since been changed elsewhere.
-          settings: deps.settings.get(),
           updateStatus: deps.getUpdateStatus(),
           actions: {
             clockIn: () => run(() => deps.store.clockIn(deps.clockInInput())),
             startBreak: (id) => run(() => deps.store.startBreak(id)),
             endBreak: () => run(() => deps.store.endBreak()),
             clockOut: () => run(() => deps.store.clockOut()),
-            about: () => showAbout(t, locale),
             signIn: () => {
               lastActionError = null
               deps.onSignIn()
@@ -223,12 +221,6 @@ export function createTray(deps: TrayDeps): Tray {
               lastActionError = null
               deps.onSignIn()
             },
-            setOpenAtLogin: (value) => applySetting({ openAtLogin: value }),
-            setAlwaysOnTop: (value) => applySetting({ alwaysOnTop: value }),
-            setAutoInstallUpdates: (value) => applySetting({ autoInstallUpdates: value }),
-            setTheme: (value) => applySetting({ theme: value }),
-            setExpandDirection: (value) => applySetting({ expandDirection: value }),
-            setLanguage: (value) => applySetting({ language: value }),
             toggleWindow: () => {
               toggleWidget()
               // `isVisible()` decides the menu's wording, so the menu has to be
@@ -240,6 +232,7 @@ export function createTray(deps: TrayDeps): Tray {
               void deps.store.refresh()
             },
             checkForUpdates: deps.onCheckForUpdates,
+            openWindow: (page) => deps.onOpenWindow(page),
             quit: deps.onQuit,
           },
         }),
@@ -269,28 +262,6 @@ export function createTray(deps: TrayDeps): Tray {
     })
   }
 
-  /**
-   * Writes one setting and rebuilds the menu from what is actually stored.
-   *
-   * Electron has already flipped the clicked checkbox by the time this runs, so
-   * a silent failure would leave a tick standing next to a setting that never
-   * changed. `Settings.set` persists before it commits, and the write can fail
-   * for real — a virus scanner can block the
-   * `rename` with `EBUSY`. The re-render then restores the old tick and the
-   * sentence next to it says why.
-   */
-  function applySetting(patch: Partial<AppSettings>): void {
-    lastActionError = null
-    try {
-      deps.settings.set(patch)
-    } catch (error) {
-      console.error('[tray] settings write failed:', error)
-      lastActionError = describeSettingsWriteFailure(
-        translatorFor(resolveLocale(deps.settings.get().language, app.getLocale())),
-      )
-    }
-    render()
-  }
 
   let lastOpenRefresh = 0
   function refreshOnOpen(): void {

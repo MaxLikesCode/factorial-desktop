@@ -33,7 +33,13 @@ import {
   type AppSnapshot,
   type InvokeChannel,
   type SerialisedSnapshot,
+  isMainWindowPage,
+  type AppInfo,
+  type MainWindowPage,
 } from '@shared/ipc-contract'
+import { MINUTES_PER_DAY, parseIsoDate, type DayEdit, type TimesheetBlock } from '@shared/timesheet'
+import { asHoursSetting } from './long-shift'
+import type { Timesheet } from './timesheet'
 import {
   ACTION_IN_FLIGHT_MESSAGE,
   type AttendanceSnapshot,
@@ -81,12 +87,20 @@ export interface IpcHandlerDeps {
    * Opens a native menu over the widget and resolves what was picked.
    * Injected rather than reached for, so these handlers stay free of Electron.
    */
-  popupMenu: (items: PopupMenuItem[], anchor: Point) => Promise<string | null>
+  popupMenu: (items: PopupMenuItem[], anchor: Point, senderId?: number) => Promise<string | null>
   /** Clears the session cookie and offers a new sign-in. Owned by `index.ts`. */
   onSignOut: () => Promise<void>
+  /** Recorded time, by month and by day. Owned by `timesheet.ts`. */
+  timesheet: Pick<Timesheet, 'getMonth' | 'saveDay'>
+  /** Opens the app window at a section. Owned by `main-window.ts`. */
+  openMainWindow: (page: MainWindowPage | null) => void
+  getAppInfo: () => AppInfo
+  /** A manual update check. Owned by `updater.ts`. */
+  checkForUpdates: () => void
 }
 
-export type IpcHandler = (payload: unknown) => Promise<unknown>
+/** `senderId` is the asking `webContents`' id, for handlers that answer in a window. */
+export type IpcHandler = (payload: unknown, senderId?: number) => Promise<unknown>
 
 export type IpcHandlers = Record<InvokeChannel, IpcHandler>
 
@@ -112,9 +126,9 @@ function describe(error: unknown): string {
 
 /** Every handler funnels through this, so no rejection ever crosses undecodable. */
 function guard(handler: IpcHandler): IpcHandler {
-  return async (payload) => {
+  return async (payload, senderId) => {
     try {
-      return await handler(payload)
+      return await handler(payload, senderId)
     } catch (error) {
       throw new Error(encodeActionError(classifyActionError(error), describe(error)))
     }
@@ -189,6 +203,15 @@ function asSettingsPatch(payload: unknown): Partial<AppSettings> {
   if (typeof raw.autoInstallUpdates === 'boolean') {
     patch.autoInstallUpdates = raw.autoInstallUpdates
   }
+  if (typeof raw.askLocationOnClockIn === 'boolean') {
+    patch.askLocationOnClockIn = raw.askLocationOnClockIn
+  }
+  if (raw.longShiftReminderHours === null || typeof raw.longShiftReminderHours === 'number') {
+    patch.longShiftReminderHours = asHoursSetting(raw.longShiftReminderHours)
+  }
+  if (raw.autoClockOutHours === null || typeof raw.autoClockOutHours === 'number') {
+    patch.autoClockOutHours = asHoursSetting(raw.autoClockOutHours)
+  }
   // `skippedUpdateVersion` is deliberately not accepted from here. Only the
   // update window writes it, and that window has its own bridge.
   return patch
@@ -201,6 +224,46 @@ function isPopupMenuItem(value: unknown): value is PopupMenuItem {
   return typeof row.id === 'string' && row.id !== '' && typeof row.label === 'string'
 }
 
+/**
+ * A day as the editor sends it. Every block is checked field by field: the
+ * numbers become clock-in and clock-out instants in a real timesheet, and a
+ * NaN or a string there is not worth finding out about from Factorial.
+ */
+function asDayEdit(payload: unknown): DayEdit {
+  const raw = asRecord(payload, IPC.saveTimesheetDay)
+  if (typeof raw.date !== 'string' || parseIsoDate(raw.date) === null) {
+    throw new Error(`${IPC.saveTimesheetDay}: expected a date`)
+  }
+  if (!Array.isArray(raw.blocks)) throw new Error(`${IPC.saveTimesheetDay}: expected blocks`)
+  const blocks: TimesheetBlock[] = raw.blocks.map((value, index) => {
+    const b = asRecord(value, `${IPC.saveTimesheetDay}.blocks[${index}]`)
+    const minute = (v: unknown): number | null =>
+      typeof v === 'number' && Number.isFinite(v) ? Math.min(MINUTES_PER_DAY, Math.max(0, Math.round(v))) : null
+    const start = minute(b.start)
+    const end = b.end === null ? null : minute(b.end)
+    if (start === null || (b.end !== null && end === null)) {
+      throw new Error(`${IPC.saveTimesheetDay}: block ${index} has no usable times`)
+    }
+    if (b.kind !== 'work' && b.kind !== 'break') {
+      throw new Error(`${IPC.saveTimesheetDay}: block ${index} has no kind`)
+    }
+    return {
+      id: typeof b.id === 'string' && b.id !== '' ? b.id : null,
+      kind: b.kind,
+      start,
+      end,
+      breakConfigurationId:
+        typeof b.breakConfigurationId === 'string' && b.breakConfigurationId !== ''
+          ? b.breakConfigurationId
+          : null,
+      breakName: typeof b.breakName === 'string' ? b.breakName : null,
+      locationType:
+        typeof b.locationType === 'string' && isLocationType(b.locationType) ? b.locationType : null,
+    }
+  })
+  return { date: raw.date, blocks }
+}
+
 export function createIpcHandlers({
   store,
   settings,
@@ -208,6 +271,10 @@ export function createIpcHandlers({
   setWindowInteractive,
   setWindowDragging,
   popupMenu,
+  timesheet,
+  openMainWindow,
+  getAppInfo,
+  checkForUpdates,
 }: IpcHandlerDeps): IpcHandlers {
   const handlers: IpcHandlers = {
     [IPC.getSnapshot]: async () => serialiseSnapshot(store.getSnapshot()),
@@ -248,7 +315,7 @@ export function createIpcHandlers({
      * built from junk would put it somewhere off screen — neither is worth
      * failing the whole call over, so both degrade to "nothing to show".
      */
-    [IPC.popupMenu]: async (payload) => {
+    [IPC.popupMenu]: async (payload, senderId) => {
       const raw = asRecord(payload, IPC.popupMenu)
       const items = Array.isArray(raw.items) ? raw.items.filter(isPopupMenuItem) : []
       if (items.length === 0) return null
@@ -256,10 +323,34 @@ export function createIpcHandlers({
       const anchor = asRecord(raw.anchor, `${IPC.popupMenu}.anchor`)
       if (typeof anchor.x !== 'number' || typeof anchor.y !== 'number') return null
 
-      return popupMenu(items, { x: anchor.x, y: anchor.y })
+      return popupMenu(items, { x: anchor.x, y: anchor.y }, senderId)
     },
     [IPC.setWindowDragging]: async (payload) => {
       setWindowDragging(payload === true)
+    },
+    [IPC.getTimesheetMonth]: async (payload) => {
+      const raw = asRecord(payload, IPC.getTimesheetMonth)
+      const year = raw.year
+      const month = raw.month
+      if (
+        typeof year !== 'number' ||
+        !Number.isInteger(year) ||
+        typeof month !== 'number' ||
+        !Number.isInteger(month) ||
+        month < 1 ||
+        month > 12
+      ) {
+        throw new Error(`${IPC.getTimesheetMonth}: expected a year and a month`)
+      }
+      return timesheet.getMonth(year, month)
+    },
+    [IPC.saveTimesheetDay]: async (payload) => timesheet.saveDay(asDayEdit(payload)),
+    [IPC.openMainWindow]: async (payload) => {
+      openMainWindow(isMainWindowPage(payload) ? payload : null)
+    },
+    [IPC.getAppInfo]: async () => getAppInfo(),
+    [IPC.checkForUpdates]: async () => {
+      checkForUpdates()
     },
   }
 

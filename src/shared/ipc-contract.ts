@@ -27,6 +27,7 @@
 
 import type { AttendanceState } from './attendance-state'
 import type { LanguageSetting } from './i18n'
+import type { DayEdit, TimesheetDay, TimesheetMonth } from './timesheet'
 
 export const IPC = {
   getSnapshot: 'attendance:getSnapshot',
@@ -44,6 +45,12 @@ export const IPC = {
   setWindowDragging: 'widget:setDragging',
   popupMenu: 'widget:popupMenu',
   cursorMoved: 'widget:cursorMoved',
+  getTimesheetMonth: 'timesheet:getMonth',
+  saveTimesheetDay: 'timesheet:saveDay',
+  openMainWindow: 'window:openMain',
+  navigate: 'window:navigate',
+  getAppInfo: 'app:getInfo',
+  checkForUpdates: 'update:check',
 } as const
 
 /**
@@ -56,8 +63,27 @@ export const IPC = {
  */
 export type InvokeChannel = Exclude<
   (typeof IPC)[keyof typeof IPC],
-  typeof IPC.snapshotChanged | typeof IPC.settingsChanged | typeof IPC.cursorMoved
+  | typeof IPC.snapshotChanged
+  | typeof IPC.settingsChanged
+  | typeof IPC.cursorMoved
+  | typeof IPC.navigate
 >
+
+/** The sections of the app window; what `openMainWindow` can ask for. */
+export type MainWindowPage = 'overview' | 'timesheet' | 'settings'
+
+export const MAIN_WINDOW_PAGES: readonly MainWindowPage[] = ['overview', 'timesheet', 'settings']
+
+export function isMainWindowPage(value: unknown): value is MainWindowPage {
+  return typeof value === 'string' && (MAIN_WINDOW_PAGES as readonly string[]).includes(value)
+}
+
+/** What the settings page's About section shows. */
+export interface AppInfo {
+  version: string
+  electron: string
+  chromium: string
+}
 
 export interface BreakOption {
   id: string
@@ -250,6 +276,15 @@ export interface AppSettings {
    * the user asks for by hand, since that is a request to see it again.
    */
   skippedUpdateVersion: string | null
+  /**
+   * Ask where the work happens before every clock-in, as a menu on the
+   * button. Off, the remembered location is used without a question.
+   */
+  askLocationOnClockIn: boolean
+  /** Hours on the clock before a reminder notification; null is off. */
+  longShiftReminderHours: number | null
+  /** Hours on the clock before the app clocks out by itself; null is off. */
+  autoClockOutHours: number | null
 }
 
 /**
@@ -391,4 +426,15 @@ export interface FactorialBridge {
    * menu is dismissed without a choice.
    */
   popupMenu(items: PopupMenuItem[], anchor: Point): Promise<string | null>
+  /** A month of the timesheet — every day, with its records as blocks. */
+  getTimesheetMonth(year: number, month: number): Promise<TimesheetMonth>
+  /** Writes an edited day and resolves with the day as Factorial now holds it. */
+  saveTimesheetDay(edit: DayEdit): Promise<TimesheetDay>
+  /** Opens the app window, optionally at a section. */
+  openMainWindow(page?: MainWindowPage): Promise<void>
+  /** The app window is told which section to show; returns its own unsubscribe. */
+  onNavigate(callback: (page: MainWindowPage) => void): () => void
+  getAppInfo(): Promise<AppInfo>
+  /** A manual update check; the answer arrives in the update window. */
+  checkForUpdates(): Promise<void>
 }

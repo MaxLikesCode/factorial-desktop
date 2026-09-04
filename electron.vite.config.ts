@@ -32,11 +32,12 @@ export default defineConfig({
         '@renderer': resolve('src/renderer/src'),
       },
     },
-    // Two pages, same bundle: the widget and the update window.
+    // Three pages, same bundle: the widget, the app window and the update window.
     build: {
       rollupOptions: {
         input: {
           index: resolve('src/renderer/index.html'),
+          app: resolve('src/renderer/app.html'),
           update: resolve('src/renderer/update.html'),
         },
       },

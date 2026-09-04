@@ -7,7 +7,8 @@ interface Props {
   snapshot: AppSnapshot
   /** True while an action is in flight; every control locks (DESIGN.md, "Optimistische Updates"). */
   busy: boolean
-  onClockIn: () => void
+  /** Handed the button's box, so a location menu can hang from it. */
+  onClockIn: (anchor: DOMRect) => void
   onClockOut: () => void
   onStartBreak: (id: string) => void
   onEndBreak: () => void
@@ -44,7 +45,11 @@ export function ActionBar({
 
   if (state.kind === 'out') {
     return (
-      <Button size="sm" disabled={busy} onClick={onClockIn}>
+      <Button
+        size="sm"
+        disabled={busy}
+        onClick={(event) => onClockIn(event.currentTarget.getBoundingClientRect())}
+      >
         {t('tray.clockIn')}
       </Button>
     )

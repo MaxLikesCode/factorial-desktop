@@ -9,9 +9,9 @@
  * `window-all-closed` handler at the bottom.
  */
 
-import { app, dialog, nativeTheme, powerMonitor } from 'electron'
+import { Notification, app, dialog, nativeTheme, powerMonitor } from 'electron'
 import { join } from 'node:path'
-import { IPC, type ThemeSetting } from '@shared/ipc-contract'
+import { IPC, isMainWindowPage, type ThemeSetting } from '@shared/ipc-contract'
 import type { ExpandDirection } from '@shared/widget-size'
 import { resolveUserDataPath } from './app-identity'
 import { createAttendanceStore, type ClockInInput } from './attendance'
@@ -26,10 +26,14 @@ import { registerIpc } from './ipc'
 import { applyBrowserUserAgent, clearSession, createNetFetch, getFactorialSession } from './session'
 import { buildLoginItemSettings, createSettings, type Settings } from './settings'
 import { createTray, hasTray, refreshTray } from './tray'
+import { createTimesheet } from './timesheet'
+import { watchLongShifts } from './long-shift'
+import { getMainWindow, showMainWindow } from './main-window'
 import { createUpdateLog } from './update-log'
 import { maybePreviewUpdateWindow } from './update-preview'
 import { createUpdater } from './updater'
 import { resolveLocale } from '@shared/i18n'
+import { toLocalDate } from '@shared/time'
 import { translatorFor } from '@shared/locales'
 import {
   createWidgetWindow,
@@ -60,9 +64,8 @@ function withWindowEffects(settings: Settings): Settings {
     set: (patch) => {
       const next = settings.set(patch)
       setWidgetAlwaysOnTop(next.alwaysOnTop)
-      const widget = getWidget()
-      if (widget && !widget.isDestroyed()) {
-        widget.webContents.send(IPC.settingsChanged, next)
+      for (const win of [getWidget(), getMainWindow()]) {
+        if (win && !win.isDestroyed()) win.webContents.send(IPC.settingsChanged, next)
       }
       return next
     },
@@ -169,6 +172,14 @@ async function signInOrOfferAnother(ops: Operations): Promise<Identity | null> {
   }
 }
 
+/** A system notification, if the platform offers them; a click opens the app window. */
+function notify(title: string, body: string, onClick: () => void): void {
+  if (!Notification.isSupported()) return
+  const notification = new Notification({ title, body })
+  notification.on('click', onClick)
+  notification.show()
+}
+
 async function bootstrap(): Promise<void> {
   const factorialSession = getFactorialSession()
   // Before anything touches the network: Factorial's sign-in refuses to verify
@@ -242,37 +253,9 @@ async function bootstrap(): Promise<void> {
     }
   }
 
-  // Before the window exists: the renderer asks for a snapshot as it mounts, and
-  // an unanswered `invoke` would reject in its first effect.
-  registerIpc({
-    setWindowInteractive: setWidgetInteractive,
-    setWindowDragging: setWidgetDragging,
-    popupMenu: popupWidgetMenu,
-    store,
-    settings: settingsWithWindowEffects,
-    onSignOut: signInAgain,
-    // Only the widget listens. The login window loads a third-party page with no
-    // preload, so a broadcast there is at best wasted and at worst hands app
-    // state to someone else's renderer. `getWidget` is called per push, so this
-    // is correct before the window exists and after it is gone.
-    targets: () => {
-      const widget = getWidget()
-      return widget ? [widget] : []
-    },
-  })
-
-  const widget = createWidgetWindow({
-    positionFile: join(app.getPath('userData'), 'window-position.json'),
-    alwaysOnTop: settings.get().alwaysOnTop,
-    expandDirection: settings.get().expandDirection,
-  })
-
   // Built before the first read so that a failing refresh still leaves a tray
   // behind — otherwise a bad network on start would produce an app with a hidden
   // widget and no way to quit it.
-  // Reads the state per prompt rather than capturing it: whether a restart is
-  // acceptable depends on whether a shift is running *at that moment*, not on
-  // what was true when the app started.
   const updater = createUpdater({
     getTranslate: () => translatorFor(resolveLocale(settings.get().language, app.getLocale())),
     getLocale: () => resolveLocale(settings.get().language, app.getLocale()),
@@ -286,6 +269,48 @@ async function bootstrap(): Promise<void> {
     logger: createUpdateLog(app.getPath('userData')),
   })
 
+  const timesheet = createTimesheet({
+    ops,
+    employeeId,
+    defaultLocationType: () => settings.get().lastLocationType,
+    // An edited today changes the widget's bar and sum; the store re-reads
+    // rather than being told, so the two can never disagree.
+    onSaved: (date) => {
+      if (date === toLocalDate(new Date())) void store.refresh()
+    },
+  })
+
+  // Before the window exists: the renderer asks for a snapshot as it mounts, and
+  // an unanswered `invoke` would reject in its first effect.
+  registerIpc({
+    setWindowInteractive: setWidgetInteractive,
+    setWindowDragging: setWidgetDragging,
+    popupMenu: popupWidgetMenu,
+    store,
+    settings: settingsWithWindowEffects,
+    onSignOut: signInAgain,
+    timesheet,
+    openMainWindow: (page) => showMainWindow(page),
+    getAppInfo: () => ({
+      version: app.getVersion(),
+      electron: process.versions.electron,
+      chromium: process.versions.chrome,
+    }),
+    checkForUpdates: () => void updater.checkNow(true),
+    // The widget and the app window listen. The login window loads a
+    // third-party page with no preload, so a broadcast there is at best wasted
+    // and at worst hands app state to someone else's renderer. Both getters are
+    // called per push, so this is correct before a window exists and after it
+    // is gone.
+    targets: () => [getWidget(), getMainWindow()].filter((w) => w !== null),
+  })
+
+  const widget = createWidgetWindow({
+    positionFile: join(app.getPath('userData'), 'window-position.json'),
+    alwaysOnTop: settings.get().alwaysOnTop,
+    expandDirection: settings.get().expandDirection,
+  })
+
   createTray({
     store,
     settings: settingsWithWindowEffects,
@@ -295,7 +320,28 @@ async function bootstrap(): Promise<void> {
     },
     onCheckForUpdates: () => void updater.checkNow(true),
     getUpdateStatus: () => updater.getStatus(),
+    onOpenWindow: (page) => showMainWindow(page),
     onQuit: () => app.quit(),
+  })
+
+  // The forgotten shift: a notification after N hours, and — only when the
+  // user switched it on — a clock-out after M. See long-shift.ts.
+  watchLongShifts({
+    getState: () => store.getSnapshot().state,
+    getSettings: () => {
+      const { longShiftReminderHours, autoClockOutHours } = settings.get()
+      return { longShiftReminderHours, autoClockOutHours }
+    },
+    remind: (hours) => {
+      const t = translatorFor(resolveLocale(settings.get().language, app.getLocale()))
+      notify(t('longShift.reminderTitle'), t('longShift.reminderBody', { hours }), () => showMainWindow('overview'))
+    },
+    clockOut: async () => {
+      await store.clockOut()
+      const t = translatorFor(resolveLocale(settings.get().language, app.getLocale()))
+      notify(t('longShift.clockedOutTitle'), t('longShift.clockedOutBody'), () => showMainWindow('timesheet'))
+    },
+    onClockOutFailed: (reason) => console.error('[long-shift] automatic clock-out failed:', reason),
   })
 
   // One read so the widget and the tray have real numbers immediately.
@@ -310,6 +356,10 @@ async function bootstrap(): Promise<void> {
 
   // Development only, and only when asked for — see update-preview.ts.
   maybePreviewUpdateWindow(() => resolveLocale(settings.get().language, app.getLocale()))
+  // Same idea for the app window: FACTORIAL_OPEN_WINDOW=timesheet opens it at
+  // start, so a change to it can be looked at without a trip through the tray.
+  const openAt = process.env.FACTORIAL_OPEN_WINDOW
+  if (!app.isPackaged && isMainWindowPage(openAt)) showMainWindow(openAt)
 
   // The timer is recomputed from the shift's start on every render, so it cannot
   // drift while the machine sleeps — but `todayMinutes` and the state itself

@@ -26,6 +26,9 @@ const SETTINGS: AppSettings = {
   language: 'en',
   autoInstallUpdates: false,
   skippedUpdateVersion: null,
+  askLocationOnClockIn: false,
+  longShiftReminderHours: 8,
+  autoClockOutHours: null,
 }
 
 function fakeStore(overrides: Partial<IpcStore> = {}): IpcStore & { listeners: (() => void)[] } {
@@ -66,6 +69,10 @@ function handlersFor(store: IpcStore, settings = fakeSettings(), onSignOut = vi.
       setWindowInteractive,
       setWindowDragging,
       popupMenu,
+      timesheet: { getMonth: vi.fn(async () => ({ year: 2026, month: 9, days: [] })), saveDay: vi.fn() },
+      openMainWindow: vi.fn(),
+      getAppInfo: () => ({ version: '0.0.0', electron: '0', chromium: '0' }),
+      checkForUpdates: vi.fn(),
     }),
     settings,
     onSignOut,
@@ -102,9 +109,15 @@ describe('createIpcHandlers', () => {
         IPC.setWindowInteractive,
         IPC.setWindowDragging,
         IPC.popupMenu,
+        IPC.getTimesheetMonth,
+        IPC.saveTimesheetDay,
+        IPC.openMainWindow,
+        IPC.getAppInfo,
+        IPC.checkForUpdates,
       ].sort(),
     )
     expect(Object.keys(handlers)).not.toContain(IPC.snapshotChanged)
+    expect(Object.keys(handlers)).not.toContain(IPC.navigate)
   })
 
   it('serialises the snapshot on its way out', async () => {

@@ -17,7 +17,7 @@
  *    monitor which is no longer attached is unreachable by any normal means.
  */
 
-import { BrowserWindow, Menu, app, screen } from 'electron'
+import { BrowserWindow, Menu, app, screen, webContents } from 'electron'
 import { join } from 'node:path'
 import { IPC } from '@shared/ipc-contract'
 import {
@@ -483,8 +483,13 @@ export function setWidgetExpandDirection(direction: ExpandDirection): void {
 export function popupWidgetMenu(
   items: { id: string; label: string; checked?: boolean }[],
   anchor: { x: number; y: number },
+  senderId?: number,
 ): Promise<string | null> {
-  const win = widget
+  // The window that asked, when known: the app window has the same buttons
+  // as the widget, and a menu anchored in the wrong window opens in the
+  // wrong place. The widget stays the fallback for a call without a sender.
+  const sender = senderId === undefined ? null : webContents.fromId(senderId)
+  const win = (sender ? BrowserWindow.fromWebContents(sender) : null) ?? widget
   if (!win || win.isDestroyed()) return Promise.resolve(null)
 
   return new Promise((resolve) => {

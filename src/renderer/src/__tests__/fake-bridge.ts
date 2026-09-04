@@ -41,6 +41,9 @@ export const TEST_SETTINGS: AppSettings = {
   language: 'de',
   autoInstallUpdates: false,
   skippedUpdateVersion: null,
+  askLocationOnClockIn: false,
+  longShiftReminderHours: 8,
+  autoClockOutHours: null,
 }
 
 export interface FakeBridge extends FactorialBridge {
@@ -102,6 +105,12 @@ export function createFakeBridge(
     },
     setWindowDragging: vi.fn(async () => {}),
     popupMenu: vi.fn(async () => null),
+    getTimesheetMonth: vi.fn(async () => ({ year: 2026, month: 9, days: [] })),
+    saveTimesheetDay: vi.fn(async (edit) => ({ date: edit.date, blocks: edit.blocks, expectedMinutes: null })),
+    openMainWindow: vi.fn(async () => {}),
+    onNavigate: () => () => {},
+    getAppInfo: vi.fn(async () => ({ version: '0.0.0', electron: '0', chromium: '0' })),
+    checkForUpdates: vi.fn(async () => {}),
     pushSettings(patch) {
       currentSettings = { ...currentSettings, ...patch }
       for (const listener of [...settingsListeners]) listener(currentSettings)

@@ -19,7 +19,9 @@ added without touching the transport or the state store.
   real state.
 - **No code signing or notarisation.** The first launch needs right-click → Open
   on macOS, *More info → Run anyway* on Windows.
-- **No notifications or reminders** ("you have been clocked in for 9 hours").
+- **No notifications beyond the forgotten shift.** The one reminder that
+  exists ("still clocked in after N hours", `src/main/long-shift.ts`) is about
+  the mistake a time tracker is most likely to cause; nothing else notifies.
 
 ## The Factorial API
 
@@ -981,6 +983,26 @@ CI on Linux.
 Tagging `v*` builds both platforms in CI and attaches the artefacts to a GitHub
 release. The platforms build one after another so that the second adds to the
 release the first created.
+
+## The app window
+
+`src/main/main-window.ts` and `src/renderer/src/app/`. An ordinary window —
+frame, taskbar entry, remembered size — with a sidebar of three sections:
+
+- **Overview**: today's numbers, the running timer and the same three actions
+  as the widget, at full size.
+- **Timesheet**: a month of days; a day opens into an editor with the day as a
+  strip of work and break blocks whose ends can be dragged, the same blocks as
+  fields, and the running sum against the target. Saving writes only the diff
+  (`src/shared/timesheet.ts`, `diffDay`) through `createAttendanceShift`,
+  `updateAttendanceShift` and `deleteAttendanceShift` (docs/api-discovery.md).
+- **Settings**: everything the tray's submenu used to hold, plus the three
+  clock-in settings — ask for the location, remind after N hours, clock out
+  after M hours.
+
+The widget stays exactly as it is; the window shares its preload and bridge,
+so both read one snapshot and write one settings store. The tray keeps the
+actions and three entries that open the window.
 
 ## Extensibility
 

@@ -24,15 +24,9 @@
 import type { MenuItemConstructorOptions } from 'electron'
 import { breakMinutes } from '@shared/day-timeline'
 import { describeActionError, describeActionFailure, describeStaleReason } from '@shared/errors'
-import {
-  LANGUAGE_NAMES,
-  LOCALES,
-  type LanguageSetting,
-  type MessageKey,
-  type Translate,
-} from '@shared/i18n'
-import type { AppSettings, AppSnapshot, ThemeSetting } from '@shared/ipc-contract'
-import type { ExpandDirection } from '@shared/widget-size'
+import type { Translate } from '@shared/i18n'
+import type { AppSnapshot } from '@shared/ipc-contract'
+import type { MainWindowPage } from '@shared/ipc-contract'
 import { classifyActionError } from './ipc-handlers'
 import { type UpdateStatus, updateMenuEntry } from './update-policy'
 
@@ -51,13 +45,7 @@ export interface TrayActions {
   signOut: () => void
   toggleWindow: () => void
   refresh: () => void
-  setOpenAtLogin: (value: boolean) => void
-  setAlwaysOnTop: (value: boolean) => void
-  setAutoInstallUpdates: (value: boolean) => void
-  setTheme: (value: ThemeSetting) => void
-  setExpandDirection: (value: ExpandDirection) => void
   /** Switches the language; `system` follows the OS. */
-  setLanguage: (value: LanguageSetting) => void
   /**
    * Asks the release feed now and reports either way.
    *
@@ -66,8 +54,8 @@ export interface TrayActions {
    * that silently does nothing reads as broken.
    */
   checkForUpdates: () => void
-  /** Shows the version. Sits next to the update check, which is why it exists. */
-  about: () => void
+  /** Opens the app window at a section. */
+  openWindow: (page: MainWindowPage) => void
   quit: () => void
 }
 
@@ -77,8 +65,6 @@ export interface TrayMenuInput {
   windowVisible: boolean
   /** The last tray action that failed, already translated, or `null`. */
   lastActionError: string | null
-  /** What the checkboxes under settings show, read fresh on every render. */
-  settings: AppSettings
   actions: TrayActions
   /** Read per render, so a language change shows on the next one. */
   t: Translate
@@ -271,152 +257,11 @@ export function trayActionErrorText(t: Translate, error: unknown): string {
  * "Beim Anmelden starten" three lines above "Abmelden" reads as if it were about
  * the same login.
  */
-/**
- * The appearance picker.
- *
- * Radios rather than a single "Dunkles Design" checkbox, because there are three
- * states and not two: following the OS is a distinct choice from picking dark,
- * and a checkbox cannot say which of the two is in force. The wording is
- * macOS's own for the two explicit choices; "Systemvorgabe" is deliberately not
- * Apple's "Automatisch", which there means switching by time of day rather than
- * following the system setting.
- *
- * Electron sets a radio item's own `checked` flag on click, so — like the two
- * toggles below — the handler passes the value it wants rather than reading
- * that flag back.
- */
-const THEME_KEY = [
-  { value: 'system', key: 'settings.appearanceSystem' },
-  { value: 'light', key: 'settings.appearanceLight' },
-  { value: 'dark', key: 'settings.appearanceDark' },
-] as const satisfies ReadonlyArray<{ value: ThemeSetting; key: MessageKey }>
-
-function themeSubmenu(
-  t: Translate,
-  settings: AppSettings,
-  actions: TrayActions,
-): MenuItemConstructorOptions[] {
-  return THEME_KEY.map(({ value, key }) => ({
-    label: t(key),
-    type: 'radio',
-    checked: settings.theme === value,
-    click: () => actions.setTheme(value),
-  }))
-}
-
-/**
- * Which way the card grows when it opens.
- *
- * The labels name the direction rather than the benefit, because the benefit
- * ("the button stays under your pointer") is only half of it: the window is
- * wider than the collapsed card and gets clamped to the display as a whole, so
- * the direction also decides which screen edge the widget can be pushed all the
- * way into.
- */
-const DIRECTION_KEY = [
-  { value: 'right', key: 'settings.expandRight' },
-  { value: 'left', key: 'settings.expandLeft' },
-] as const satisfies ReadonlyArray<{ value: ExpandDirection; key: MessageKey }>
-
-function directionSubmenu(
-  t: Translate,
-  settings: AppSettings,
-  actions: TrayActions,
-): MenuItemConstructorOptions[] {
-  return DIRECTION_KEY.map(({ value, key }) => ({
-    label: t(key),
-    type: 'radio',
-    checked: settings.expandDirection === value,
-    click: () => actions.setExpandDirection(value),
-  }))
-}
-
-/**
- * The language picker.
- *
- * Each language is listed under its own name — "Deutsch", not "German" — because
- * whoever opens this menu is looking for a language they read, and quite
- * possibly cannot read the one currently active. "System" is the exception and
- * is translated, since it names a behaviour rather than a language.
- */
-function languageSubmenu(
-  t: Translate,
-  settings: AppSettings,
-  actions: TrayActions,
-): MenuItemConstructorOptions[] {
-  const pick = (value: LanguageSetting, label: string): MenuItemConstructorOptions => ({
-    label,
-    type: 'radio',
-    checked: settings.language === value,
-    click: () => actions.setLanguage(value),
-  })
-  return [
-    pick('system', t('settings.languageSystem')),
-    { type: 'separator' },
-    ...LOCALES.map((locale) => pick(locale, LANGUAGE_NAMES[locale])),
-  ]
-}
-
-function settingsSubmenu(
-  t: Translate,
-  snapshot: AppSnapshot,
-  settings: AppSettings,
-  actions: TrayActions,
-  updateStatus: UpdateStatus,
-): MenuItemConstructorOptions[] {
-  const items: MenuItemConstructorOptions[] = [
-    {
-      label: t('settings.startAtLogin'),
-      type: 'checkbox',
-      checked: settings.openAtLogin,
-      click: () => actions.setOpenAtLogin(!settings.openAtLogin),
-    },
-    {
-      label: t('settings.alwaysOnTop'),
-      type: 'checkbox',
-      checked: settings.alwaysOnTop,
-      click: () => actions.setAlwaysOnTop(!settings.alwaysOnTop),
-    },
-    { label: t('settings.expand'), submenu: directionSubmenu(t, settings, actions) },
-    { label: t('settings.appearance'), submenu: themeSubmenu(t, settings, actions) },
-    { label: t('settings.language'), submenu: languageSubmenu(t, settings, actions) },
-    { type: 'separator' },
-    // Above the update entry, because it is about the same thing: the offer's
-    // own checkbox switches this on, and this is where it is switched off.
-    {
-      label: t('settings.autoInstallUpdates'),
-      type: 'checkbox',
-      checked: settings.autoInstallUpdates,
-      click: () => actions.setAutoInstallUpdates(!settings.autoInstallUpdates),
-    },
-    // Not next to "Refresh" one level up on purpose: that one reloads the times,
-    // this one looks for a new program. Two very different things that would
-    // read as the same one if they sat together.
-    // Label and clickability come from the updater's state: idle asks, a
-    // download reports its percentage, and a staged update offers the restart.
-    { ...updateMenuEntry(t, updateStatus), click: () => actions.checkForUpdates() },
-    // Directly under the update entry: one says which version is running, the
-    // other fetches a newer one. Apart, the first would be a curiosity; here it
-    // is the answer to "did that update actually apply?".
-    { label: t('tray.about'), click: () => actions.about() },
-  ]
-
-  // With no session there is nothing to drop, and the top-level entry already
-  // says "Sign in" for the very same call — naming one action twice, with
-  // opposite words, in one menu would be worse than leaving this out.
-  if (snapshot.state.kind !== 'unauthenticated') {
-    items.push({ type: 'separator' }, { label: t('tray.signOut'), click: () => actions.signOut() })
-  }
-
-  return items
-}
-
 export function buildTrayMenu({
   snapshot,
   now,
   windowVisible,
   lastActionError,
-  settings,
   actions,
   t,
   updateStatus,
@@ -484,10 +329,18 @@ export function buildTrayMenu({
       click: () => actions.toggleWindow(),
     },
     { label: t('tray.refresh'), click: () => actions.refresh() },
-    {
-      label: t('tray.settings'),
-      submenu: settingsSubmenu(t, snapshot, settings, actions, updateStatus),
-    },
+    { type: 'separator' },
+    // The app window, at each of its sections. Every setting the tray used
+    // to carry as a submenu lives there now; the tray keeps the actions and
+    // the way in.
+    { label: t('tray.openWindow'), click: () => actions.openWindow('overview') },
+    { label: t('tray.timesheet'), click: () => actions.openWindow('timesheet') },
+    { label: t('tray.settings'), click: () => actions.openWindow('settings') },
+    // Label and clickability come from the updater's state: idle asks, a
+    // download reports its percentage, and a staged update offers the restart.
+    // Kept in the tray because a download in progress needs a surface that
+    // is always there, and the app window is not.
+    { ...updateMenuEntry(t, updateStatus), click: () => actions.checkForUpdates() },
     { type: 'separator' },
     // Always present, in every state: closing the widget only hides it and the
     // window is kept out of the taskbar, so this is the only way out of the app

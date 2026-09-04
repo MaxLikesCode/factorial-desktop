@@ -1,0 +1,60 @@
+/*
+ * The app window is an ordinary window with a sidebar. `styles.css` is the
+ * widget's: transparent page, no selection, no scrollbars. Everything below
+ * undoes what does not apply here and adds the few things a window needs.
+ *
+ * The palette is the widget's, shifted one step: the page sits on
+ * `--sidebar` and the content on `--background`, so the sidebar reads as the
+ * frame and the content as the sheet — the layering the reference screenshots
+ * have. The window's own background (main-window.ts) is tinted to `--sidebar`
+ * so the title-bar overlay blends into it.
+ */
+html,
+body,
+#root {
+    background: var(--sidebar);
+    user-select: text;
+    overflow: hidden;
+}
+
+/* The top strip of the window is the platform's: the overlay's controls sit
+ * over it on Windows, the traffic lights on macOS. Dragging it moves the
+ * window, and everything the user can click opts out. */
+.titlebar {
+    -webkit-app-region: drag;
+    height: 40px;
+}
+.titlebar button,
+.titlebar input,
+.titlebar a,
+.no-drag {
+    -webkit-app-region: no-drag;
+}
+
+/* Scrollbars in the content area, thin and in the page's own colours. */
+.app-scroll {
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--foreground) 20%, transparent) transparent;
+}
+
+/* Switches, sliders and inputs follow the page's accent. */
+input[type='checkbox'],
+input[type='range'],
+input[type='radio'] {
+    accent-color: var(--primary);
+}
+
+/* The timeline editor: the handles are the whole affordance, so they get a
+ * cursor and a visible grab area wider than the line they sit on. */
+.tl-handle {
+    cursor: ew-resize;
+    touch-action: none;
+}
+.tl-block {
+    cursor: grab;
+    touch-action: none;
+}
+.tl-block:active {
+    cursor: grabbing;
+}

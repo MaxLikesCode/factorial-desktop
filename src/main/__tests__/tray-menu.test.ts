@@ -15,7 +15,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import type { MenuItemConstructorOptions } from 'electron'
-import { encodeActionError, type AppSettings, type AppSnapshot } from '@shared/ipc-contract'
+import { encodeActionError, type AppSnapshot } from '@shared/ipc-contract'
 import { translatorFor } from '@shared/locales'
 import { FactorialError } from '../factorial/client'
 import { ACTION_IN_FLIGHT_MESSAGE } from '../attendance'
@@ -46,18 +46,6 @@ const t = translatorFor('de')
 
 const NOW = new Date(2026, 7, 12, 11, 0, 0)
 
-const settings: AppSettings = {
-  openAtLogin: true,
-  alwaysOnTop: true,
-  lastLocationType: 'office',
-  lastWorkplaceId: null,
-  theme: 'system',
-  expandDirection: 'right',
-  language: 'en',
-  autoInstallUpdates: false,
-  skippedUpdateVersion: null,
-}
-
 function clockedIn(since: Date): AppSnapshot['state'] {
   return { kind: 'in', shiftId: '1', since, locationType: 'office', workplaceId: null }
 }
@@ -72,18 +60,12 @@ function noopActions(): TrayActions {
     startBreak: vi.fn(),
     endBreak: vi.fn(),
     clockOut: vi.fn(),
-    setAutoInstallUpdates: vi.fn(),
+    openWindow: vi.fn(),
     signIn: vi.fn(),
     signOut: vi.fn(),
     toggleWindow: vi.fn(),
     refresh: vi.fn(),
-    setOpenAtLogin: vi.fn(),
-    setAlwaysOnTop: vi.fn(),
-    setTheme: vi.fn(),
-    setExpandDirection: vi.fn(),
     checkForUpdates: vi.fn(),
-    about: vi.fn(),
-    setLanguage: vi.fn(),
     quit: vi.fn(),
   }
 }
@@ -243,7 +225,6 @@ describe('buildTrayMenu', () => {
       now: NOW,
       windowVisible: true,
       lastActionError: null,
-      settings,
       actions: noopActions(),
       updateStatus: { kind: 'idle' },
       ...overrides,
@@ -251,8 +232,8 @@ describe('buildTrayMenu', () => {
   }
 
   /**
-   * The update entry lives inside the settings submenu, and it is the only
-   * surface a download has. Asserted through the built menu rather than through
+   * The update entry is the only surface a download has while the app window
+   * is closed. Asserted through the built menu rather than through
    * `updateMenuEntry` alone, because the wiring between the two is the part
    * that was missing.
    */
@@ -262,14 +243,12 @@ describe('buildTrayMenu', () => {
     // matters.
     const entry = (status: Parameters<typeof buildTrayMenu>[0]['updateStatus']) => {
       const actions = noopActions()
-      const items = menu(base, { updateStatus: status, actions })
-      const settingsItem = items.find((i) => i.label === 'Einstellungen')
-      const submenu = settingsItem?.submenu as {
+      const items = menu(base, { updateStatus: status, actions }) as {
         label?: string
         enabled?: boolean
         click?: () => void
       }[]
-      return submenu.find((item) => {
+      return items.find((item) => {
         ;(actions.checkForUpdates as ReturnType<typeof vi.fn>).mockClear()
         item.click?.()
         return (actions.checkForUpdates as ReturnType<typeof vi.fn>).mock.calls.length === 1
@@ -287,29 +266,6 @@ describe('buildTrayMenu', () => {
     })
   })
 
-  it('offers the version right under the update check', () => {
-    const actions = noopActions()
-    const items = menu(base, { actions })
-    const submenu = items.find((i) => i.label === 'Einstellungen')?.submenu as {
-      label?: string
-      click?: () => void
-    }[]
-
-    const about = submenu.find((i) => i.label === 'Über Factorial Desktop …')
-    expect(about).toBeDefined()
-    about?.click?.()
-    expect(actions.about).toHaveBeenCalledTimes(1)
-
-    // Adjacency is the point: the version is what you check after an update
-    // claims to have applied.
-    const updateIndex = submenu.findIndex((i) => {
-      ;(actions.checkForUpdates as ReturnType<typeof vi.fn>).mockClear()
-      i.click?.()
-      return (actions.checkForUpdates as ReturnType<typeof vi.fn>).mock.calls.length === 1
-    })
-    expect(submenu.indexOf(about!)).toBe(updateIndex + 1)
-  })
-
   it('starts with the status line as a disabled entry', () => {
     // This entry is where Windows reads the running time.
     const items = menu({ ...base, state: clockedIn(new Date(2026, 7, 12, 9, 30, 0)) })
@@ -325,7 +281,11 @@ describe('buildTrayMenu', () => {
       '---',
       'Fenster ausblenden',
       'Aktualisieren',
+      '---',
+      'Factorial Desktop öffnen',
+      'Zeiterfassung …',
       'Einstellungen',
+      'Nach Updates suchen …',
       '---',
       'Beenden',
     ])
@@ -436,12 +396,10 @@ describe('buildTrayMenu', () => {
     })
   })
 
-  describe('Einstellungen', () => {
-    // DESIGN.md, "Tray": the context menu carries "Einstellungen", and
-    // DESIGN.md, "Einstellungen" names exactly these three items. The tray is
-    // the app's only surface for them — the widget shows "Anmelden" only while
-    // the session is gone and has no settings UI at all.
-    it('is offered in every state, because there is no other settings surface', () => {
+  describe('the app window', () => {
+    // Every setting the tray used to carry as a submenu lives in the app
+    // window now; the tray keeps the actions and three ways in.
+    it('offers the window at each section, in every state', () => {
       for (const state of [
         base.state,
         clockedIn(NOW),
@@ -449,123 +407,21 @@ describe('buildTrayMenu', () => {
         { kind: 'unknown' } as const,
         { kind: 'unauthenticated' } as const,
       ]) {
-        expect(labels(menu({ ...base, state }))).toContain('Einstellungen')
+        const actions = noopActions()
+        const items = menu({ ...base, state }, { actions })
+        fire(itemAt(items, 'Factorial Desktop öffnen'))
+        fire(itemAt(items, 'Zeiterfassung …'))
+        fire(itemAt(items, 'Einstellungen'))
+        expect(actions.openWindow).toHaveBeenNthCalledWith(1, 'overview')
+        expect(actions.openWindow).toHaveBeenNthCalledWith(2, 'timesheet')
+        expect(actions.openWindow).toHaveBeenNthCalledWith(3, 'settings')
       }
     })
 
-    it('shows the two toggles as checkboxes reflecting what is stored', () => {
-      const entries = submenuOf(itemAt(menu(base), 'Einstellungen'))
-      const autostart = itemAt(entries, 'Autostart')
-      const onTop = itemAt(entries, 'Immer im Vordergrund')
-
-      expect(autostart.type).toBe('checkbox')
-      expect(onTop.type).toBe('checkbox')
-      expect(autostart.checked).toBe(true)
-      expect(onTop.checked).toBe(true)
-
-      const off = submenuOf(
-        itemAt(
-          menu(base, { settings: { ...settings, openAtLogin: false, alwaysOnTop: false } }),
-          'Einstellungen',
-        ),
-      )
-      expect(itemAt(off, 'Autostart').checked).toBe(false)
-      expect(itemAt(off, 'Immer im Vordergrund').checked).toBe(false)
-    })
-
-    it('offers both directions as radios and writes the one it names', () => {
-      const actions = noopActions()
-      const directions = submenuOf(
-        itemAt(submenuOf(itemAt(menu(base, { actions }), 'Einstellungen')), 'Aufklappen'),
-      )
-
-      expect(directions.map((entry) => entry.label)).toEqual(['Nach rechts', 'Nach links'])
-      for (const entry of directions) expect(entry.type).toBe('radio')
-      // The fixture stores 'right', the direction that shipped first.
-      expect(directions.map((entry) => entry.checked)).toEqual([true, false])
-
-      fire(directions[1])
-      expect(actions.setExpandDirection).toHaveBeenCalledWith('left')
-    })
-
-    it('offers the appearance as three radios, with the stored one marked', () => {
-      const entries = submenuOf(itemAt(menu(base), 'Einstellungen'))
-      const theme = submenuOf(itemAt(entries, 'Erscheinungsbild'))
-
-      expect(theme.map((entry) => entry.label)).toEqual(['Systemvorgabe', 'Hell', 'Dunkel'])
-      for (const entry of theme) expect(entry.type).toBe('radio')
-      // The fixture stores 'system'.
-      expect(theme.map((entry) => entry.checked)).toEqual([true, false, false])
-
-      const dark = submenuOf(
-        itemAt(
-          submenuOf(
-            itemAt(menu(base, { settings: { ...settings, theme: 'dark' } }), 'Einstellungen'),
-          ),
-          'Erscheinungsbild',
-        ),
-      )
-      expect(dark.map((entry) => entry.checked)).toEqual([false, false, true])
-    })
-
-    it('writes the value it names, not the radio item’s own state', () => {
-      // Same trap as the checkboxes: Electron sets a radio's `checked` on click
-      // before the handler runs, so reading it back would tell the handler
-      // nothing but "you were clicked".
-      const actions = noopActions()
-      const theme = submenuOf(
-        itemAt(submenuOf(itemAt(menu(base, { actions }), 'Einstellungen')), 'Erscheinungsbild'),
-      )
-
-      fire(theme[2])
-      expect(actions.setTheme).toHaveBeenCalledWith('dark')
-      fire(theme[0])
-      expect(actions.setTheme).toHaveBeenCalledWith('system')
-    })
-
-    it('writes the opposite of the stored value, not of the menu item’s own state', () => {
-      // Electron flips a checkbox item's `checked` on click by itself. The
-      // handler must ask the settings for the value it inverts, otherwise a
-      // menu built from a stale render would write back what is already there.
-      const actions = noopActions()
-      const entries = submenuOf(itemAt(menu(base, { actions }), 'Einstellungen'))
-
-      fire(itemAt(entries, 'Autostart'))
-      expect(actions.setOpenAtLogin).toHaveBeenCalledWith(false)
-
-      fire(itemAt(entries, 'Immer im Vordergrund'))
-      expect(actions.setAlwaysOnTop).toHaveBeenCalledWith(false)
-
-      const offActions = noopActions()
-      const off = submenuOf(
-        itemAt(
-          menu(base, {
-            actions: offActions,
-            settings: { ...settings, openAtLogin: false, alwaysOnTop: false },
-          }),
-          'Einstellungen',
-        ),
-      )
-      fire(itemAt(off, 'Autostart'))
-      expect(offActions.setOpenAtLogin).toHaveBeenCalledWith(true)
-      fire(itemAt(off, 'Immer im Vordergrund'))
-      expect(offActions.setAlwaysOnTop).toHaveBeenCalledWith(true)
-    })
-
-    it('offers "Abmelden" while there is a session to drop', () => {
-      const actions = noopActions()
-      const entries = submenuOf(itemAt(menu(base, { actions }), 'Einstellungen'))
-      fire(itemAt(entries, 'Abmelden'))
-      expect(actions.signOut).toHaveBeenCalledOnce()
-    })
-
-    it('does not offer "Abmelden" when the session is already gone', () => {
-      // The top-level entry there is "Anmelden", which runs the same code;
-      // offering both at once would name one action twice, with opposite words.
-      const items = menu({ ...base, state: { kind: 'unauthenticated' } })
-      const entries = submenuOf(itemAt(items, 'Einstellungen'))
-      expect(entries.map((entry) => entry.label)).not.toContain('Abmelden')
-      expect(labels(items)).toContain('Anmelden')
+    it('carries no settings submenu any more', () => {
+      const items = menu(base)
+      expect(items.every((item) => item.submenu === undefined || item.label === 'Pause')).toBe(true)
+      expect(labels(items)).not.toContain('Über Factorial Desktop …')
     })
   })
 })

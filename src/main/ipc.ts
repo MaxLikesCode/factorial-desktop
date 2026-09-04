@@ -36,7 +36,10 @@ export function registerIpc({
   const handlers = createIpcHandlers(deps)
 
   for (const [channel, handler] of Object.entries(handlers)) {
-    ipcMain.handle(channel, (_event, payload: unknown) => handler(payload))
+    // The sender's id travels with the payload so a handler can answer in the
+    // window that asked — a popup menu has to hang from the button that was
+    // clicked, and since the app window that button can be in either window.
+    ipcMain.handle(channel, (event, payload: unknown) => handler(payload, event.sender.id))
   }
 
   const unsubscribe = createSnapshotBroadcaster(deps.store, (snapshot) => {

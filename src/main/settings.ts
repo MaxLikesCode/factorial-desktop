@@ -30,6 +30,7 @@ import { isThemeSetting, type AppSettings, type ThemeSetting } from '@shared/ipc
 import { isLanguageSetting } from '@shared/i18n'
 import { isExpandDirection, type ExpandDirection } from '@shared/widget-size'
 import { isLocationType } from './factorial/types'
+import { asHoursSetting } from './long-shift'
 
 export const DEFAULT_SETTINGS: AppSettings = {
   // Autostart on by default — DESIGN.md, "Einstellungen". The OS is only told
@@ -46,6 +47,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   language: 'system',
   autoInstallUpdates: false,
   skippedUpdateVersion: null,
+  askLocationOnClockIn: false,
+  // On by default: a day that never ended is the mistake this exists for, and
+  // a notification costs nothing. The automatic clock-out writes a record, so
+  // it stays opt-in.
+  longShiftReminderHours: 8,
+  autoClockOutHours: null,
 }
 
 export interface SettingsDeps {
@@ -113,6 +120,16 @@ function sanitise(raw: unknown, base: AppSettings): AppSettings {
         : typeof r.skippedUpdateVersion === 'string' && r.skippedUpdateVersion !== ''
           ? r.skippedUpdateVersion
           : base.skippedUpdateVersion,
+    askLocationOnClockIn:
+      typeof r.askLocationOnClockIn === 'boolean' ? r.askLocationOnClockIn : base.askLocationOnClockIn,
+    // `null` is "off" and is kept; a number is rounded and bounded by
+    // `asHoursSetting`, and anything else falls back.
+    longShiftReminderHours:
+      r.longShiftReminderHours === null
+        ? null
+        : (asHoursSetting(r.longShiftReminderHours) ?? base.longShiftReminderHours),
+    autoClockOutHours:
+      r.autoClockOutHours === null ? null : (asHoursSetting(r.autoClockOutHours) ?? base.autoClockOutHours),
   }
 }
 

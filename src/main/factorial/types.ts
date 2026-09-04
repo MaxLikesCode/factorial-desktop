@@ -78,6 +78,19 @@ export interface ShiftSummary {
 }
 
 /**
+ * One closed-or-open record with both ends, for the timesheet editor. What
+ * `ShiftSummary` has plus the clock-out, which the widget never needed and
+ * the editor cannot do without. `clockOut` is null on the running record.
+ */
+export interface ShiftRecord extends ShiftSummary {
+  clockIn: string | null
+  clockOut: string | null
+  clockOutOffset: string | null
+  locationType: string | null
+  workplaceId: number | null
+}
+
+/**
  * `AttendanceShiftLocationTypeEnum`, verified against the live schema. Sending
  * anything outside this set fails the mutation in-band with HTTP 200.
  */

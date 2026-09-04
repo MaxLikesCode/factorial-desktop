@@ -26,7 +26,14 @@
 import { toLocalIsoWithOffset } from '@shared/time'
 import type { BreakConfiguration, OpenShift } from '@shared/attendance-state'
 import { FactorialError, type GraphQLClient } from './client'
-import type { BreakConfigOption, Identity, LocationType, MutationError, ShiftSummary } from './types'
+import type {
+  BreakConfigOption,
+  Identity,
+  LocationType,
+  MutationError,
+  ShiftRecord,
+  ShiftSummary,
+} from './types'
 
 /** Every record this app writes is tagged as coming from the desktop client. */
 const SOURCE = 'desktop'
@@ -461,6 +468,160 @@ export function createOperations(client: GraphQLClient) {
         options.push({ id: asId(field(node, path, 'id'), `${path}.id`), name })
       })
       return options
+    },
+
+    /**
+     * Every record in a date range, both ends included — the timesheet editor's
+     * read. Same connection as `fetchTodayShifts`, more fields, any range.
+     */
+    async fetchShifts(employeeId: number, startOn: string, endOn: string): Promise<ShiftRecord[]> {
+      const data = await client.execute<unknown>({
+        operationName: 'Shifts',
+        variables: { id: employeeId, startOn, endOn },
+        query: `query Shifts($id: Int!, $startOn: ISO8601Date!, $endOn: ISO8601Date!) {
+          attendance { employee(id: $id) {
+            attendanceShiftsConnection(startOn: $startOn, endOn: $endOn) {
+              nodes {
+                id date minutes workable clockIn clockOut clockInWithSeconds clockInOffset clockOutOffset
+                locationType workplaceId
+                timeSettingsBreakConfiguration { id name }
+              }
+            }
+          } }
+        }`,
+      })
+
+      const employee = attendanceEmployee(data, 'Shifts')
+      const base = 'Shifts.data.attendance.employee.attendanceShiftsConnection'
+      return connectionNodes(employee.attendanceShiftsConnection, base).map((node, index) => {
+        const path = `${base}.nodes[${index}]`
+        return {
+          id: asId(field(node, path, 'id'), `${path}.id`),
+          date: asString(field(node, path, 'date'), `${path}.date`),
+          minutes: asNullableInteger(field(node, path, 'minutes'), `${path}.minutes`),
+          workable: asNullableBoolean(field(node, path, 'workable'), `${path}.workable`),
+          breakConfiguration: parseBreakConfiguration(
+            field(node, path, 'timeSettingsBreakConfiguration'),
+            `${path}.timeSettingsBreakConfiguration`,
+          ),
+          clockIn: asNullableString(field(node, path, 'clockIn'), `${path}.clockIn`),
+          clockOut: asNullableString(field(node, path, 'clockOut'), `${path}.clockOut`),
+          clockInWithSeconds: asNullableString(
+            field(node, path, 'clockInWithSeconds'),
+            `${path}.clockInWithSeconds`,
+          ),
+          clockInOffset: asNullableString(field(node, path, 'clockInOffset'), `${path}.clockInOffset`),
+          clockOutOffset: asNullableString(field(node, path, 'clockOutOffset'), `${path}.clockOutOffset`),
+          locationType: asNullableString(field(node, path, 'locationType'), `${path}.locationType`),
+          workplaceId: asNullableInteger(field(node, path, 'workplaceId'), `${path}.workplaceId`),
+        }
+      })
+    },
+
+    /** The target per day over a range, keyed by date. Days the API omits are absent. */
+    async fetchExpectedMinutesByDay(
+      employeeId: number,
+      startOn: string,
+      endOn: string,
+    ): Promise<Map<string, number | null>> {
+      const data = await client.execute<unknown>({
+        operationName: 'EstimatedTimes',
+        variables: { id: employeeId, startOn, endOn },
+        query: `query EstimatedTimes($id: Int!, $startOn: ISO8601Date!, $endOn: ISO8601Date!) {
+          attendance { employee(id: $id) {
+            attendanceEstimatedTimesConnection(startOn: $startOn, endOn: $endOn) {
+              nodes { date expectedMinutes }
+            }
+          } }
+        }`,
+      })
+      const employee = attendanceEmployee(data, 'EstimatedTimes')
+      const base = 'EstimatedTimes.data.attendance.employee.attendanceEstimatedTimesConnection'
+      const out = new Map<string, number | null>()
+      connectionNodes(employee.attendanceEstimatedTimesConnection, base).forEach((node, index) => {
+        const path = `${base}.nodes[${index}]`
+        out.set(
+          asString(field(node, path, 'date'), `${path}.date`),
+          asNullableInteger(field(node, path, 'expectedMinutes'), `${path}.expectedMinutes`),
+        )
+      })
+      return out
+    },
+
+    /**
+     * A record with both ends, written by the timesheet editor. Found by
+     * validation-error probing on 2026-09-04 (docs/api-discovery.md): `date`
+     * is the one required argument; `workable: false` plus the break type is
+     * what makes the record a break.
+     */
+    async createShift(input: {
+      date: string
+      clockIn: Date
+      clockOut: Date
+      workable: boolean
+      breakConfigurationId: string | null
+      locationType: LocationType | null
+    }): Promise<void> {
+      const variables: Record<string, unknown> = {
+        date: input.date,
+        clockIn: toLocalIsoWithOffset(input.clockIn),
+        clockOut: toLocalIsoWithOffset(input.clockOut),
+        workable: input.workable,
+        source: SOURCE,
+      }
+      if (input.breakConfigurationId !== null) {
+        variables.timeSettingsBreakConfigurationId = asInteger(
+          input.breakConfigurationId,
+          'breakConfigurationId',
+        )
+      }
+      if (input.locationType !== null) variables.locationType = input.locationType
+      const data = await client.execute<unknown>({
+        operationName: 'CreateShift',
+        variables,
+        query: `mutation CreateShift($date: ISO8601Date!, $clockIn: ISO8601DateTime, $clockOut: ISO8601DateTime,
+                                     $workable: Boolean, $timeSettingsBreakConfigurationId: Int,
+                                     $locationType: AttendanceShiftLocationTypeEnum,
+                                     $source: AttendanceEnumsShiftSourceEnum) {
+          attendanceMutations {
+            createAttendanceShift(date: $date, clockIn: $clockIn, clockOut: $clockOut, workable: $workable,
+                                  timeSettingsBreakConfigurationId: $timeSettingsBreakConfigurationId,
+                                  locationType: $locationType, source: $source) {${MUTATION_RESULT}            }
+          }
+        }`,
+      })
+      assertMutationSucceeded(data, 'CreateShift', 'createAttendanceShift')
+    },
+
+    /** Moves one record's ends. `workable` cannot be changed this way (see the probe). */
+    async updateShift(input: { id: string; clockIn: Date; clockOut: Date }): Promise<void> {
+      const data = await client.execute<unknown>({
+        operationName: 'UpdateShift',
+        variables: {
+          id: asInteger(input.id, 'shift id'),
+          clockIn: toLocalIsoWithOffset(input.clockIn),
+          clockOut: toLocalIsoWithOffset(input.clockOut),
+        },
+        query: `mutation UpdateShift($id: Int!, $clockIn: ISO8601DateTime, $clockOut: ISO8601DateTime) {
+          attendanceMutations {
+            updateAttendanceShift(id: $id, clockIn: $clockIn, clockOut: $clockOut) {${MUTATION_RESULT}            }
+          }
+        }`,
+      })
+      assertMutationSucceeded(data, 'UpdateShift', 'updateAttendanceShift')
+    },
+
+    async deleteShift(input: { id: string }): Promise<void> {
+      const data = await client.execute<unknown>({
+        operationName: 'DeleteShift',
+        variables: { id: asInteger(input.id, 'shift id') },
+        query: `mutation DeleteShift($id: Int!) {
+          attendanceMutations {
+            deleteAttendanceShift(id: $id) {${MUTATION_RESULT}            }
+          }
+        }`,
+      })
+      assertMutationSucceeded(data, 'DeleteShift', 'deleteAttendanceShift')
     },
 
     async clockIn(input: { now: Date; locationType: LocationType; workplaceId: number | null }): Promise<void> {

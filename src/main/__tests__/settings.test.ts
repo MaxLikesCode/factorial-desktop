@@ -97,6 +97,9 @@ describe('createSettings', () => {
       language: DEFAULT_SETTINGS.language,
       autoInstallUpdates: DEFAULT_SETTINGS.autoInstallUpdates,
       skippedUpdateVersion: DEFAULT_SETTINGS.skippedUpdateVersion,
+      askLocationOnClockIn: DEFAULT_SETTINGS.askLocationOnClockIn,
+      longShiftReminderHours: DEFAULT_SETTINGS.longShiftReminderHours,
+      autoClockOutHours: DEFAULT_SETTINGS.autoClockOutHours,
     })
   })
 
