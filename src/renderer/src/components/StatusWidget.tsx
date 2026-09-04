@@ -292,6 +292,7 @@ export function StatusWidget(): React.JSX.Element {
   return (
     <WidgetCard
       view={view}
+      design={settings?.widgetDesign ?? 'simple'}
       open={expanded}
       onToggle={() => setExpanded((current) => !current)}
       actions={actions}

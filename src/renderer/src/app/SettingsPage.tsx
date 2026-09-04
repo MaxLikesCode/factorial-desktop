@@ -62,6 +62,16 @@ export function SettingsPage(): React.JSX.Element {
       </Section>
 
       <Section title={t('settingsPage.widget')}>
+        <Row label={t('settings.widgetDesign')}>
+          <Segmented
+            value={settings.widgetDesign}
+            onChange={(v) => set({ widgetDesign: v as AppSettings['widgetDesign'] })}
+            options={[
+              { value: 'simple', label: t('settings.designSimple') },
+              { value: 'glass', label: t('settings.designGlass') },
+            ]}
+          />
+        </Row>
         <Row label={t('settings.alwaysOnTop')}>
           <Switch checked={settings.alwaysOnTop} onChange={(v) => set({ alwaysOnTop: v })} />
         </Row>

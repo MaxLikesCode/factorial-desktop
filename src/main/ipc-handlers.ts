@@ -34,6 +34,7 @@ import {
   type InvokeChannel,
   type SerialisedSnapshot,
   isMainWindowPage,
+  isWidgetDesign,
   type AppInfo,
   type MainWindowPage,
 } from '@shared/ipc-contract'
@@ -211,6 +212,9 @@ function asSettingsPatch(payload: unknown): Partial<AppSettings> {
   }
   if (raw.autoClockOutHours === null || typeof raw.autoClockOutHours === 'number') {
     patch.autoClockOutHours = asHoursSetting(raw.autoClockOutHours)
+  }
+  if (typeof raw.widgetDesign === 'string' && isWidgetDesign(raw.widgetDesign)) {
+    patch.widgetDesign = raw.widgetDesign
   }
   // `skippedUpdateVersion` is deliberately not accepted from here. Only the
   // update window writes it, and that window has its own bridge.

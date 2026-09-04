@@ -1,6 +1,7 @@
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { ChevronDownIcon } from 'lucide-react'
 import { CARD, EXPANDED_ROWS, type ExpandDirection } from '@shared/widget-size'
+import type { WidgetDesign } from '@shared/ipc-contract'
 import { useTranslate } from '@renderer/hooks/useTranslate'
 import { ProgressBar } from './ProgressBar'
 import type { WidgetView } from './WidgetView'
@@ -24,6 +25,8 @@ interface Props {
    * is what lets the control's y stay put in the second case.
    */
   direction: ExpandDirection
+  /** Which look the card is drawn in; `styles.css` keys off `data-design`. */
+  design: WidgetDesign
 }
 
 /**
@@ -84,6 +87,7 @@ export function WidgetCard({
   actions,
   location,
   direction,
+  design,
 }: Props): React.JSX.Element {
   const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
@@ -218,6 +222,7 @@ export function WidgetCard({
     <div
       ref={cardRef}
       data-open={open}
+      data-design={design}
       data-slot="minimal-card"
       onDoubleClick={(event) => {
         // A double click that landed on a control has already been dealt with by

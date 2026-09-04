@@ -18,6 +18,7 @@
  */
 
 import { BrowserWindow, Menu, app, screen, webContents } from 'electron'
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { IPC } from '@shared/ipc-contract'
 import {
@@ -214,6 +215,23 @@ export function createWidgetWindow(deps: {
     if (writeTimer) clearTimeout(writeTimer)
     if (widget === win) widget = null
   })
+
+  // Development only: a picture of the widget into FACTORIAL_SCREENSHOT_DIR,
+  // the same helper the app window has (main-window.ts), for looking at a
+  // change to the card from a script.
+  const shotDir = process.env.FACTORIAL_SCREENSHOT_DIR
+  if (!app.isPackaged && shotDir) {
+    win.webContents.setBackgroundThrottling(false)
+    win.webContents.once('did-finish-load', () => {
+      setTimeout(() => {
+        if (win.isDestroyed()) return
+        void win.webContents.capturePage().then((image) => {
+          writeFileSync(join(shotDir, 'widget.png'), image.toPNG())
+          console.log('[widget] screenshot written')
+        })
+      }, 4000)
+    })
+  }
 
   if (process.env.ELECTRON_RENDERER_URL) {
     void win.loadURL(process.env.ELECTRON_RENDERER_URL)

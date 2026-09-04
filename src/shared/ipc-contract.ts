@@ -218,6 +218,20 @@ export function deserialiseSnapshot(snapshot: SerialisedSnapshot): AppSnapshot {
  */
 export type ThemeSetting = 'system' | 'light' | 'dark'
 
+/**
+ * How the widget's card is drawn. `simple` is the card as it always was and
+ * the default; `glass` is the app window's look (app.css) on the card —
+ * translucent gradient, a light edge on top and a dark one below, pill
+ * buttons, the Factorial orange for the primary action.
+ */
+export type WidgetDesign = 'simple' | 'glass'
+
+export const WIDGET_DESIGNS: readonly WidgetDesign[] = ['simple', 'glass']
+
+export function isWidgetDesign(value: string): value is WidgetDesign {
+  return (WIDGET_DESIGNS as readonly string[]).includes(value)
+}
+
 export const THEME_SETTINGS: readonly ThemeSetting[] = ['system', 'light', 'dark']
 
 export function isThemeSetting(value: string): value is ThemeSetting {
@@ -285,6 +299,8 @@ export interface AppSettings {
   longShiftReminderHours: number | null
   /** Hours on the clock before the app clocks out by itself; null is off. */
   autoClockOutHours: number | null
+  /** The widget card's look. See `WidgetDesign`. */
+  widgetDesign: WidgetDesign
 }
 
 /**

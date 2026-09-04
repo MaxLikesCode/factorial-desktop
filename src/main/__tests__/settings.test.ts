@@ -100,6 +100,7 @@ describe('createSettings', () => {
       askLocationOnClockIn: DEFAULT_SETTINGS.askLocationOnClockIn,
       longShiftReminderHours: DEFAULT_SETTINGS.longShiftReminderHours,
       autoClockOutHours: DEFAULT_SETTINGS.autoClockOutHours,
+      widgetDesign: DEFAULT_SETTINGS.widgetDesign,
     })
   })
 

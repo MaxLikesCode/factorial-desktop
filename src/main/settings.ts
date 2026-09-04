@@ -26,7 +26,7 @@
 
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { isThemeSetting, type AppSettings, type ThemeSetting } from '@shared/ipc-contract'
+import { isThemeSetting, isWidgetDesign, type AppSettings, type ThemeSetting } from '@shared/ipc-contract'
 import { isLanguageSetting } from '@shared/i18n'
 import { isExpandDirection, type ExpandDirection } from '@shared/widget-size'
 import { isLocationType } from './factorial/types'
@@ -53,6 +53,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   // it stays opt-in.
   longShiftReminderHours: 8,
   autoClockOutHours: null,
+  widgetDesign: 'simple',
 }
 
 export interface SettingsDeps {
@@ -130,6 +131,8 @@ function sanitise(raw: unknown, base: AppSettings): AppSettings {
         : (asHoursSetting(r.longShiftReminderHours) ?? base.longShiftReminderHours),
     autoClockOutHours:
       r.autoClockOutHours === null ? null : (asHoursSetting(r.autoClockOutHours) ?? base.autoClockOutHours),
+    widgetDesign:
+      typeof r.widgetDesign === 'string' && isWidgetDesign(r.widgetDesign) ? r.widgetDesign : base.widgetDesign,
   }
 }
 
