@@ -33,27 +33,30 @@ import { isLocationType } from './factorial/types'
 import { asHoursSetting } from './long-shift'
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  // Autostart on by default — DESIGN.md, "Einstellungen". The OS is only told
-  // about it when the value changes, plus once at startup by `index.ts`.
-  openAtLogin: true,
+  // Autostart is opt-in — DESIGN.md, "Settings". The OS is only told about
+  // it when the value changes, plus once at startup by `index.ts`.
+  openAtLogin: false,
   alwaysOnTop: true,
   lastLocationType: 'office',
   lastWorkplaceId: null,
   // Follow the OS unless the user says otherwise. A widget that sits on the
   // desktop all day should match what everything around it is doing.
   theme: 'system',
-  // The direction that shipped first; the alternative is opt-in.
-  expandDirection: 'right',
+  // Left, because the widget usually sits at the screen's right edge, where
+  // a card that grows rightwards would grow off the screen.
+  expandDirection: 'left',
   language: 'system',
   autoInstallUpdates: false,
   skippedUpdateVersion: null,
-  askLocationOnClockIn: false,
+  // Asked every time: the location is a real field in the HR record, and a
+  // remembered "office" on a day at home is a wrong record nobody notices.
+  askLocationOnClockIn: true,
   // On by default: a day that never ended is the mistake this exists for, and
   // a notification costs nothing. The automatic clock-out writes a record, so
   // it stays opt-in.
   longShiftReminderHours: 8,
   autoClockOutHours: null,
-  widgetDesign: 'simple',
+  widgetDesign: 'glass',
 }
 
 export interface SettingsDeps {

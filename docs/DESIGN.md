@@ -758,11 +758,15 @@ window.
 
 ## Settings
 
-- Start at login (default on)
-- Always on top
-- Expand direction: right (default) or left
+- Start at login (default off)
+- Always on top (default on)
+- Expand direction: left (default) or right
 - Appearance: system (default), light, dark
 - Language: system (default) or one of seven
+- Widget design: glass (default) or simple
+- Ask for the location before every clock-in (default on)
+- Reminder after 8 h on the clock (default on); automatic clock-out (default off)
+- Install updates automatically (default off)
 - Check for updates — doubles as the download's progress display
 - About: the app version and the Electron/Chromium it runs on. Deliberately next
   to the update entry: it is how "did that update apply?" gets answered, and the

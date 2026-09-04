@@ -45,8 +45,8 @@ describe('createSettings', () => {
     applyLoginItem.mockClear()
     s.set({ alwaysOnTop: false })
     expect(applyLoginItem).not.toHaveBeenCalled()
-    s.set({ openAtLogin: false })
-    expect(applyLoginItem).toHaveBeenCalledWith(false)
+    s.set({ openAtLogin: true })
+    expect(applyLoginItem).toHaveBeenCalledWith(true)
   })
 
   it('does not touch the login item merely by being constructed', () => {
@@ -169,8 +169,8 @@ describe('createSettings and the appearance', () => {
 })
 
 describe('createSettings and the expand direction', () => {
-  it('starts at the direction that shipped first', () => {
-    expect(DEFAULT_SETTINGS.expandDirection).toBe('right')
+  it('starts growing to the left, away from the screen edge it usually sits at', () => {
+    expect(DEFAULT_SETTINGS.expandDirection).toBe('left')
   })
 
   it('reports a direction change, and only a change', () => {
@@ -182,11 +182,11 @@ describe('createSettings and the expand direction', () => {
       applyExpandDirection,
     })
 
-    s.set({ expandDirection: 'left' })
-    expect(applyExpandDirection).toHaveBeenCalledWith('left')
+    s.set({ expandDirection: 'right' })
+    expect(applyExpandDirection).toHaveBeenCalledWith('right')
 
     applyExpandDirection.mockClear()
-    s.set({ expandDirection: 'left' })
+    s.set({ expandDirection: 'right' })
     expect(applyExpandDirection).not.toHaveBeenCalled()
   })
 
