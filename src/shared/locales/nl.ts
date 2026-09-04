@@ -136,6 +136,7 @@ export const nl: Catalogue = {
   'timesheet.balance': 'Saldo',
   'timesheet.noRecords': 'Geen registraties',
   'timesheet.dayOff': 'Vrije dag',
+  'timesheet.now': 'nu',
   'timesheet.running': 'loopt',
   'timesheet.work': 'Werk',
   'timesheet.break': 'Pauze',

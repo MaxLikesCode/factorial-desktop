@@ -226,6 +226,7 @@ export const en = {
   'timesheet.balance': 'Balance',
   'timesheet.noRecords': 'No records',
   'timesheet.dayOff': 'Day off',
+  'timesheet.now': 'now',
   'timesheet.running': 'running',
   'timesheet.work': 'Work',
   'timesheet.break': 'Break',

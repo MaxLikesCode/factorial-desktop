@@ -51,11 +51,11 @@ export function showMainWindow(page: MainWindowPage | null = null): void {
     // match the page so they do not float on a white strip.
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: nativeTheme.shouldUseDarkColors ? '#1c1c1c' : '#f5f5f5',
-      symbolColor: nativeTheme.shouldUseDarkColors ? '#e5e5e5' : '#1c1c1c',
-      height: 40,
+      color: nativeTheme.shouldUseDarkColors ? '#131318' : '#f3f2ef',
+      symbolColor: nativeTheme.shouldUseDarkColors ? '#e5e5e5' : '#2a2a2e',
+      height: 56,
     },
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1c1c1c' : '#f5f5f5',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#131318' : '#f3f2ef',
     webPreferences: {
       preload: join(import.meta.dirname, '../preload/index.mjs'),
       contextIsolation: true,
@@ -88,11 +88,11 @@ export function showMainWindow(page: MainWindowPage | null = null): void {
     if (created.isDestroyed()) return
     const dark = nativeTheme.shouldUseDarkColors
     created.setTitleBarOverlay?.({
-      color: dark ? '#1c1c1c' : '#f5f5f5',
-      symbolColor: dark ? '#e5e5e5' : '#1c1c1c',
-      height: 40,
+      color: dark ? '#131318' : '#f3f2ef',
+      symbolColor: dark ? '#e5e5e5' : '#2a2a2e',
+      height: 56,
     })
-    created.setBackgroundColor(dark ? '#1c1c1c' : '#f5f5f5')
+    created.setBackgroundColor(dark ? '#131318' : '#f3f2ef')
   }
   nativeTheme.on('updated', retint)
   created.on('closed', () => nativeTheme.removeListener('updated', retint))

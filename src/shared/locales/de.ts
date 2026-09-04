@@ -145,6 +145,7 @@ export const de: Catalogue = {
   'timesheet.balance': 'Saldo',
   'timesheet.noRecords': 'Keine Einträge',
   'timesheet.dayOff': 'Frei',
+  'timesheet.now': 'jetzt',
   'timesheet.running': 'läuft',
   'timesheet.work': 'Arbeit',
   'timesheet.break': 'Pause',

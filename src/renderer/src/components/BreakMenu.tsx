@@ -8,6 +8,12 @@ interface Props {
   options: BreakOption[]
   disabled: boolean
   onSelect: (id: string) => void
+  /**
+   * The app window's own button style. Given, a plain `<button>` with these
+   * classes is rendered instead of the widget's `Button`; the menu behaviour
+   * is the same either way.
+   */
+  className?: string
 }
 
 /**
@@ -22,7 +28,7 @@ interface Props {
  * A native menu is the platform's own window. It is bounded by the screen rather
  * than by ours, and it flips and scrolls near an edge without being told to.
  */
-export function BreakMenu({ options, disabled, onSelect }: Props): React.JSX.Element {
+export function BreakMenu({ options, disabled, onSelect, className }: Props): React.JSX.Element {
   const t = useTranslate()
   async function open(event: React.MouseEvent<HTMLButtonElement>): Promise<void> {
     const box = event.currentTarget.getBoundingClientRect()
@@ -37,6 +43,20 @@ export function BreakMenu({ options, disabled, onSelect }: Props): React.JSX.Ele
       )
       .catch(() => null)
     if (picked !== null) onSelect(picked)
+  }
+
+  if (className !== undefined) {
+    return (
+      <button
+        type="button"
+        className={className}
+        disabled={disabled || options.length === 0}
+        onClick={(event) => void open(event)}
+      >
+        <PauseIcon />
+        {t('tray.break')}
+      </button>
+    )
   }
 
   return (

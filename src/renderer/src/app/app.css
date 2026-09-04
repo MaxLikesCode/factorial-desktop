@@ -1,28 +1,100 @@
 /*
- * The app window is an ordinary window with a sidebar. `styles.css` is the
- * widget's: transparent page, no selection, no scrollbars. Everything below
- * undoes what does not apply here and adds the few things a window needs.
+ * The app window's look: "B4 · Liquid Glass, ruhig" from the design canvas.
  *
- * The palette is the widget's, shifted one step: the page sits on
- * `--sidebar` and the content on `--background`, so the sidebar reads as the
- * frame and the content as the sheet — the layering the reference screenshots
- * have. The window's own background (main-window.ts) is tinted to `--sidebar`
- * so the title-bar overlay blends into it.
+ * A window of its own, so it has tokens of its own — `styles.css` belongs to
+ * the widget, which stays exactly as it is. Everything the pages use is an
+ * `--app-*` token or an `.app-*` class defined here; the shadcn tokens are
+ * left alone. Dark is the design; light is its counterpart with the same
+ * structure, and the switch is `prefers-color-scheme`, which the main process
+ * drives from the appearance setting via `nativeTheme.themeSource`.
+ *
+ * The palette, in one line: a dark sidebar, a surface one step lighter with a
+ * faint vertical gradient, cards as glass — translucent gradient, blur, a
+ * light edge on top and a dark one below, 22 px radius — and the Factorial
+ * orange for the one primary action. Emerald is work, amber is a break.
  */
+
+:root {
+    --app-sidebar: oklch(0.955 0.004 80);
+    --app-surface-a: oklch(0.985 0.003 80);
+    --app-surface-b: oklch(0.965 0.003 80);
+    --app-card: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.72) 55%, rgba(255, 255, 255, 0.8));
+    --app-card-border: rgba(0, 0, 0, 0.08);
+    --app-edge-top: rgba(255, 255, 255, 0.95);
+    --app-edge-bottom: rgba(0, 0, 0, 0.06);
+    --app-card-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+    --app-editor: linear-gradient(180deg, rgba(0, 0, 0, 0.025), rgba(0, 0, 0, 0.045));
+    --app-text: oklch(0.2 0.01 60);
+    --app-muted: rgba(0, 0, 0, 0.55);
+    --app-faint: rgba(0, 0, 0, 0.42);
+    --app-line: rgba(0, 0, 0, 0.08);
+    --app-fill: rgba(0, 0, 0, 0.05);
+    --app-fill-strong: rgba(0, 0, 0, 0.09);
+    --app-input: rgba(255, 255, 255, 0.7);
+    --app-input-border: rgba(0, 0, 0, 0.12);
+    --app-accent: #e8502a;
+    --app-accent-2: #ff7a4d;
+    --app-accent-fg: #ffffff;
+    --app-accent-soft: rgba(232, 80, 42, 0.14);
+    --app-accent-ring: rgba(232, 80, 42, 0.22);
+    --app-work: #10b981;
+    --app-work-2: #34d399;
+    --app-break: #f5b53a;
+    --app-neg: #d93a3e;
+    --app-now: #e5484d;
+    --app-secondary: linear-gradient(180deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.08));
+    --app-secondary-border: rgba(0, 0, 0, 0.1);
+    --app-secondary-edge: rgba(255, 255, 255, 0.8);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --app-sidebar: oklch(0.145 0.01 260);
+        --app-surface-a: oklch(0.21 0.006 260);
+        --app-surface-b: oklch(0.185 0.006 260);
+        --app-card: linear-gradient(135deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.035) 55%, rgba(255, 255, 255, 0.06));
+        --app-card-border: rgba(255, 255, 255, 0.18);
+        --app-edge-top: rgba(255, 255, 255, 0.22);
+        --app-edge-bottom: rgba(0, 0, 0, 0.35);
+        --app-card-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.06), 0 24px 60px rgba(0, 0, 0, 0.4);
+        --app-editor: linear-gradient(180deg, rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0.26));
+        --app-text: #f2f2f3;
+        --app-muted: rgba(255, 255, 255, 0.55);
+        --app-faint: rgba(255, 255, 255, 0.4);
+        --app-line: rgba(255, 255, 255, 0.06);
+        --app-fill: rgba(255, 255, 255, 0.05);
+        --app-fill-strong: rgba(255, 255, 255, 0.09);
+        --app-input: rgba(0, 0, 0, 0.25);
+        --app-input-border: rgba(255, 255, 255, 0.08);
+        --app-accent: #e84e28;
+        --app-accent-2: #ff8054;
+        --app-accent-fg: #ffffff;
+        --app-accent-soft: rgba(255, 122, 77, 0.16);
+        --app-accent-ring: rgba(255, 154, 110, 0.22);
+        --app-work: #22b985;
+        --app-work-2: #3fe0a6;
+        --app-break: #f5b53a;
+        --app-neg: #ff8a8a;
+        --app-now: #ff5d5d;
+        --app-secondary: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06));
+        --app-secondary-border: rgba(255, 255, 255, 0.18);
+        --app-secondary-edge: rgba(255, 255, 255, 0.25);
+    }
+}
+
 html,
 body,
 #root {
-    background: var(--sidebar);
+    background: var(--app-sidebar);
+    color: var(--app-text);
     user-select: text;
     overflow: hidden;
 }
 
-/* The top strip of the window is the platform's: the overlay's controls sit
- * over it on Windows, the traffic lights on macOS. Dragging it moves the
- * window, and everything the user can click opts out. */
+/* The top strip is the platform's: its window controls sit over it on Windows,
+ * the traffic lights on macOS. Dragging it moves the window. */
 .titlebar {
     -webkit-app-region: drag;
-    height: 40px;
 }
 .titlebar button,
 .titlebar input,
@@ -31,30 +103,261 @@ body,
     -webkit-app-region: no-drag;
 }
 
-/* Scrollbars in the content area, thin and in the page's own colours. */
+.app-surface {
+    background: linear-gradient(180deg, var(--app-surface-a), var(--app-surface-b));
+    border-left: 1px solid var(--app-line);
+}
+
 .app-scroll {
     overflow-y: auto;
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in oklch, var(--foreground) 20%, transparent) transparent;
+    scrollbar-color: color-mix(in oklch, var(--app-text) 20%, transparent) transparent;
 }
 
-/* Switches, sliders and inputs follow the page's accent. */
-input[type='checkbox'],
-input[type='range'],
-input[type='radio'] {
-    accent-color: var(--primary);
+/* --- text ------------------------------------------------------------- */
+.app-muted { color: var(--app-muted); }
+.app-faint { color: var(--app-faint); }
+.app-num { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.app-eyebrow {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--app-faint);
 }
 
-/* The timeline editor: the handles are the whole affordance, so they get a
- * cursor and a visible grab area wider than the line they sit on. */
+/* --- sidebar ---------------------------------------------------------- */
+.app-nav {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    text-align: left;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--app-muted);
+    transition: background 120ms ease, color 120ms ease;
+}
+.app-nav:hover { background: var(--app-fill); color: var(--app-text); }
+.app-nav[aria-current='page'] {
+    background: linear-gradient(180deg, var(--app-fill-strong), var(--app-fill));
+    box-shadow: 0 1px 0 var(--app-secondary-edge) inset;
+    border: 1px solid var(--app-line);
+    color: var(--app-text);
+    font-weight: 600;
+}
+.app-nav-tile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+/* --- glass card ------------------------------------------------------- */
+.app-card {
+    background: var(--app-card);
+    -webkit-backdrop-filter: blur(26px) saturate(170%);
+    backdrop-filter: blur(26px) saturate(170%);
+    border: 1px solid var(--app-card-border);
+    border-radius: 22px;
+    box-shadow: 0 1px 0 var(--app-edge-top) inset, 0 -1px 0 var(--app-edge-bottom) inset, var(--app-card-shadow);
+}
+.app-editor {
+    background: var(--app-editor);
+    -webkit-backdrop-filter: blur(26px);
+    backdrop-filter: blur(26px);
+    border-top: 1px solid var(--app-line);
+    border-bottom: 1px solid var(--app-line);
+}
+.app-divide > * + * { border-top: 1px solid var(--app-line); }
+.app-line { border-color: var(--app-line); }
+
+/* --- controls --------------------------------------------------------- */
+.app-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 36px;
+    padding: 0 16px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: transform 80ms ease, filter 120ms ease, opacity 120ms ease;
+    outline: none;
+}
+.app-btn:active:not(:disabled) { transform: translateY(1px); }
+.app-btn:disabled { opacity: 0.45; pointer-events: none; }
+.app-btn:focus-visible { box-shadow: 0 0 0 3px var(--app-accent-ring); }
+.app-btn-lg { height: 42px; padding: 0 18px; font-size: 14px; }
+.app-btn-sm { height: 30px; padding: 0 12px; font-size: 12px; }
+.app-btn-primary {
+    background: linear-gradient(180deg, var(--app-accent-2), var(--app-accent));
+    color: var(--app-accent-fg);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.45) inset, 0 -2px 0 rgba(0, 0, 0, 0.25) inset;
+}
+.app-btn-primary:hover:not(:disabled) { filter: brightness(1.06); }
+.app-btn-secondary {
+    background: var(--app-secondary);
+    border: 1px solid var(--app-secondary-border);
+    box-shadow: 0 1px 0 var(--app-secondary-edge) inset;
+    color: var(--app-text);
+}
+.app-btn-secondary:hover:not(:disabled) { filter: brightness(1.08); }
+.app-btn-ghost { color: var(--app-muted); }
+.app-btn-ghost:hover:not(:disabled) { background: var(--app-fill); color: var(--app-text); }
+.app-btn-icon { width: 30px; height: 30px; padding: 0; border-radius: 9px; }
+.app-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+
+.app-input {
+    height: 32px;
+    border-radius: 9px;
+    background: var(--app-input);
+    border: 1px solid var(--app-input-border);
+    color: var(--app-text);
+    font-size: 14px;
+    padding: 0 10px;
+    outline: none;
+    font-variant-numeric: tabular-nums;
+}
+.app-input:focus-visible {
+    border-color: color-mix(in oklch, var(--app-accent-2) 70%, transparent);
+    box-shadow: 0 0 0 3px var(--app-accent-ring);
+}
+.app-input:disabled { opacity: 0.6; }
+.app-select { appearance: none; padding-right: 28px; cursor: pointer; }
+
+/* Segmented control, for the two- and three-way settings. */
+.app-seg {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 9px;
+    background: var(--app-input);
+    border: 1px solid var(--app-input-border);
+    font-size: 13px;
+}
+.app-seg button {
+    padding: 5px 10px;
+    border-radius: 6px;
+    color: var(--app-muted);
+    font-weight: 500;
+}
+.app-seg button[aria-pressed='true'] {
+    background: var(--app-fill-strong);
+    color: var(--app-text);
+    box-shadow: 0 1px 0 var(--app-secondary-edge) inset;
+}
+
+.app-switch {
+    position: relative;
+    width: 40px;
+    height: 24px;
+    border-radius: 999px;
+    background: var(--app-fill-strong);
+    transition: background 150ms ease;
+    flex-shrink: 0;
+}
+.app-switch[aria-checked='true'] { background: linear-gradient(180deg, var(--app-accent-2), var(--app-accent)); }
+.app-switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    transition: transform 150ms ease;
+}
+.app-switch[aria-checked='true']::after { transform: translateX(16px); }
+
+/* --- timeline editor -------------------------------------------------- */
+.tl-track {
+    position: relative;
+    height: 44px;
+    border-radius: 12px;
+    background: var(--app-input);
+    border: 1px solid var(--app-line);
+}
+.tl-block {
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: grab;
+    touch-action: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.tl-block:active { cursor: grabbing; }
+.tl-block[data-kind='work'] {
+    background: linear-gradient(180deg, var(--app-work-2), var(--app-work));
+    color: #04291b;
+}
+.tl-block[data-kind='break'] {
+    background: repeating-linear-gradient(135deg, rgba(245, 181, 58, 0.55) 0 6px, rgba(245, 181, 58, 0.35) 6px 12px);
+    border: 1px solid rgba(245, 181, 58, 0.5);
+    color: var(--app-text);
+    box-shadow: none;
+}
+.tl-block[data-running='true'] { border-radius: 8px 3px 3px 8px; }
 .tl-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 12px;
     cursor: ew-resize;
     touch-action: none;
 }
-.tl-block {
-    cursor: grab;
-    touch-action: none;
+.tl-handle::after {
+    content: '';
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: 4px;
+    width: 3px;
+    border-radius: 2px;
+    background: rgba(0, 0, 0, 0.28);
 }
-.tl-block:active {
-    cursor: grabbing;
+.tl-handle-start { left: 0; }
+.tl-handle-end { right: 0; }
+.tl-now {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    border-radius: 2px;
+    background: var(--app-now);
 }
+.tl-now-label {
+    position: absolute;
+    bottom: -18px;
+    transform: translateX(-50%);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--app-now);
+}
+.app-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+}
+.app-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.app-dot-work { background: var(--app-work-2); }
+.app-dot-break { background: var(--app-break); }
+.app-row-hover:hover { background: var(--app-fill); }

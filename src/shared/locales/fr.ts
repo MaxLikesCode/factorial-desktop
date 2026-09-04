@@ -136,6 +136,7 @@ export const fr: Catalogue = {
   'timesheet.balance': 'Solde',
   'timesheet.noRecords': 'Aucun enregistrement',
   'timesheet.dayOff': 'Jour de repos',
+  'timesheet.now': 'maintenant',
   'timesheet.running': 'en cours',
   'timesheet.work': 'Travail',
   'timesheet.break': 'Pause',

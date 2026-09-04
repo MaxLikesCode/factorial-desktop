@@ -15,7 +15,6 @@ import {
   type TimesheetDay,
 } from '@shared/timesheet'
 import { useTranslate } from '@renderer/hooks/useTranslate'
-import { Button } from '@renderer/components/ui/button'
 import { describeActionError } from '@renderer/lib/errors'
 import { Timeline } from './Timeline'
 
@@ -89,17 +88,14 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
   }
 
   return (
-    <div className="flex flex-col gap-5 border-t bg-muted/20 px-5 py-5" data-slot="day-editor">
-      <Timeline blocks={blocks} now={now} onChange={change} disabled={saving} />
+    <div className="app-editor flex flex-col gap-[18px] px-5 py-5" data-slot="day-editor">
+      <Timeline blocks={blocks} now={now} onChange={change} disabled={saving} nowLabel={t('timesheet.now')} />
 
       <div className="flex flex-col gap-2">
         {blocks.map((block, index) => (
-          <div key={block.id ?? `new-${index}`} className="flex items-center gap-3 text-sm" data-slot="block-row">
-            <span
-              className={`w-20 shrink-0 rounded-md px-2 py-0.5 text-center text-xs font-medium ${
-                block.kind === 'work' ? 'bg-primary text-primary-foreground' : 'bg-primary/15 text-foreground'
-              }`}
-            >
+          <div key={block.id ?? `new-${index}`} className="flex items-center gap-3 rounded-[10px] px-2.5 py-2 text-sm" style={{ background: 'var(--app-fill)' }} data-slot="block-row">
+            <span className="app-chip w-[132px] shrink-0">
+              <span className={`app-dot ${block.kind === 'work' ? 'app-dot-work' : 'app-dot-break'}`} />
               {block.kind === 'work'
                 ? t('timesheet.work')
                 : breakOptions.length > 1
@@ -117,7 +113,7 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
                     ),
                   )
                 }}
-                className="h-7 rounded-md border bg-background px-1.5 text-xs"
+                className="app-input h-7 text-xs"
               >
                 {breakOptions.map((option) => (
                   <option key={option.id} value={option.id}>
@@ -134,47 +130,39 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
               placeholder={block.end === null ? t('timesheet.running') : undefined}
               onCommit={(v) => setTime(index, 'end', v)}
             />
-            <span className="w-16 text-right tabular-nums text-muted-foreground">
+            <span className="app-muted w-16 text-right text-[13px]" style={{ fontVariantNumeric: 'tabular-nums' }}>
               {formatHours((block.end ?? now ?? block.start) - block.start)}
             </span>
             <span className="flex-1" />
             {block.end !== null && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t('timesheet.remove')}
-                disabled={saving}
-                onClick={() => change(blocks.filter((_, i) => i !== index))}
-              >
+              <button type="button" className="app-btn app-btn-ghost app-btn-icon" aria-label={t('timesheet.remove')} disabled={saving} onClick={() => change(blocks.filter((_, i) => i !== index))}>
                 <Trash2Icon />
-              </Button>
+              </button>
             )}
           </div>
         ))}
-        {blocks.some((b) => b.end === null) && (
-          <div className="text-xs text-muted-foreground">{t('timesheet.runningHint')}</div>
-        )}
+        {blocks.some((b) => b.end === null) && <div className="app-faint text-xs">{t('timesheet.runningHint')}</div>}
       </div>
 
-      <div className="flex items-center gap-2">
-        <Button variant="secondary" size="sm" disabled={saving} onClick={() => add('work')}>
-          {t('timesheet.addWork')}
-        </Button>
-        <Button variant="secondary" size="sm" disabled={saving || breakOptions.length === 0} onClick={() => add('break')}>
-          {t('timesheet.addBreak')}
-        </Button>
+      <div className="flex items-center gap-2.5">
+        <button type="button" className="app-btn app-btn-secondary" disabled={saving} onClick={() => add('work')}>
+          + {t('timesheet.work')}
+        </button>
+        <button type="button" className="app-btn app-btn-secondary" disabled={saving || breakOptions.length === 0} onClick={() => add('break')}>
+          + {t('timesheet.break')}
+        </button>
         <span className="flex-1" />
-        <span className="text-sm tabular-nums text-muted-foreground" data-slot="sums">
-          {t('overview.worked')} <strong className="text-foreground">{formatHours(worked)}</strong>
+        <span className="app-muted text-[13px]" style={{ fontVariantNumeric: 'tabular-nums' }} data-slot="sums">
+          {t('overview.worked')} <strong className="font-semibold" style={{ color: 'var(--app-text)' }}>{formatHours(worked)}</strong>
           {day.expectedMinutes !== null && day.expectedMinutes > 0 ? ` / ${formatHours(day.expectedMinutes)}` : ''}
           {breaks > 0 ? ` · ${t('overview.breaks')} ${formatHours(breaks)}` : ''}
         </span>
-        <Button variant="ghost" size="sm" disabled={!dirty || saving} onClick={() => setBlocks(day.blocks)}>
+        <button type="button" className="app-btn app-btn-ghost" disabled={!dirty || saving} onClick={() => setBlocks(day.blocks)}>
           {t('timesheet.discard')}
-        </Button>
-        <Button size="sm" disabled={!dirty || saving} onClick={() => void save()}>
+        </button>
+        <button type="button" className="app-btn app-btn-primary" disabled={!dirty || saving} onClick={() => void save()}>
           {t('timesheet.save')}
-        </Button>
+        </button>
       </div>
     </div>
   )
@@ -202,7 +190,7 @@ function TimeField({
   useEffect(() => setText(shown), [shown])
   return (
     <label className="flex items-center gap-1.5">
-      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="app-faint text-xs">{label}</span>
       <input
         value={text}
         placeholder={placeholder}
@@ -213,7 +201,7 @@ function TimeField({
         onKeyDown={(event) => {
           if (event.key === 'Enter') onCommit(text)
         }}
-        className="h-7 w-16 rounded-md border bg-background px-2 text-center text-sm tabular-nums outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+        className="app-input w-16 text-center"
       />
     </label>
   )

@@ -1,10 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { ChevronDownIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { LANGUAGE_NAMES, LOCALES } from '@shared/i18n'
 import type { AppInfo, AppSettings } from '@shared/ipc-contract'
+import { useAttendance } from '@renderer/hooks/useAttendance'
 import { useSettings } from '@renderer/hooks/useSettings'
 import { useTranslate } from '@renderer/hooks/useTranslate'
-import { Button } from '@renderer/components/ui/button'
 
 /** The hour choices for the two long-shift settings; null is "off". */
 const HOUR_CHOICES: (number | null)[] = [null, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 24]
@@ -18,20 +19,21 @@ const HOUR_CHOICES: (number | null)[] = [null, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14,
 export function SettingsPage(): React.JSX.Element {
   const t = useTranslate()
   const settings = useSettings()
+  const snapshot = useAttendance()
   const [info, setInfo] = useState<AppInfo | null>(null)
 
   useEffect(() => {
     void window.factorial.getAppInfo().then(setInfo, () => {})
   }, [])
 
-  if (settings === null) return <div className="pt-6 text-sm text-muted-foreground">{t('widget.pleaseWait')}</div>
+  if (settings === null) return <div className="app-muted pt-7 text-sm">{t('widget.pleaseWait')}</div>
 
   function set(patch: Partial<AppSettings>): void {
     void window.factorial.setSettings(patch).catch(() => toast.error(t('error.settingsWrite')))
   }
 
   return (
-    <div className="flex max-w-2xl flex-col gap-8 pt-2">
+    <div className="flex max-w-2xl flex-col gap-6 pt-7">
       <Section title={t('settingsPage.general')}>
         <Row label={t('settings.startAtLogin')}>
           <Switch checked={settings.openAtLogin} onChange={(v) => set({ openAtLogin: v })} />
@@ -47,13 +49,13 @@ export function SettingsPage(): React.JSX.Element {
           />
         </Row>
         <Row label={t('settings.appearance')}>
-          <Select
+          <Segmented
             value={settings.theme}
             onChange={(v) => set({ theme: v as AppSettings['theme'] })}
             options={[
-              { value: 'system', label: t('settings.appearanceSystem') },
               { value: 'light', label: t('settings.appearanceLight') },
               { value: 'dark', label: t('settings.appearanceDark') },
+              { value: 'system', label: t('settings.appearanceSystem') },
             ]}
           />
         </Row>
@@ -64,18 +66,18 @@ export function SettingsPage(): React.JSX.Element {
           <Switch checked={settings.alwaysOnTop} onChange={(v) => set({ alwaysOnTop: v })} />
         </Row>
         <Row label={t('settings.expand')}>
-          <Select
+          <Segmented
             value={settings.expandDirection}
             onChange={(v) => set({ expandDirection: v as AppSettings['expandDirection'] })}
             options={[
-              { value: 'right', label: t('settings.expandRight') },
               { value: 'left', label: t('settings.expandLeft') },
+              { value: 'right', label: t('settings.expandRight') },
             ]}
           />
         </Row>
       </Section>
 
-      <Section title={t('settingsPage.clockIn')}>
+      <Section title={t('settingsPage.clockIn')} wide>
         <Row label={t('settingsPage.askLocation')} hint={t('settingsPage.askLocationHint')}>
           <Switch checked={settings.askLocationOnClockIn} onChange={(v) => set({ askLocationOnClockIn: v })} />
         </Row>
@@ -92,38 +94,40 @@ export function SettingsPage(): React.JSX.Element {
           <Switch checked={settings.autoInstallUpdates} onChange={(v) => set({ autoInstallUpdates: v })} />
         </Row>
         <Row label={info === null ? '' : t('about.version', { version: info.version })} hint={info === null ? undefined : `Electron ${info.electron} · Chromium ${info.chromium}`}>
-          <Button variant="outline" size="sm" onClick={() => void window.factorial.checkForUpdates().catch(() => {})}>
+          <button type="button" className="app-btn app-btn-secondary" onClick={() => void window.factorial.checkForUpdates().catch(() => {})}>
             {t('settings.checkForUpdates')}
-          </Button>
+          </button>
         </Row>
       </Section>
 
       <Section title={t('settingsPage.account')}>
-        <Row label={t('settingsPage.signedInAs')}>
-          <Button variant="outline" size="sm" onClick={() => void window.factorial.signOut().catch(() => {})}>
-            {t('tray.signOut')}
-          </Button>
+        <Row
+          label={snapshot.state.kind === 'unauthenticated' ? t('state.unauthenticated') : t('settingsPage.signedInAs')}
+        >
+          <button type="button" className="app-btn app-btn-secondary" onClick={() => void window.factorial.signOut().catch(() => {})}>
+            {snapshot.state.kind === 'unauthenticated' ? t('tray.signIn') : t('tray.signOut')}
+          </button>
         </Row>
       </Section>
     </div>
   )
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }): React.JSX.Element {
+function Section({ title, children, wide = false }: { title: string; children: ReactNode; wide?: boolean }): React.JSX.Element {
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="px-1 text-sm font-semibold text-muted-foreground">{title}</h2>
-      <div className="divide-y rounded-2xl border bg-card">{children}</div>
+    <section className="flex flex-col gap-2" data-wide={wide || undefined}>
+      <h2 className="app-eyebrow px-1">{title}</h2>
+      <div className="app-card app-divide overflow-hidden">{children}</div>
     </section>
   )
 }
 
-function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }): React.JSX.Element {
+function Row({ label, hint, children }: { label: string; hint?: string | undefined; children: ReactNode }): React.JSX.Element {
   return (
-    <label className="flex cursor-default items-center justify-between gap-6 px-5 py-3.5">
+    <label className="flex cursor-default items-center justify-between gap-6 px-[18px] py-3.5">
       <span className="flex min-w-0 flex-col gap-0.5">
         <span className="text-[15px] font-medium">{label}</span>
-        {hint !== undefined && <span className="text-sm text-muted-foreground">{hint}</span>}
+        {hint !== undefined && <span className="app-muted text-[13px]">{hint}</span>}
       </span>
       <span className="shrink-0">{children}</span>
     </label>
@@ -131,18 +135,26 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
 }
 
 function Switch({ checked, onChange }: { checked: boolean; onChange: (value: boolean) => void }): React.JSX.Element {
+  return <button type="button" role="switch" aria-checked={checked} className="app-switch" onClick={() => onChange(!checked)} />
+}
+
+function Segmented({
+  value,
+  options,
+  onChange,
+}: {
+  value: string
+  options: { value: string; label: string }[]
+  onChange: (value: string) => void
+}): React.JSX.Element {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={`relative h-6 w-10 rounded-full transition-colors ${checked ? 'bg-primary' : 'bg-muted-foreground/30'}`}
-    >
-      <span
-        className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-4.5' : 'translate-x-0.5'}`}
-      />
-    </button>
+    <span className="app-seg">
+      {options.map((option) => (
+        <button key={option.value} type="button" aria-pressed={option.value === value} onClick={() => onChange(option.value)}>
+          {option.label}
+        </button>
+      ))}
+    </span>
   )
 }
 
@@ -156,17 +168,16 @@ function Select({
   onChange: (value: string) => void
 }): React.JSX.Element {
   return (
-    <select
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      className="h-8 rounded-lg border bg-background px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-    >
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
+    <span className="relative inline-flex items-center">
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="app-input app-select text-[13px]">
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDownIcon className="app-faint pointer-events-none absolute right-2.5 size-3.5" />
+    </span>
   )
 }
 

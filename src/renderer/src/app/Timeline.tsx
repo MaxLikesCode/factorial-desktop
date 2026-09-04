@@ -7,6 +7,8 @@ interface Props {
   now: number | null
   onChange: (blocks: TimesheetBlock[]) => void
   disabled?: boolean
+  /** The label under the "now" line. */
+  nowLabel: string
 }
 
 const SNAP = 5
@@ -25,18 +27,18 @@ const MIN_LENGTH = 5
  * The running block (the one without an end) ends at "now": it has no right
  * handle and its body only moves its start.
  */
-export function Timeline({ blocks, now, onChange, disabled = false }: Props): React.JSX.Element {
+export function Timeline({ blocks, now, onChange, disabled = false, nowLabel }: Props): React.JSX.Element {
   const track = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<{ index: number; part: 'start' | 'end' | 'body'; grabOffset: number } | null>(null)
 
   const [lo, hi] = rangeOf(blocks, now)
   const span = hi - lo
+  const pct = (minute: number): string => `${((minute - lo) / span) * 100}%`
 
   function minuteAt(clientX: number): number {
     const box = track.current?.getBoundingClientRect()
     if (!box || box.width === 0) return lo
-    const ratio = (clientX - box.left) / box.width
-    const raw = lo + ratio * span
+    const raw = lo + ((clientX - box.left) / box.width) * span
     return Math.round(raw / SNAP) * SNAP
   }
 
@@ -89,72 +91,57 @@ export function Timeline({ blocks, now, onChange, disabled = false }: Props): Re
   const ticks = tickMinutes(lo, hi)
 
   return (
-    <div className="flex flex-col gap-1.5 select-none">
-      <div className="relative h-4 text-[11px] tabular-nums text-muted-foreground">
+    <div className="flex flex-col gap-1.5 pb-4 select-none">
+      <div className="app-faint relative h-4 text-[11px]" style={{ fontVariantNumeric: 'tabular-nums' }}>
         {ticks.map((minute) => (
-          <span
-            key={minute}
-            className="absolute -translate-x-1/2"
-            style={{ left: `${((minute - lo) / span) * 100}%` }}
-          >
+          <span key={minute} className="absolute -translate-x-1/2" style={{ left: pct(minute) }}>
             {formatMinuteOfDay(minute).replace(/^0/, '')}
           </span>
         ))}
       </div>
-      <div ref={track} className="relative h-10 rounded-lg bg-muted/60" data-slot="timeline">
+      <div ref={track} className="tl-track" data-slot="timeline">
         {ticks.map((minute) => (
-          <span
-            key={minute}
-            className="absolute top-0 bottom-0 w-px bg-border"
-            style={{ left: `${((minute - lo) / span) * 100}%` }}
-          />
+          <span key={minute} className="absolute inset-y-0 w-px" style={{ left: pct(minute), background: 'var(--app-line)' }} />
         ))}
-        {now !== null && now >= lo && now <= hi && (
-          <span
-            className="absolute top-0 bottom-0 w-0.5 bg-destructive"
-            style={{ left: `${((now - lo) / span) * 100}%` }}
-            data-slot="now"
-          />
-        )}
         {blocks.map((block, index) => {
           const end = block.end ?? now ?? block.start
-          const left = ((block.start - lo) / span) * 100
-          const width = Math.max(0, ((end - block.start) / span) * 100)
           const running = block.end === null
+          const length = end - block.start
           return (
             <div
               key={block.id ?? `new-${index}`}
-              className={`tl-block absolute top-1.5 bottom-1.5 rounded-md ${
-                block.kind === 'work' ? 'bg-primary' : 'bg-primary/35'
-              } ${running ? 'animate-pulse' : ''} ${disabled ? 'opacity-70' : ''}`}
-              style={{ left: `${left}%`, width: `${width}%` }}
-              title={`${formatMinuteOfDay(block.start)} – ${block.end === null ? '…' : formatMinuteOfDay(block.end)}`}
+              className="tl-block"
               data-slot="block"
               data-kind={block.kind}
+              data-running={running || undefined}
+              style={{ left: pct(block.start), width: `${Math.max(0, (length / span) * 100)}%`, opacity: disabled ? 0.7 : 1 }}
+              title={`${formatMinuteOfDay(block.start)} – ${block.end === null ? '…' : formatMinuteOfDay(block.end)}`}
               onPointerDown={(event) => begin(event, index, 'body')}
               onPointerMove={move}
               onPointerUp={finish}
               onPointerCancel={finish}
             >
-              <span
-                className="tl-handle absolute top-0 bottom-0 -left-1.5 w-3"
-                onPointerDown={(event) => begin(event, index, 'start')}
-                onPointerMove={move}
-                onPointerUp={finish}
-                onPointerCancel={finish}
-              />
+              <span className="tl-handle tl-handle-start" onPointerDown={(event) => begin(event, index, 'start')} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} />
+              {length >= 45 && (
+                <span className="pointer-events-none px-3 truncate">
+                  {block.kind === 'break' && block.breakName && length >= 120 ? `${block.breakName} · ` : ''}
+                  {formatMinuteOfDay(length).replace(/^0/, '')}
+                </span>
+              )}
               {!running && (
-                <span
-                  className="tl-handle absolute top-0 -right-1.5 bottom-0 w-3"
-                  onPointerDown={(event) => begin(event, index, 'end')}
-                  onPointerMove={move}
-                  onPointerUp={finish}
-                  onPointerCancel={finish}
-                />
+                <span className="tl-handle tl-handle-end" onPointerDown={(event) => begin(event, index, 'end')} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} />
               )}
             </div>
           )
         })}
+        {now !== null && now >= lo && now <= hi && (
+          <>
+            <span className="tl-now" style={{ left: pct(now) }} data-slot="now" />
+            <span className="tl-now-label" style={{ left: pct(now) }}>
+              {nowLabel}
+            </span>
+          </>
+        )}
       </div>
     </div>
   )

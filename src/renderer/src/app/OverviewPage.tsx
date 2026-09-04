@@ -1,13 +1,11 @@
 import { useState } from 'react'
-import { LogOutIcon, PauseIcon, PlayIcon, SquareIcon } from 'lucide-react'
+import { LogInIcon, PauseIcon, PlayIcon, SquareIcon } from 'lucide-react'
 import { formatDuration, formatHoursMinutes } from '@shared/time'
-import { breakMinutes, buildDayBar } from '@shared/day-timeline'
+import { breakMinutes, type DaySegment } from '@shared/day-timeline'
 import { useAttendance, useTicker } from '@renderer/hooks/useAttendance'
 import { useSettings } from '@renderer/hooks/useSettings'
 import { useTranslate } from '@renderer/hooks/useTranslate'
-import { Button } from '@renderer/components/ui/button'
 import { BreakMenu } from '@renderer/components/BreakMenu'
-import { ProgressBar } from '@renderer/components/ProgressBar'
 import { LOCATIONS } from '@renderer/components/LocationSelect'
 import { describeActionError } from '@renderer/lib/errors'
 import { clockInFromButton } from '@renderer/lib/clock-in'
@@ -28,19 +26,17 @@ export function OverviewPage({ onEditToday }: { onEditToday: () => void }): Reac
   const [busy, setBusy] = useState(false)
 
   const runningMs = running ? Math.max(0, now - state.since.getTime()) : 0
-  const runningMinutes = state.kind === 'in' ? runningMs / 60_000 : 0
-  const worked = snapshot.todayMinutes + runningMinutes
-  const breaks = breakMinutes(snapshot.daySegments) + (state.kind === 'break' ? runningMs / 60_000 : 0)
+  const runningMinutes = runningMs / 60_000
+  const worked = snapshot.todayMinutes + (state.kind === 'in' ? runningMinutes : 0)
+  const breaks = breakMinutes(snapshot.daySegments) + (state.kind === 'break' ? runningMinutes : 0)
   const target = snapshot.expectedMinutes
   const remaining = target === null ? null : Math.max(0, target - worked)
+
   // The running record is not in `daySegments` (it has no length yet); the
-  // renderer is the one that knows the current second, so it adds it here —
-  // the same thing the widget does.
-  const live = runningSegment(state.kind, runningMs)
-  const parts =
-    state.kind === 'unknown' || state.kind === 'unauthenticated'
-      ? []
-      : buildDayBar(live === null ? snapshot.daySegments : [...snapshot.daySegments, live], target)
+  // renderer knows the current second, so it adds it — as the widget does.
+  const live: DaySegment | null =
+    state.kind === 'in' ? { kind: 'work', minutes: runningMinutes } : state.kind === 'break' ? { kind: 'break', minutes: runningMinutes } : null
+  const segments = live === null ? snapshot.daySegments : [...snapshot.daySegments, live]
 
   async function run(action: () => Promise<unknown>): Promise<void> {
     setBusy(true)
@@ -56,24 +52,28 @@ export function OverviewPage({ onEditToday }: { onEditToday: () => void }): Reac
   const location = LOCATIONS.find(
     (l) => l.value === ((state.kind === 'in' || state.kind === 'break' ? state.locationType : null) ?? settings?.lastLocationType),
   )
+  const tone = state.kind === 'in' ? 'var(--app-work-2)' : state.kind === 'break' ? 'var(--app-break)' : 'var(--app-faint)'
 
   return (
-    <div className="flex max-w-3xl flex-col gap-8 pt-2">
-      <section className="grid grid-cols-4 gap-px overflow-hidden rounded-2xl border bg-border">
-        <Stat label={t('overview.worked')} value={formatHoursMinutes(worked)} />
-        <Stat label={t('overview.target')} value={target === null ? '–' : formatHoursMinutes(target)} />
-        <Stat label={t('overview.remaining')} value={remaining === null ? '–' : formatHoursMinutes(remaining)} />
-        <Stat label={t('overview.breaks')} value={formatHoursMinutes(breaks)} />
+    <div className="flex max-w-3xl flex-col gap-6 pt-7">
+      <section className="app-card grid grid-cols-4 overflow-hidden">
+        <Stat label={t('overview.worked')} value={formatHours(worked)} first />
+        <Stat label={t('overview.target')} value={target === null ? '–' : formatHours(target)} />
+        <Stat label={t('overview.remaining')} value={remaining === null ? '–' : formatHours(remaining)} />
+        <Stat label={t('overview.breaks')} value={formatHours(breaks)} />
       </section>
 
-      <section className="flex flex-col gap-5 rounded-2xl border bg-card p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex flex-col gap-1">
-            <div className="text-sm font-medium text-muted-foreground">{t(`state.${state.kind}`)}</div>
-            <div className="text-5xl font-semibold tabular-nums tracking-tight">
+      <section className="app-card flex flex-col gap-5 px-[30px] pt-7 pb-6">
+        <div className="flex items-start justify-between gap-6">
+          <div className="flex flex-col gap-1.5">
+            <div className="app-muted flex items-center gap-2 text-sm font-medium">
+              <span className="size-2 rounded-full" style={{ background: tone, boxShadow: running ? `0 0 0 4px color-mix(in oklch, ${tone} 22%, transparent)` : undefined }} />
+              <span>{t(`state.${state.kind}`)}</span>
+            </div>
+            <div className="app-num text-[64px] leading-none font-semibold" style={{ letterSpacing: '-0.03em' }}>
               {running ? formatDuration(runningMs) : formatHoursMinutes(worked)}
             </div>
-            <div className="text-sm text-muted-foreground">
+            <div className="app-muted text-sm">
               {running
                 ? t('overview.since', { time: state.since.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) })
                 : t('overview.today')}
@@ -102,29 +102,67 @@ export function OverviewPage({ onEditToday }: { onEditToday: () => void }): Reac
             onSignIn={() => run(() => window.factorial.signOut())}
           />
         </div>
-        <ProgressBar parts={parts} tone={state.kind === 'in' ? 'active' : state.kind === 'break' ? 'paused' : 'idle'} className="h-2" />
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>{snapshot.stale ? t('overview.stale') : ''}</span>
-          <Button variant="ghost" size="sm" onClick={onEditToday}>
-            {t('overview.editToday')}
-          </Button>
+
+        <DayBar segments={segments} target={target} />
+
+        <div className="flex items-center justify-between text-[13px]">
+          <div className="app-muted flex gap-4">
+            <span className="app-chip font-medium"><span className="app-dot app-dot-work" />{t('timesheet.work')} {formatHours(worked)}</span>
+            <span className="app-chip font-medium"><span className="app-dot app-dot-break" />{t('timesheet.break')} {formatHours(breaks)}</span>
+            {snapshot.stale && <span>{t('overview.stale')}</span>}
+          </div>
+          <button type="button" className="app-btn app-btn-ghost app-btn-sm" onClick={onEditToday}>
+            {t('overview.editToday')} →
+          </button>
         </div>
       </section>
     </div>
   )
 }
 
-function runningSegment(kind: string, ms: number): { kind: 'work' | 'break'; minutes: number } | null {
-  if (kind === 'in') return { kind: 'work', minutes: ms / 60_000 }
-  if (kind === 'break') return { kind: 'break', minutes: ms / 60_000 }
-  return null
+function formatHours(minutes: number): string {
+  const total = Math.max(0, Math.round(minutes))
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')} h`
 }
 
-function Stat({ label, value }: { label: string; value: string }): React.JSX.Element {
+function Stat({ label, value, first = false }: { label: string; value: string; first?: boolean }): React.JSX.Element {
   return (
-    <div className="flex flex-col gap-1 bg-card px-5 py-4">
-      <div className="text-2xl font-semibold tabular-nums tracking-tight">{value}</div>
-      <div className="text-sm text-muted-foreground">{label}</div>
+    <div className="flex flex-col gap-1.5 px-[26px] py-[22px]" style={first ? undefined : { borderLeft: '1px solid var(--app-line)' }}>
+      <div className="app-num text-[26px] font-semibold">{value}</div>
+      <div className="app-muted text-sm">{label}</div>
+    </div>
+  )
+}
+
+/** Today as a strip against its target; the bar is the target's length. */
+function DayBar({ segments, target }: { segments: DaySegment[]; target: number | null }): React.JSX.Element {
+  const label = useTranslate()('overview.target')
+  const total = Math.max(target ?? 0, segments.reduce((s, x) => s + x.minutes, 0))
+  let offset = 0
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="relative h-2.5 overflow-hidden rounded-full" style={{ background: 'var(--app-fill-strong)' }}>
+        {total > 0 &&
+          segments.map((segment, index) => {
+            const left = (offset / total) * 100
+            offset += segment.minutes
+            return (
+              <span
+                key={index}
+                className="absolute inset-y-0"
+                style={{
+                  left: `${left}%`,
+                  width: `${(segment.minutes / total) * 100}%`,
+                  background: segment.kind === 'work' ? 'var(--app-work-2)' : 'var(--app-break)',
+                }}
+              />
+            )
+          })}
+      </div>
+      <div className="app-faint flex justify-between text-xs" style={{ fontVariantNumeric: 'tabular-nums' }}>
+        <span />
+        <span>{target === null ? '' : `${label} ${formatHours(target)}`}</span>
+      </div>
     </div>
   )
 }
@@ -151,30 +189,35 @@ function Actions({
   const t = useTranslate()
   if (state === 'unauthenticated') {
     return (
-      <Button size="lg" disabled={busy} onClick={onSignIn}>
-        <LogOutIcon /> {t('tray.signIn')}
-      </Button>
+      <button type="button" className="app-btn app-btn-primary app-btn-lg" disabled={busy} onClick={onSignIn}>
+        <LogInIcon /> {t('tray.signIn')}
+      </button>
     )
   }
   if (state === 'out' || state === 'unknown') {
     return (
-      <Button size="lg" disabled={busy} onClick={(event) => onClockIn(event.currentTarget.getBoundingClientRect())}>
+      <button
+        type="button"
+        className="app-btn app-btn-primary app-btn-lg"
+        disabled={busy}
+        onClick={(event) => onClockIn(event.currentTarget.getBoundingClientRect())}
+      >
         <PlayIcon /> {t('tray.clockIn')}
-      </Button>
+      </button>
     )
   }
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2.5 pt-1">
       {state === 'in' ? (
-        <BreakMenu options={breakOptions} disabled={busy} onSelect={onStartBreak} />
+        <BreakMenu options={breakOptions} disabled={busy} onSelect={onStartBreak} className="app-btn app-btn-secondary app-btn-lg" />
       ) : (
-        <Button size="lg" disabled={busy} onClick={onEndBreak}>
+        <button type="button" className="app-btn app-btn-secondary app-btn-lg" disabled={busy} onClick={onEndBreak}>
           <PauseIcon /> {t('tray.resume')}
-        </Button>
+        </button>
       )}
-      <Button size="lg" variant="outline" disabled={busy} onClick={onClockOut}>
+      <button type="button" className="app-btn app-btn-primary app-btn-lg" disabled={busy} onClick={onClockOut}>
         <SquareIcon /> {t('tray.clockOut')}
-      </Button>
+      </button>
     </div>
   )
 }

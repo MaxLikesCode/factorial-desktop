@@ -1,19 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react'
 import { toLocalDate } from '@shared/time'
-import {
-  MINUTES_PER_DAY,
-  formatHours,
-  minuteOfDay,
-  workedMinutes,
-  type TimesheetDay,
-  type TimesheetMonth,
-} from '@shared/timesheet'
+import { MINUTES_PER_DAY, formatHours, minuteOfDay, workedMinutes, type TimesheetDay, type TimesheetMonth } from '@shared/timesheet'
 import { useAttendance, useTicker } from '@renderer/hooks/useAttendance'
 import { useSettings } from '@renderer/hooks/useSettings'
 import { useTranslate } from '@renderer/hooks/useTranslate'
 import { resolveLocale } from '@shared/i18n'
-import { Button } from '@renderer/components/ui/button'
 import { describeActionError } from '@renderer/lib/errors'
 import { DayEditor } from './DayEditor'
 
@@ -24,8 +17,10 @@ import { DayEditor } from './DayEditor'
  * The month is read once per navigation and replaced day by day as saves
  * come back — the save resolves with the day as Factorial now holds it, so
  * what the row shows after a save is what the server has, not what was sent.
+ * The month stepper lives in the window's title strip (`headerSlot`), so the
+ * strip is the same height on every page.
  */
-export function TimesheetPage(): React.JSX.Element {
+export function TimesheetPage({ headerSlot }: { headerSlot: HTMLElement | null }): React.JSX.Element {
   const t = useTranslate()
   const settings = useSettings()
   const snapshot = useAttendance()
@@ -54,7 +49,7 @@ export function TimesheetPage(): React.JSX.Element {
       setMonth(null)
       setError(t('timesheet.loadFailed', { reason: describeActionError(t, e) }))
     }
-  }, [cursor, t])
+  }, [cursor, t, today])
 
   useEffect(() => {
     void load()
@@ -83,20 +78,22 @@ export function TimesheetPage(): React.JSX.Element {
   const targetTotal = pastOrToday.reduce((sum, d) => sum + (d.expectedMinutes ?? 0), 0)
   const balance = workedTotal - targetTotal
 
-  return (
-    <div className="flex max-w-3xl flex-col gap-6 pt-2">
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon-sm" aria-label={t('timesheet.previousMonth')} onClick={() => step(-1)}>
+  const header = (
+    <div className="flex w-full items-center justify-between">
+      <div className="flex items-center gap-1.5">
+        <button type="button" className="app-btn app-btn-ghost app-btn-icon no-drag" aria-label={t('timesheet.previousMonth')} onClick={() => step(-1)}>
           <ChevronLeftIcon />
-        </Button>
-        <h2 className="min-w-44 text-center text-lg font-semibold capitalize">{title}</h2>
-        <Button variant="ghost" size="icon-sm" aria-label={t('timesheet.nextMonth')} onClick={() => step(1)}>
+        </button>
+        <span className="min-w-[150px] text-center text-[15px] font-semibold capitalize" style={{ color: 'var(--app-text)' }}>
+          {title}
+        </span>
+        <button type="button" className="app-btn app-btn-ghost app-btn-icon no-drag" aria-label={t('timesheet.nextMonth')} onClick={() => step(1)}>
           <ChevronRightIcon />
-        </Button>
+        </button>
         {!isCurrentMonth(cursor) && (
-          <Button
-            variant="ghost"
-            size="sm"
+          <button
+            type="button"
+            className="app-btn app-btn-ghost app-btn-sm no-drag"
             onClick={() => {
               const d = new Date()
               setOpen(null)
@@ -104,19 +101,44 @@ export function TimesheetPage(): React.JSX.Element {
             }}
           >
             {t('timesheet.thisMonth')}
-          </Button>
+          </button>
         )}
       </div>
+    </div>
+  )
 
-      <section className="grid grid-cols-3 gap-px overflow-hidden rounded-2xl border bg-border">
-        <Stat label={t('overview.worked')} value={formatHours(workedTotal)} />
+  return (
+    <div className="flex max-w-3xl flex-col gap-6 pt-7">
+      {headerSlot !== null && createPortal(header, headerSlot)}
+
+      <section className="app-card grid grid-cols-3 overflow-hidden">
+        <Stat label={t('overview.worked')} value={formatHours(workedTotal)} first />
         <Stat label={t('overview.target')} value={formatHours(targetTotal)} />
-        <Stat label={t('timesheet.balance')} value={`${balance < 0 ? '−' : '+'}${formatHours(Math.abs(balance))}`} tone={balance < 0 ? 'neg' : 'pos'} />
+        <Stat
+          label={t('timesheet.balance')}
+          value={`${balance < 0 ? '−' : '+'}${formatHours(Math.abs(balance))}`}
+          color={balance < 0 ? 'var(--app-neg)' : 'var(--app-work-2)'}
+        />
       </section>
 
-      {error !== null && <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">{error}</div>}
+      {error !== null && (
+        <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'color-mix(in oklch, var(--app-neg) 12%, transparent)', border: '1px solid color-mix(in oklch, var(--app-neg) 40%, transparent)' }}>
+          {error}
+        </div>
+      )}
 
-      <section className="divide-y overflow-hidden rounded-2xl border bg-card">
+      <section className="app-card app-divide flex flex-col overflow-hidden">
+        <div className="app-faint flex items-center gap-4 px-5 py-2.5 text-[11px]" style={{ fontVariantNumeric: 'tabular-nums' }}>
+          <span className="w-14 shrink-0" />
+          <div className="flex flex-1 justify-between">
+            {[6, 8, 10, 12, 14, 16, 18, 20].map((h) => (
+              <span key={h}>{h}</span>
+            ))}
+          </div>
+          <span className="w-[120px] shrink-0 text-right">{t('overview.worked')} / {t('overview.target')}</span>
+          <span className="w-14 shrink-0 text-right">{t('timesheet.balance')}</span>
+        </div>
+
         {days.map((day) => {
           const isToday = day.date === today
           const future = day.date > today
@@ -132,31 +154,29 @@ export function TimesheetPage(): React.JSX.Element {
                 type="button"
                 disabled={future}
                 onClick={() => setOpen(opened ? null : day.date)}
-                className={`flex w-full items-center gap-4 px-5 py-3 text-left transition-colors hover:bg-muted/40 disabled:opacity-40 disabled:hover:bg-transparent ${
-                  opened ? 'bg-muted/40' : ''
-                }`}
+                className="app-row-hover flex w-full items-center gap-4 px-5 py-3 text-left transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+                style={opened ? { background: 'var(--app-fill)' } : undefined}
               >
-                <span className="flex w-14 shrink-0 flex-col leading-tight">
-                  <span className="text-xs uppercase text-muted-foreground">
+                <span className="flex w-14 shrink-0 flex-col leading-[1.1]">
+                  <span className="text-[11px] uppercase" style={{ letterSpacing: '0.06em', color: isToday ? 'var(--app-accent-2)' : 'var(--app-faint)' }}>
                     {date.toLocaleDateString(locale, { weekday: 'short' })}
                   </span>
-                  <span className={`text-lg font-semibold tabular-nums ${isToday ? 'text-primary' : ''}`}>{date.getDate()}</span>
+                  <span className="app-num text-lg font-semibold">{date.getDate()}</span>
                 </span>
                 <MiniStrip day={day} now={now} />
-                <span className="w-32 shrink-0 text-right text-sm tabular-nums">
+                <span className="w-[120px] shrink-0 text-right text-sm" style={{ fontVariantNumeric: 'tabular-nums' }}>
                   {day.blocks.length === 0 ? (
-                    <span className="text-muted-foreground">{target === 0 || target === null ? t('timesheet.dayOff') : t('timesheet.noRecords')}</span>
+                    <span className="app-faint">{target === 0 || target === null ? t('timesheet.dayOff') : t('timesheet.noRecords')}</span>
                   ) : (
                     <>
-                      <span className="font-medium">{formatHours(worked)}</span>
-                      {target !== null && target > 0 && <span className="text-muted-foreground"> / {formatHours(target)}</span>}
+                      <span className="font-semibold">{formatHours(worked).replace(' h', '')}</span>
+                      {target !== null && target > 0 && <span className="app-faint"> / {formatHours(target).replace(' h', '')}</span>}
                     </>
                   )}
                 </span>
                 <span
-                  className={`w-16 shrink-0 text-right text-xs tabular-nums ${
-                    delta === null ? 'text-transparent' : delta < 0 ? 'text-destructive' : 'text-muted-foreground'
-                  }`}
+                  className="w-14 shrink-0 text-right text-[13px]"
+                  style={{ fontVariantNumeric: 'tabular-nums', color: delta === null ? 'transparent' : delta < 0 ? 'var(--app-neg)' : 'var(--app-work-2)' }}
                 >
                   {delta === null ? '' : `${delta < 0 ? '−' : '+'}${formatHours(Math.abs(delta)).replace(' h', '')}`}
                 </span>
@@ -186,11 +206,11 @@ function isCurrentMonth(cursor: { year: number; month: number }): boolean {
   return cursor.year === d.getFullYear() && cursor.month === d.getMonth() + 1
 }
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: 'pos' | 'neg' }): React.JSX.Element {
+function Stat({ label, value, color, first = false }: { label: string; value: string; color?: string; first?: boolean }): React.JSX.Element {
   return (
-    <div className="flex flex-col gap-1 bg-card px-5 py-4">
-      <div className={`text-2xl font-semibold tabular-nums tracking-tight ${tone === 'neg' ? 'text-destructive' : ''}`}>{value}</div>
-      <div className="text-sm text-muted-foreground">{label}</div>
+    <div className="flex flex-col gap-1.5 px-[26px] py-[22px]" style={first ? undefined : { borderLeft: '1px solid var(--app-line)' }}>
+      <div className="app-num text-[26px] font-semibold" style={color ? { color } : undefined}>{value}</div>
+      <div className="app-muted text-sm">{label}</div>
     </div>
   )
 }
@@ -201,16 +221,19 @@ function MiniStrip({ day, now }: { day: TimesheetDay; now: number | null }): Rea
   const hi = Math.max(20 * 60, ...day.blocks.map((b) => b.end ?? now ?? 0))
   const span = Math.min(MINUTES_PER_DAY, hi) - lo
   return (
-    <span className="relative h-2.5 flex-1 overflow-hidden rounded-full bg-muted/60">
+    <span className="relative h-3 flex-1 overflow-hidden rounded-full" style={{ background: 'var(--app-fill)' }}>
       {day.blocks.map((block, index) => {
         const end = block.end ?? now ?? block.start
+        const running = block.end === null
         return (
           <span
             key={block.id ?? `new-${index}`}
-            className={`absolute top-0 bottom-0 rounded-full ${block.kind === 'work' ? 'bg-primary' : 'bg-primary/35'}`}
+            className="absolute inset-y-0 rounded-full"
             style={{
               left: `${Math.max(0, ((block.start - lo) / span) * 100)}%`,
               width: `${Math.max(0, ((end - block.start) / span) * 100)}%`,
+              background: block.kind === 'work' ? 'var(--app-work-2)' : 'var(--app-break)',
+              boxShadow: running ? '0 0 0 3px color-mix(in oklch, var(--app-work-2) 25%, transparent)' : undefined,
             }}
           />
         )
