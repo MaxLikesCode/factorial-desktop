@@ -42,6 +42,8 @@
     --app-break: #f5b53a;
     --app-neg: #d93a3e;
     --app-now: #e5484d;
+    --app-pending: #6d5ce7;
+    --app-pending-soft: rgba(109, 92, 231, 0.14);
     --app-secondary: linear-gradient(180deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.08));
     --app-secondary-border: rgba(0, 0, 0, 0.1);
     --app-secondary-edge: rgba(255, 255, 255, 0.8);
@@ -75,6 +77,8 @@
         --app-work-2: #3fe0a6;
         --app-break: #f5b53a;
         --app-neg: #ff8a8a;
+        --app-pending: #a99cff;
+        --app-pending-soft: rgba(169, 156, 255, 0.18);
         --app-now: #ff5d5d;
         --app-secondary: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06));
         --app-secondary-border: rgba(255, 255, 255, 0.18);
@@ -328,6 +332,49 @@ img {
     box-shadow: none;
 }
 .tl-block[data-running='true'] { border-radius: 8px 3px 3px 8px; }
+/* A requested change: drawn where it would be, in nobody's colour, and not
+   draggable — it is a proposal, and the strip only ever edits the record. */
+.tl-ghost {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    border-radius: 9px;
+    border: 2px dashed var(--app-pending);
+    background: var(--app-pending-soft);
+    color: var(--app-pending);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+    z-index: 2;
+}
+.tl-ghost[data-ghost='delete'] {
+    background: repeating-linear-gradient(135deg, var(--app-pending-soft) 0 5px, transparent 5px 10px);
+    text-decoration: line-through;
+}
+.app-pending-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--app-pending);
+    background: var(--app-pending-soft);
+    white-space: nowrap;
+}
+.app-pending-badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--app-pending);
+}
 .tl-handle {
     position: absolute;
     top: 0;
@@ -375,6 +422,7 @@ img {
 .app-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
 .app-dot-work { background: var(--app-work-2); }
 .app-dot-break { background: var(--app-break); }
+.app-dot-pending { background: var(--app-pending); }
 .app-row-hover:hover { background: var(--app-fill); }
 
 /* --- dropdown list (Dropdown.tsx) ------------------------------------- */

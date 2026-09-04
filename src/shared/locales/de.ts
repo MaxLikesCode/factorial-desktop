@@ -157,10 +157,28 @@ export const de: Catalogue = {
   'timesheet.addWork': 'Arbeit hinzufügen',
   'timesheet.addBreak': 'Pause hinzufügen',
   'timesheet.remove': 'Entfernen',
-  'timesheet.save': 'Speichern',
+  'timesheet.save': 'Änderungen beantragen',
   'timesheet.discard': 'Verwerfen',
-  'timesheet.saved': 'Gespeichert',
-  'timesheet.saveFailed': 'Speichern fehlgeschlagen: {reason}',
+  'timesheet.saved': 'Änderungen beantragt',
+  'timesheet.saveFailed': 'Beantragen fehlgeschlagen: {reason}',
+
+  'timesheet.noChanges': 'Keine Änderungen zu beantragen',
+
+  'timesheet.pendingHint': 'Änderungen müssen genehmigt werden. Bis dahin bleibt der Tag unverändert.',
+
+  'timesheet.pendingCount': '{count} beantragt',
+
+  'timesheet.pendingTitle': 'Beantragte Änderungen',
+
+  'timesheet.pendingNew': 'Neu',
+
+  'timesheet.pendingDelete': 'Löschen',
+
+  'timesheet.withdraw': 'Zurückziehen',
+
+  'timesheet.withdrawn': 'Antrag zurückgezogen',
+
+  'timesheet.withdrawFailed': 'Zurückziehen fehlgeschlagen: {reason}',
   'timesheet.loadFailed': 'Der Monat konnte nicht geladen werden: {reason}',
   'timesheet.unsaved': 'Ungespeicherte Änderungen',
   'timesheet.runningHint': 'Der laufende Eintrag endet mit dem Ausstempeln.',

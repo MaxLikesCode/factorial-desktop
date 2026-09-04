@@ -238,10 +238,28 @@ export const en = {
   'timesheet.addWork': 'Add work',
   'timesheet.addBreak': 'Add break',
   'timesheet.remove': 'Remove',
-  'timesheet.save': 'Save',
+  'timesheet.save': 'Request changes',
   'timesheet.discard': 'Discard',
-  'timesheet.saved': 'Saved',
-  'timesheet.saveFailed': 'Saving failed: {reason}',
+  'timesheet.saved': 'Changes requested',
+  'timesheet.saveFailed': 'Requesting the change failed: {reason}',
+
+  'timesheet.noChanges': 'Nothing to request',
+
+  'timesheet.pendingHint': 'Changes have to be approved. Until then the day stays as it is.',
+
+  'timesheet.pendingCount': '{count} requested',
+
+  'timesheet.pendingTitle': 'Requested changes',
+
+  'timesheet.pendingNew': 'New',
+
+  'timesheet.pendingDelete': 'Delete',
+
+  'timesheet.withdraw': 'Withdraw',
+
+  'timesheet.withdrawn': 'Request withdrawn',
+
+  'timesheet.withdrawFailed': 'Withdrawing failed: {reason}',
   'timesheet.loadFailed': 'The month could not be loaded: {reason}',
   'timesheet.unsaved': 'Unsaved changes',
   'timesheet.runningHint': 'The running record ends when you clock out.',

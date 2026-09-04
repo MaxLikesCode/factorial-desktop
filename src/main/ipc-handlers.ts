@@ -94,7 +94,7 @@ export interface IpcHandlerDeps {
   /** Clears the session cookie and offers a new sign-in. Owned by `index.ts`. */
   onSignOut: () => Promise<void>
   /** Recorded time, by month and by day. Owned by `timesheet.ts`. */
-  timesheet: Pick<Timesheet, 'getMonth' | 'saveDay'>
+  timesheet: Pick<Timesheet, 'getMonth' | 'saveDay' | 'withdraw'>
   /** Opens the app window at a section. Owned by `main-window.ts`. */
   openMainWindow: (page: MainWindowPage | null) => void
   getAppInfo: () => AppInfo
@@ -354,6 +354,13 @@ export function createIpcHandlers({
       return timesheet.getMonth(year, month)
     },
     [IPC.saveTimesheetDay]: async (payload) => timesheet.saveDay(asDayEdit(payload)),
+    [IPC.withdrawTimesheetRequest]: async (payload) => {
+      const raw = asRecord(payload, IPC.withdrawTimesheetRequest)
+      if (typeof raw.requestId !== 'string' || raw.requestId === '' || typeof raw.date !== 'string' || parseIsoDate(raw.date) === null) {
+        throw new Error(`${IPC.withdrawTimesheetRequest}: expected a request id and a date`)
+      }
+      return timesheet.withdraw(raw.requestId, raw.date)
+    },
     [IPC.openMainWindow]: async (payload) => {
       openMainWindow(isMainWindowPage(payload) ? payload : null)
     },

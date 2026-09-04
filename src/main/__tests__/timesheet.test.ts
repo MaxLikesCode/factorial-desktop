@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { ShiftRecord } from '../factorial/types'
-import { blockFromRecord, createTimesheet, daysFromRecords, type TimesheetOperations } from '../timesheet'
+import type { EditRequestRecord, ShiftRecord } from '../factorial/types'
+import { blockFromRecord, createTimesheet, daysFromRecords, pendingFromRecord, type TimesheetOperations } from '../timesheet'
 
 function record(over: Partial<ShiftRecord>): ShiftRecord {
   return {
@@ -53,45 +53,90 @@ describe('daysFromRecords', () => {
       [record({ id: '2', clockIn: '2000-01-01T13:00:00+02:00', clockOut: '2000-01-01T17:00:00+02:00' }), record({ id: '1' })],
       new Map([['2026-09-04', 480]]),
     )
-    expect(days[0]).toEqual({ date: '2026-09-03', blocks: [], expectedMinutes: null })
+    expect(days[0]).toEqual({ date: '2026-09-03', blocks: [], expectedMinutes: null, requests: [] })
     expect(days[1]?.expectedMinutes).toBe(480)
     expect(days[1]?.blocks.map((b) => b.id)).toEqual(['1', '2'])
   })
 })
 
+function editRequest(over: Partial<EditRequestRecord>): EditRequestRecord {
+  return {
+    id: '9',
+    approved: null,
+    requestType: 'update_shift',
+    date: '2026-09-04',
+    shiftId: '1',
+    clockIn: '13:12',
+    clockOut: '18:08',
+    workable: null,
+    breakConfigurationId: null,
+    ...over,
+  }
+}
+
+describe('pendingFromRecord', () => {
+  it('drops answered requests — approved ones are in the blocks, rejected ones are history', () => {
+    expect(pendingFromRecord(editRequest({ approved: true }))).toBeNull()
+    expect(pendingFromRecord(editRequest({ approved: false }))).toBeNull()
+    expect(pendingFromRecord(editRequest({}))).toMatchObject({ id: '9', start: 792, end: 1088 })
+  })
+
+  it('keeps a delete request that carries no times', () => {
+    expect(pendingFromRecord(editRequest({ requestType: 'delete_shift', clockIn: null, clockOut: null }))).toMatchObject({
+      requestType: 'delete_shift',
+      start: null,
+      end: null,
+    })
+  })
+})
+
 describe('createTimesheet.saveDay', () => {
-  function fakeOps(records: ShiftRecord[]): TimesheetOperations & { calls: string[] } {
+  function fakeOps(records: ShiftRecord[], requests: EditRequestRecord[] = []): TimesheetOperations & { calls: string[] } {
     const calls: string[] = []
     return {
       calls,
       fetchShifts: vi.fn(async () => records),
       fetchExpectedMinutesByDay: vi.fn(async () => new Map()),
-      createShift: vi.fn(async (input) => {
-        calls.push(`create ${input.workable ? 'work' : 'break'} ${input.clockIn.getHours()}:${input.clockIn.getMinutes()}-${input.clockOut.getHours()}:${input.clockOut.getMinutes()}`)
+      fetchEditRequests: vi.fn(async () => requests),
+      withdrawTimesheetEdit: vi.fn(async (input) => {
+        calls.push(`withdraw ${input.id}`)
       }),
-      updateShift: vi.fn(async (input) => {
-        calls.push(`update ${input.id} ${input.clockIn.getHours()}:${input.clockIn.getMinutes()}-${input.clockOut.getHours()}:${input.clockOut.getMinutes()}`)
-      }),
-      deleteShift: vi.fn(async (input) => {
-        calls.push(`delete ${input.id}`)
+      requestTimesheetEdit: vi.fn(async (input) => {
+        const times = input.clockIn === null ? '' : ` ${input.clockIn}-${input.clockOut}`
+        calls.push(`${input.requestType} ${input.shiftId ?? 'new'}${times}`)
       }),
     }
   }
 
-  it('writes only what moved, deletes first, and reports the saved day', async () => {
+  it('requests only what moved, deletes first, and reports how many went out', async () => {
     const ops = fakeOps([record({ id: '1' }), record({ id: '2', clockIn: '2000-01-01T13:00:00+02:00', clockOut: '2000-01-01T17:00:00+02:00' })])
     const onSaved = vi.fn()
     const sheet = createTimesheet({ ops, employeeId: 1, defaultLocationType: () => 'work_from_home', onSaved })
-    await sheet.saveDay({
+    const result = await sheet.saveDay({
       date: '2026-09-04',
       blocks: [
         { id: '1', kind: 'work', start: 510, end: 735, breakConfigurationId: null, breakName: null, locationType: 'office' },
         { id: null, kind: 'work', start: 780, end: 1000, breakConfigurationId: null, breakName: null, locationType: null },
       ],
     })
-    expect(ops.calls).toEqual(['delete 2', 'create work 13:0-16:40'])
-    expect(ops.createShift).toHaveBeenCalledWith(expect.objectContaining({ locationType: 'work_from_home', date: '2026-09-04' }))
+    expect(ops.calls).toEqual(['delete_shift 2', 'create_shift new 13:00-16:40'])
+    expect(ops.requestTimesheetEdit).toHaveBeenCalledWith(
+      expect.objectContaining({ employeeId: 1, locationType: 'work_from_home', date: '2026-09-04', workable: true }),
+    )
+    expect(result.requested).toBe(2)
     expect(onSaved).toHaveBeenCalledWith('2026-09-04')
+  })
+
+  it('returns the day Factorial still holds, not the edit that was requested', async () => {
+    const ops = fakeOps([record({ id: '1' })])
+    const sheet = createTimesheet({ ops, employeeId: 1, defaultLocationType: () => 'office' })
+    const result = await sheet.saveDay({
+      date: '2026-09-04',
+      blocks: [{ id: '1', kind: 'work', start: 480, end: 735, breakConfigurationId: null, breakName: null, locationType: 'office' }],
+    })
+    // A request changes nothing until it is approved, so the unmoved 08:30 is
+    // the honest answer — 08:00 is only what was asked for.
+    expect(result.day.blocks.map((b) => b.start)).toEqual([510])
   })
 
   it('moves a block in place', async () => {
@@ -101,7 +146,27 @@ describe('createTimesheet.saveDay', () => {
       date: '2026-09-04',
       blocks: [{ id: '1', kind: 'work', start: 480, end: 735, breakConfigurationId: null, breakName: null, locationType: 'office' }],
     })
-    expect(ops.calls).toEqual(['update 1 8:0-12:15'])
+    expect(ops.calls).toEqual(['update_shift 1 08:00-12:15'])
+  })
+
+  it('lists only the pending requests of a day, with their times as minutes', async () => {
+    const pending = editRequest({ id: '9', clockOut: '18:55' })
+    const ops = fakeOps([record({ id: '1' })], [pending, editRequest({ id: '8', approved: true }), editRequest({ id: '7', approved: false })])
+    const sheet = createTimesheet({ ops, employeeId: 1, defaultLocationType: () => 'office' })
+    const month = await sheet.getMonth(2026, 9)
+    const day = month.days.find((d) => d.date === '2026-09-04')
+    expect(day?.requests).toEqual([
+      { id: '9', requestType: 'update_shift', shiftId: '1', start: 792, end: 1135, workable: null, breakConfigurationId: null },
+    ])
+  })
+
+  it('withdraws a request and answers with the day re-read', async () => {
+    const ops = fakeOps([record({ id: '1' })], [editRequest({ id: '9' })])
+    const sheet = createTimesheet({ ops, employeeId: 1, defaultLocationType: () => 'office' })
+    const day = await sheet.withdraw('9', '2026-09-04')
+    expect(ops.calls).toEqual(['withdraw 9'])
+    expect(day.date).toBe('2026-09-04')
+    expect(ops.fetchEditRequests).toHaveBeenCalledTimes(1)
   })
 
   it('refuses a date it cannot read', async () => {

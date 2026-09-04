@@ -154,10 +154,28 @@ export const pt: Catalogue = {
   'timesheet.addWork': 'Adicionar trabalho',
   'timesheet.addBreak': 'Adicionar pausa',
   'timesheet.remove': 'Remover',
-  'timesheet.save': 'Guardar',
+  'timesheet.save': 'Solicitar alterações',
   'timesheet.discard': 'Descartar',
-  'timesheet.saved': 'Guardado',
-  'timesheet.saveFailed': 'Não foi possível guardar: {reason}',
+  'timesheet.saved': 'Alterações solicitadas',
+  'timesheet.saveFailed': 'Não foi possível solicitar: {reason}',
+
+  'timesheet.noChanges': 'Nada a solicitar',
+
+  'timesheet.pendingHint': 'As alterações têm de ser aprovadas. Até lá o dia fica como está.',
+
+  'timesheet.pendingCount': '{count} solicitadas',
+
+  'timesheet.pendingTitle': 'Alterações solicitadas',
+
+  'timesheet.pendingNew': 'Novo',
+
+  'timesheet.pendingDelete': 'Eliminar',
+
+  'timesheet.withdraw': 'Retirar',
+
+  'timesheet.withdrawn': 'Pedido retirado',
+
+  'timesheet.withdrawFailed': 'Não foi possível retirar: {reason}',
   'timesheet.loadFailed': 'Não foi possível carregar o mês: {reason}',
   'timesheet.unsaved': 'Alterações por guardar',
   'timesheet.runningHint': 'O registo em curso termina quando saíres.',

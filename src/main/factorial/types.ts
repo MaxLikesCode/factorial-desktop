@@ -103,6 +103,27 @@ export function isLocationType(value: string): value is LocationType {
   return (LOCATION_TYPES as readonly string[]).includes(value)
 }
 
+/** The request kinds live in `@shared/timesheet`, because the renderer shows them too. */
+import type { EditRequestType } from '@shared/timesheet'
+export type { EditRequestType }
+
+/**
+ * One `AttendanceEditTimesheetRequest`, as read back. `approved` is the whole
+ * state machine: null is pending, true was applied, false was turned down.
+ * The times are `HH:MM` strings — the same shape the request was sent with.
+ */
+export interface EditRequestRecord {
+  id: string
+  approved: boolean | null
+  requestType: EditRequestType
+  date: string
+  shiftId: string | null
+  clockIn: string | null
+  clockOut: string | null
+  workable: boolean | null
+  breakConfigurationId: string | null
+}
+
 /**
  * One member of `errors: [MutationError!]!` (K5), after unpacking.
  *

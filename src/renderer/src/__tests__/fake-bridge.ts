@@ -107,7 +107,12 @@ export function createFakeBridge(
     setWindowDragging: vi.fn(async () => {}),
     popupMenu: vi.fn(async () => null),
     getTimesheetMonth: vi.fn(async () => ({ year: 2026, month: 9, days: [] })),
-    saveTimesheetDay: vi.fn(async (edit) => ({ date: edit.date, blocks: edit.blocks, expectedMinutes: null })),
+    // A request changes nothing, so the day comes back without the edit in it.
+    saveTimesheetDay: vi.fn(async (edit) => ({
+      day: { date: edit.date, blocks: [], expectedMinutes: null, requests: [] },
+      requested: edit.blocks.length,
+    })),
+    withdrawTimesheetRequest: vi.fn(async (_id, date) => ({ date, blocks: [], expectedMinutes: null, requests: [] })),
     openMainWindow: vi.fn(async () => {}),
     onNavigate: () => () => {},
     getAppInfo: vi.fn(async () => ({ version: '0.0.0', electron: '0', chromium: '0', user: { fullName: 'Max', email: 'm@x', companyName: 'X' } })),

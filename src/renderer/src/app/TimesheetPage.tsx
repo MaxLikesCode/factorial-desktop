@@ -177,6 +177,11 @@ export function TimesheetPage({ headerSlot }: { headerSlot: HTMLElement | null }
                   <span className="app-num text-lg font-semibold">{date.getDate()}</span>
                 </span>
                 <MiniStrip day={day} now={now} />
+                {day.requests.length > 0 && (
+                  <span className="app-pending-badge shrink-0" data-slot="pending-badge">
+                    {t('timesheet.pendingCount', { count: day.requests.length })}
+                  </span>
+                )}
                 <span className="w-[120px] shrink-0 text-right text-sm" style={{ fontVariantNumeric: 'tabular-nums' }}>
                   {day.blocks.length === 0 ? (
                     <span className="app-faint">{target === 0 || target === null ? t('timesheet.dayOff') : t('timesheet.noRecords')}</span>
@@ -254,6 +259,27 @@ function MiniStrip({ day, now }: { day: TimesheetDay; now: number | null }): Rea
               width: `${Math.max(0, ((end - block.start) / span) * 100)}%`,
               background: block.kind === 'work' ? 'var(--app-work-2)' : 'var(--app-break)',
               boxShadow: running ? '0 0 0 3px color-mix(in oklch, var(--app-work-2) 25%, transparent)' : undefined,
+            }}
+          />
+        )
+      })}
+      {/* What was asked for, as an outline over what is there — so a day
+          with a pending change looks unsettled before the row is opened. */}
+      {day.requests.map((request) => {
+        const target = day.blocks.find((b) => b.id === request.shiftId)
+        const start = request.requestType === 'delete_shift' ? target?.start : request.start
+        const end = request.requestType === 'delete_shift' ? target?.end : request.end
+        if (start === undefined || start === null || end === undefined || end === null) return null
+        return (
+          <span
+            key={request.id}
+            className="absolute inset-y-0 rounded-full"
+            data-slot="pending-strip"
+            style={{
+              left: `${Math.max(0, ((start - lo) / span) * 100)}%`,
+              width: `${Math.max(0, ((end - start) / span) * 100)}%`,
+              border: '2px dashed var(--app-pending)',
+              boxSizing: 'border-box',
             }}
           />
         )

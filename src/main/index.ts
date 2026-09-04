@@ -19,6 +19,7 @@ import { ensureAuthenticated, openLoginWindow } from './auth'
 import { classifySignInFailure } from './auth-flow'
 import { runIntrospection } from './debug-introspect'
 import { installNetDebug } from './debug-net'
+import { installWebDebug, openFactorialWeb } from './debug-web'
 import { createClient } from './factorial/client'
 import { createOperations, type Operations } from './factorial/operations'
 import { isLocationType, type Identity } from './factorial/types'
@@ -188,6 +189,9 @@ async function bootstrap(): Promise<void> {
   // Off unless FACTORIAL_DEBUG_NET=1; see debug-net.ts for what it does and does
   // not record.
   installNetDebug(factorialSession)
+  // Off unless FACTORIAL_DEBUG_WEB=1. Installed after the net log because it
+  // takes over the same listener; see debug-web.ts.
+  installWebDebug(factorialSession)
   const client = createClient(createNetFetch(factorialSession))
   const ops = createOperations(client)
 
@@ -198,6 +202,9 @@ async function bootstrap(): Promise<void> {
   if (identity === null) return
   // Off unless FACTORIAL_INTROSPECT names a type; see debug-introspect.ts.
   await runIntrospection(client)
+  // Off unless FACTORIAL_DEBUG_WEB=1: Factorial's own web app in our session,
+  // for comparing a working request with ours.
+  openFactorialWeb(factorialSession)
   const employeeId = identity.employeeId
   console.log('[auth] signed in as', identity.fullName, '/', identity.companyName)
 

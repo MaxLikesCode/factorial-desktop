@@ -1,8 +1,23 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { MINUTES_PER_DAY, formatMinuteOfDay, type TimesheetBlock } from '@shared/timesheet'
 
+/**
+ * A requested change, drawn where it would land. `delete` covers the record
+ * that would go; `change` is the range that was asked for, whether it moves a
+ * record or adds one.
+ */
+export interface TimelineGhost {
+  id: string
+  kind: 'change' | 'delete'
+  start: number
+  end: number
+  label: string
+}
+
 interface Props {
   blocks: TimesheetBlock[]
+  /** Pending requests, drawn over the blocks and never dragged. */
+  ghosts?: TimelineGhost[]
   /** Minutes of the day right now, when the day is today; the running block ends here. */
   now: number | null
   onChange: (blocks: TimesheetBlock[]) => void
@@ -27,19 +42,19 @@ const MIN_LENGTH = 5
  * The running block (the one without an end) ends at "now": it has no right
  * handle and its body only moves its start.
  */
-export function Timeline({ blocks, now, onChange, disabled = false, nowLabel }: Props): React.JSX.Element {
+export function Timeline({ blocks, ghosts = [], now, onChange, disabled = false, nowLabel }: Props): React.JSX.Element {
   const track = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<{ index: number; part: 'start' | 'end' | 'body'; grabOffset: number } | null>(null)
 
   // The hours shown. Frozen while a drag runs — recomputing per move made the
   // scale jump under the pointer whenever a block crossed an hour — and only
   // ever widened afterwards, so the strip never shifts while the day is edited.
-  const [range, setRange] = useState<[number, number]>(() => rangeOf(blocks, now))
+  const [range, setRange] = useState<[number, number]>(() => rangeOf(blocks, now, ghosts))
   useEffect(() => {
     if (drag !== null) return
-    const [nextLo, nextHi] = rangeOf(blocks, now)
+    const [nextLo, nextHi] = rangeOf(blocks, now, ghosts)
     setRange(([lo, hi]) => (nextLo < lo || nextHi > hi ? [Math.min(lo, nextLo), Math.max(hi, nextHi)] : [lo, hi]))
-  }, [blocks, now, drag])
+  }, [blocks, ghosts, now, drag])
   const [lo, hi] = range
   const span = hi - lo
   const pct = (minute: number): string => `${((minute - lo) / span) * 100}%`
@@ -147,6 +162,21 @@ export function Timeline({ blocks, now, onChange, disabled = false, nowLabel }: 
             </div>
           )
         })}
+        {ghosts.map((ghost) => {
+          const length = ghost.end - ghost.start
+          return (
+            <span
+              key={ghost.id}
+              className="tl-ghost"
+              data-slot="ghost"
+              data-ghost={ghost.kind}
+              style={{ left: pct(ghost.start), width: `${Math.max(0, (length / span) * 100)}%` }}
+              title={`${formatMinuteOfDay(ghost.start)} – ${formatMinuteOfDay(ghost.end)}`}
+            >
+              {length >= 60 && <span className="truncate px-2">{ghost.label}</span>}
+            </span>
+          )
+        })}
         {now !== null && now >= lo && now <= hi && (
           <>
             <span className="tl-now" style={{ left: pct(now) }} data-slot="now" />
@@ -164,13 +194,17 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), Math.max(min, max))
 }
 
-/** The hours the strip shows: 06–20 at least, widened to fit the day plus an hour either side. */
-export function rangeOf(blocks: readonly TimesheetBlock[], now: number | null): [number, number] {
+/** The hours the strip shows: 06–20 at least, widened to fit the day — and what was asked for — plus an hour either side. */
+export function rangeOf(blocks: readonly TimesheetBlock[], now: number | null, ghosts: readonly TimelineGhost[] = []): [number, number] {
   let lo = 6 * 60
   let hi = 20 * 60
   for (const block of blocks) {
     lo = Math.min(lo, block.start - 60)
     hi = Math.max(hi, (block.end ?? now ?? block.start) + 60)
+  }
+  for (const ghost of ghosts) {
+    lo = Math.min(lo, ghost.start - 60)
+    hi = Math.max(hi, ghost.end + 60)
   }
   lo = Math.max(0, Math.floor(lo / 60) * 60)
   hi = Math.min(MINUTES_PER_DAY, Math.ceil(hi / 60) * 60)

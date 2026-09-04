@@ -148,10 +148,28 @@ export const fr: Catalogue = {
   'timesheet.addWork': 'Ajouter du travail',
   'timesheet.addBreak': 'Ajouter une pause',
   'timesheet.remove': 'Supprimer',
-  'timesheet.save': 'Enregistrer',
+  'timesheet.save': 'Demander des modifications',
   'timesheet.discard': 'Annuler',
-  'timesheet.saved': 'Enregistré',
-  'timesheet.saveFailed': 'Échec de l’enregistrement : {reason}',
+  'timesheet.saved': 'Modifications demandées',
+  'timesheet.saveFailed': 'Échec de la demande : {reason}',
+
+  'timesheet.noChanges': 'Rien à demander',
+
+  'timesheet.pendingHint': 'Les modifications doivent être approuvées. La journée reste inchangée jusque-là.',
+
+  'timesheet.pendingCount': '{count} demandé(s)',
+
+  'timesheet.pendingTitle': 'Modifications demandées',
+
+  'timesheet.pendingNew': 'Nouveau',
+
+  'timesheet.pendingDelete': 'Supprimer',
+
+  'timesheet.withdraw': 'Retirer',
+
+  'timesheet.withdrawn': 'Demande retirée',
+
+  'timesheet.withdrawFailed': 'Échec du retrait : {reason}',
   'timesheet.loadFailed': 'Impossible de charger le mois : {reason}',
   'timesheet.unsaved': 'Modifications non enregistrées',
   'timesheet.runningHint': 'L’enregistrement en cours se termine au dépointage.',

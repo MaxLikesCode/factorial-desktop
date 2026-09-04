@@ -658,3 +658,79 @@ describe('mutations', () => {
     })
   })
 })
+
+describe('requestTimesheetEdit', () => {
+  const ok = { attendanceMutations: { createAttendanceEditTimesheetRequest: { errors: [] } } }
+
+  function request(over: Partial<Parameters<ReturnType<typeof createOperations>['requestTimesheetEdit']>[0]> = {}) {
+    return {
+      employeeId: 42,
+      requestType: 'update_shift' as const,
+      shiftId: '77',
+      date: '2026-09-01',
+      clockIn: '13:12',
+      clockOut: '18:08',
+      workable: null,
+      breakConfigurationId: null,
+      locationType: null,
+      ...over,
+    }
+  }
+
+  it('sends the ids as integers and the times as times of day', async () => {
+    const { client, calls } = recordingClient(ok)
+    await createOperations(client).requestTimesheetEdit(request())
+    expect(only(calls).variables).toEqual({
+      employeeId: 42,
+      requestType: 'update_shift',
+      attendanceShiftId: 77,
+      date: '2026-09-01',
+      clockIn: '13:12',
+      clockOut: '18:08',
+    })
+  })
+
+  it('leaves out every argument the change is not about', async () => {
+    const { client, calls } = recordingClient(ok)
+    await createOperations(client).requestTimesheetEdit(
+      request({ requestType: 'delete_shift', clockIn: null, clockOut: null }),
+    )
+    // An explicit null is a different request from an absent argument, and this
+    // mutation has fifteen of them.
+    expect(Object.keys(only(calls).variables).sort()).toEqual([
+      'attendanceShiftId',
+      'date',
+      'employeeId',
+      'requestType',
+    ])
+  })
+
+  it('carries the break type and the location when a block is created', async () => {
+    const { client, calls } = recordingClient(ok)
+    await createOperations(client).requestTimesheetEdit(
+      request({ requestType: 'create_shift', shiftId: null, workable: false, breakConfigurationId: '19613' }),
+    )
+    expect(only(calls).variables).toMatchObject({
+      requestType: 'create_shift',
+      workable: false,
+      timeSettingsBreakConfigurationId: 19613,
+    })
+    expect(only(calls).variables).not.toHaveProperty('attendanceShiftId')
+  })
+
+  it('refuses to call a refused request a success', async () => {
+    const { client } = recordingClient({
+      attendanceMutations: {
+        createAttendanceEditTimesheetRequest: {
+          errors: [{ __typename: 'StructuredError', field: 'messages', messages: ['nicht erlaubt'] }],
+        },
+      },
+    })
+    await expect(createOperations(client).requestTimesheetEdit(request())).rejects.toMatchObject({
+      kind: 'graphql',
+      // The record-level bucket is not rendered as though it were a field name.
+      message: 'nicht erlaubt',
+    })
+  })
+})
+

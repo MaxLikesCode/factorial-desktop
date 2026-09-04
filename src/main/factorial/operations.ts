@@ -26,8 +26,11 @@
 import { toLocalIsoWithOffset } from '@shared/time'
 import type { BreakConfiguration, OpenShift } from '@shared/attendance-state'
 import { FactorialError, type GraphQLClient } from './client'
+import { isEditRequestType } from '@shared/timesheet'
 import type {
   BreakConfigOption,
+  EditRequestRecord,
+  EditRequestType,
   Identity,
   LocationType,
   MutationError,
@@ -194,14 +197,25 @@ function parseMutationError(value: unknown): MutationError {
   return { kind: 'unknown', typename }
 }
 
+/**
+ * The buckets Rails uses for an error that belongs to the record as a whole
+ * rather than to one of its attributes. Naming them in the toast reads as a
+ * field called "messages", which is worse than saying nothing.
+ */
+const RECORD_LEVEL_FIELDS = new Set(['base', 'messages'])
+
 /** Both union members flattened into one readable line for the toast. */
 function describeMutationError(error: MutationError): string {
   switch (error.kind) {
     case 'simple':
       return error.message ?? UNKNOWN_ERROR_TEXT
     case 'structured': {
+      const joined = error.messages.join(', ')
+      if (error.field !== null && RECORD_LEVEL_FIELDS.has(error.field)) {
+        return joined === '' ? UNKNOWN_ERROR_TEXT : joined
+      }
       const name = error.field ?? UNKNOWN_FIELD_TEXT
-      return error.messages.length > 0 ? `${name}: ${error.messages.join(', ')}` : `${name}: ungültig`
+      return error.messages.length > 0 ? `${name}: ${joined}` : `${name}: ungültig`
     }
     case 'unknown':
       return error.typename
@@ -549,10 +563,18 @@ export function createOperations(client: GraphQLClient) {
     },
 
     /**
-     * A record with both ends, written by the timesheet editor. Found by
-     * validation-error probing on 2026-09-04 (docs/api-discovery.md): `date`
-     * is the one required argument; `workable: false` plus the break type is
-     * what makes the record a break.
+    /**
+     * The next three write attendance shifts directly, which is the *manager's*
+     * side of the timesheet: an ordinary account is refused by all of them with
+     * *"Schichten können ohne entsprechende Berechtigung weder erstellt,
+     * bearbeitet noch gelöscht werden"*. Nothing in this app calls them — the
+     * editor goes through `requestTimesheetEdit` below — and they are kept
+     * because they are the verified shape of that side of the API, for an
+     * account that does hold the permission.
+     *
+     * A record with both ends. Found by validation-error probing on 2026-09-04
+     * (docs/api-discovery.md): `date` is the one required argument;
+     * `workable: false` plus the break type is what makes the record a break.
      */
     async createShift(input: {
       date: string
@@ -622,6 +644,142 @@ export function createOperations(client: GraphQLClient) {
         }`,
       })
       assertMutationSucceeded(data, 'DeleteShift', 'deleteAttendanceShift')
+    },
+
+    /**
+     * What an employee may actually write (2026-09-05, docs/api-discovery.md).
+     *
+     * The three mutations above are the manager's side of the timesheet. An
+     * ordinary account is refused by all of them — *"Schichten können ohne
+     * entsprechende Berechtigung weder erstellt, bearbeitet noch gelöscht
+     * werden"* — and Factorial's own web interface does not use them either: it
+     * opens "Änderungen beantragen" and sends this instead. One request per
+     * changed record; somebody with the permission then approves it.
+     *
+     * One thing differs from every other mutation in this file:
+     * **`clockIn`/`clockOut` are `String`, not `ISO8601DateTime`**, and the date
+     * travels beside them in its own argument. They are times of day — `18:08` —
+     * not instants. Verified against the live API on 2026-09-05, which accepted
+     * exactly this document and answered with a pending request.
+     *
+     * The ids are `Int` like everywhere else (K4). The web app's own bundle
+     * declares them `ID`, which is wrong and would be rejected with
+     * `variableMismatch` — do not copy the client's types, ask the server.
+     */
+    async requestTimesheetEdit(input: {
+      employeeId: number
+      requestType: EditRequestType
+      /** The record to change. Null only for `create_shift`, which has none yet. */
+      shiftId: string | null
+      date: string
+      /** `HH:MM`. Null for `delete_shift`, which changes no times. */
+      clockIn: string | null
+      clockOut: string | null
+      workable: boolean | null
+      breakConfigurationId: string | null
+      locationType: LocationType | null
+    }): Promise<void> {
+      // Only what this request is actually about is sent. An explicit null on an
+      // argument the change does not concern is a different request from leaving
+      // it out, and this mutation has fifteen of them.
+      const variables: Record<string, unknown> = {
+        employeeId: input.employeeId,
+        requestType: input.requestType,
+        date: input.date,
+      }
+      if (input.shiftId !== null) variables.attendanceShiftId = asInteger(input.shiftId, 'shift id')
+      if (input.clockIn !== null) variables.clockIn = input.clockIn
+      if (input.clockOut !== null) variables.clockOut = input.clockOut
+      if (input.workable !== null) variables.workable = input.workable
+      if (input.breakConfigurationId !== null) {
+        variables.timeSettingsBreakConfigurationId = asInteger(
+          input.breakConfigurationId,
+          'breakConfigurationId',
+        )
+      }
+      if (input.locationType !== null) variables.locationType = input.locationType
+
+      const data = await client.execute<unknown>({
+        operationName: 'RequestTimesheetEdit',
+        variables,
+        query: `mutation RequestTimesheetEdit($employeeId: Int!,
+                                              $requestType: AttendanceEditTimesheetRequestRequestTypeEnum!,
+                                              $attendanceShiftId: Int, $clockIn: String, $clockOut: String,
+                                              $date: ISO8601Date, $workable: Boolean,
+                                              $timeSettingsBreakConfigurationId: Int,
+                                              $locationType: AttendanceShiftLocationTypeEnum) {
+          attendanceMutations {
+            createAttendanceEditTimesheetRequest(employeeId: $employeeId, requestType: $requestType,
+                                                 attendanceShiftId: $attendanceShiftId,
+                                                 clockIn: $clockIn, clockOut: $clockOut, date: $date,
+                                                 workable: $workable,
+                                                 timeSettingsBreakConfigurationId: $timeSettingsBreakConfigurationId,
+                                                 locationType: $locationType) {
+              editTimesheetRequest { id approved requestType }
+${MUTATION_RESULT}            }
+          }
+        }`,
+      })
+      assertMutationSucceeded(data, 'RequestTimesheetEdit', 'createAttendanceEditTimesheetRequest')
+    },
+
+    /**
+     * Every change request in a date range, answered or not. Read from the
+     * employee's own connection rather than `AttendanceShift.editTimesheetRequest`,
+     * because a `create_shift` request has no shift to hang off. Verified on
+     * 2026-09-05 against a day with one applied and two pending requests.
+     */
+    async fetchEditRequests(employeeId: number, startOn: string, endOn: string): Promise<EditRequestRecord[]> {
+      const data = await client.execute<unknown>({
+        operationName: 'EditRequests',
+        variables: { id: employeeId, startOn, endOn },
+        query: `query EditRequests($id: Int!, $startOn: ISO8601Date!, $endOn: ISO8601Date!) {
+          attendance { employee(id: $id) {
+            attendanceEditTimesheetRequestsConnection(startOn: $startOn, endOn: $endOn) {
+              nodes {
+                id approved requestType date clockIn clockOut workable
+                timeSettingsBreakConfigurationId
+                attendanceShift { id }
+              }
+            }
+          } }
+        }`,
+      })
+
+      const employee = attendanceEmployee(data, 'EditRequests')
+      const base = 'EditRequests.data.attendance.employee.attendanceEditTimesheetRequestsConnection'
+      return connectionNodes(employee.attendanceEditTimesheetRequestsConnection, base).map((node, index) => {
+        const path = `${base}.nodes[${index}]`
+        const requestType = asString(field(node, path, 'requestType'), `${path}.requestType`)
+        if (!isEditRequestType(requestType)) fail(`${path}.requestType`, 'a known request type', requestType)
+        const shift = field(node, path, 'attendanceShift')
+        const breakId = field(node, path, 'timeSettingsBreakConfigurationId')
+        return {
+          id: asId(field(node, path, 'id'), `${path}.id`),
+          approved: asNullableBoolean(field(node, path, 'approved'), `${path}.approved`),
+          requestType,
+          date: asString(field(node, path, 'date'), `${path}.date`),
+          shiftId: shift === null || shift === undefined ? null : asId(field(shift, `${path}.attendanceShift`, 'id'), `${path}.attendanceShift.id`),
+          clockIn: asNullableString(field(node, path, 'clockIn'), `${path}.clockIn`),
+          clockOut: asNullableString(field(node, path, 'clockOut'), `${path}.clockOut`),
+          workable: asNullableBoolean(field(node, path, 'workable'), `${path}.workable`),
+          breakConfigurationId: breakId === null || breakId === undefined ? null : asId(breakId, `${path}.timeSettingsBreakConfigurationId`),
+        }
+      })
+    },
+
+    /** Takes a pending request back. `id: Int!` is its only argument (probe, 2026-09-05). */
+    async withdrawTimesheetEdit(input: { id: string }): Promise<void> {
+      const data = await client.execute<unknown>({
+        operationName: 'WithdrawTimesheetEdit',
+        variables: { id: asInteger(input.id, 'request id') },
+        query: `mutation WithdrawTimesheetEdit($id: Int!) {
+          attendanceMutations {
+            deleteAttendanceEditTimesheetRequest(id: $id) {${MUTATION_RESULT}            }
+          }
+        }`,
+      })
+      assertMutationSucceeded(data, 'WithdrawTimesheetEdit', 'deleteAttendanceEditTimesheetRequest')
     },
 
     async clockIn(input: { now: Date; locationType: LocationType; workplaceId: number | null }): Promise<void> {

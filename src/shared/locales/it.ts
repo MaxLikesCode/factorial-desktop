@@ -148,10 +148,28 @@ export const it: Catalogue = {
   'timesheet.addWork': 'Aggiungi lavoro',
   'timesheet.addBreak': 'Aggiungi pausa',
   'timesheet.remove': 'Rimuovi',
-  'timesheet.save': 'Salva',
+  'timesheet.save': 'Richiedi modifiche',
   'timesheet.discard': 'Annulla',
-  'timesheet.saved': 'Salvato',
-  'timesheet.saveFailed': 'Salvataggio non riuscito: {reason}',
+  'timesheet.saved': 'Modifiche richieste',
+  'timesheet.saveFailed': 'Richiesta non riuscita: {reason}',
+
+  'timesheet.noChanges': 'Nulla da richiedere',
+
+  'timesheet.pendingHint': 'Le modifiche devono essere approvate. Fino ad allora la giornata resta invariata.',
+
+  'timesheet.pendingCount': '{count} richieste',
+
+  'timesheet.pendingTitle': 'Modifiche richieste',
+
+  'timesheet.pendingNew': 'Nuovo',
+
+  'timesheet.pendingDelete': 'Elimina',
+
+  'timesheet.withdraw': 'Ritira',
+
+  'timesheet.withdrawn': 'Richiesta ritirata',
+
+  'timesheet.withdrawFailed': 'Ritiro non riuscito: {reason}',
   'timesheet.loadFailed': 'Impossibile caricare il mese: {reason}',
   'timesheet.unsaved': 'Modifiche non salvate',
   'timesheet.runningHint': 'La registrazione in corso termina quando timbri l’uscita.',

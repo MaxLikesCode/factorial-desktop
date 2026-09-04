@@ -109,8 +109,17 @@ Three more fields on `attendanceMutations`:
 | `updateAttendanceShift` | `id: Int!` | `clockIn`, `clockOut`, `date`, `locationType`, `workplaceId`, `observations`, `timeSettingsBreakConfigurationId`, `referenceDate` — **not** `workable`, `source`, `halfDay`, `now` |
 | `deleteAttendanceShift` | `id: Int!` | nothing else |
 
-Not yet verified: whether they return `{ errors, shift }` like the four clock
-mutations (assume so), and what an approved month answers.
+They do report failure in-band like the four clock mutations: a save was refused
+with a `StructuredError`, `field: "messages"` — Rails' record-level bucket, not
+an attribute — reading *"Schichten können ohne entsprechende Berechtigung weder
+erstellt, bearbeitet noch gelöscht werden."* So the permission check is one
+guard for all three, and a refusal arrives with HTTP 200 and an empty error list
+nowhere in sight.
+
+These three are the manager-side mutations. The section below settles why, and
+what an employee is meant to send instead.
+
+Still not verified: what an approved month answers.
 
 `AttendanceShift` also has `clockOut`, `clockOutOffset`, `observations`,
 `locationType`, `workplaceId`, `halfDay`, `attendancePeriodId`, `inSource`,
@@ -118,3 +127,92 @@ mutations (assume so), and what an approved month answers.
 `editable`. The month's approval state is not on the shift; `AttendanceEmployee`
 has `attendanceCyclesConnection` and `attendanceBalancesConnection(startOn,
 endOn)`, neither of which carries an approval field under any obvious name.
+
+### Why the edit mutations are refused — answered 2026-09-05
+
+They are refused because this account genuinely may not use them. Factorial's own
+web interface does not edit shifts directly either: the pencil on a row opens
+**"Änderungen beantragen"** with an **"Anfrage senden"** button, and the timesheet
+table carries an **"Anfragestatus"** column. An employee proposes a change; a
+manager approves it. `create/update/deleteAttendanceShift` are the manager-side
+mutations, and the permission error is correct, not a malformed request.
+
+The employee-side mutation is on `attendanceMutations` after all — the earlier
+probe missed it by guessing `createAttendanceEditRequest` when the name is:
+
+```graphql
+attendanceMutations {
+  createAttendanceEditTimesheetRequest(
+    employeeId: Int!                                              # required
+    requestType: AttendanceEditTimesheetRequestRequestTypeEnum!   # required
+    attendanceShiftId: Int         # the record to change; omitted for create_shift
+    clockIn: String  clockOut: String        # "18:08" — a time of day, see below
+    date: ISO8601Date  referenceDate: ISO8601Date
+    workable: Boolean  timeSettingsBreakConfigurationId: Int
+    locationType: AttendanceShiftLocationTypeEnum
+    workplaceId: Int  clockInWorkAreaId: Int  clockOutWorkAreaId: Int
+    observations: String  reason: String
+  ) {
+    editTimesheetRequest { id approved requestType attendanceShiftId }
+    errors { ... }        # the same MutationError union as the clock mutations
+  }
+}
+```
+
+`requestType` takes `create_shift`, `update_shift`, `delete_shift` — verified by
+validation probe; `create`/`update`/`delete` are rejected.
+
+**Do not take the ids from the web app's bundle.** It declares its variables as
+`ID`, and sending that is rejected outright with `variableMismatch`:
+*"Type mismatch on variable $employeeId and argument employeeId (ID! / Int!)"*.
+They are `Int`, like every other attendance mutation — K4 applies here too. The
+bundle is a good way to find a name and a bad way to learn a type; the server is
+the only authority on the second.
+
+`clockIn`/`clockOut` being `String` next to a separate `date` is the other
+surprise, and it means what it looks like: **times of day, not instants**. The
+request that finally went through carried `clockIn: "13:12", clockOut: "18:08"`
+with `date: "2026-09-01"`.
+
+Verified end to end on 2026-09-05 with the document in `operations.ts`:
+
+```jsonc
+{ "editTimesheetRequest": { "id": 13542327, "approved": null,
+                            "requestType": "update_shift" }, "errors": [] }
+```
+
+`approved: null` is the pending state — the write has not happened yet and may
+never. Nothing about the shift itself changed in that response.
+
+How this was found, without writing anything: the operation lives in the web
+app's JS bundle as a GraphQL AST, so fetching the page's own scripts and reading
+the `Name` nodes yields the whole signature. The enum values and the required
+arguments were then confirmed against the live API with the sentinel trick from
+above — a document that fails validation executes nothing.
+
+The consequence for this app is not a fixed request but a different feature: a
+saved day cannot change the timesheet, only ask for it to be changed.
+
+### Reading the requests back, and taking one back — 2026-09-05
+
+What the "Anfragestatus" column is made of. Three places answer, all verified
+by sentinel probe and one by a real read:
+
+- `attendance.employee(id:).attendanceEditTimesheetRequestsConnection(startOn:, endOn:)`
+  — **the one this app uses.** Every request of the employee in the range,
+  answered or not, with `approved: true | false | null` (null is pending), the
+  `requestType`, the proposed `clockIn`/`clockOut` as `"HH:MM"`, and
+  `attendanceShift { id }` for the record it concerns. A `create_shift` request
+  has no shift, which is why the shift-side field below is not enough.
+- `AttendanceShift.editTimesheetRequest` — the same object, from the record.
+- `attendance.editTimesheetRequestsConnection` — exists; arguments not probed.
+
+Real answer for 2026-09-01 (trimmed): one applied request (`approved: true`,
+the 18:07 that is now in the record) and the pending ones next to it, each
+naming shift `554387733`.
+
+`attendanceMutations.deleteAttendanceEditTimesheetRequest(id: Int!)` withdraws
+a pending request; payload `DeleteAttendanceEditTimesheetRequestPayload` with
+the usual `errors` union and `editTimesheetRequest`. There is also an
+`updateAttendanceEditTimesheetRequest`, not probed.
+

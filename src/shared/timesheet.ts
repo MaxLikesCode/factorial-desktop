@@ -36,12 +36,51 @@ export interface TimesheetBlock {
   locationType: string | null
 }
 
+/**
+ * `AttendanceEditTimesheetRequestRequestTypeEnum`, verified by validation probe
+ * on 2026-09-05: the bare `create`/`update`/`delete` are rejected, these three
+ * are accepted. One enum covers all three kinds of change an employee can ask
+ * for, which is why there is one request mutation and not three.
+ */
+export const EDIT_REQUEST_TYPES = ['create_shift', 'update_shift', 'delete_shift'] as const
+
+export type EditRequestType = (typeof EDIT_REQUEST_TYPES)[number]
+
+export function isEditRequestType(value: string): value is EditRequestType {
+  return (EDIT_REQUEST_TYPES as readonly string[]).includes(value)
+}
+
+/**
+ * A change that was asked for and not yet answered.
+ *
+ * This is the other half of what the editor shows: the blocks are what the
+ * timesheet holds, the requests are what has been proposed against it.
+ * Nothing here is in the timesheet — an `update_shift` names the record it
+ * would move via `shiftId`, a `create_shift` names none, a `delete_shift`
+ * carries no times. Only pending requests cross IPC; an approved one is
+ * already in the blocks and a rejected one is history.
+ */
+export interface PendingRequest {
+  id: string
+  requestType: EditRequestType
+  /** The record the request is about; null for `create_shift`. */
+  shiftId: string | null
+  /** Proposed ends in minutes of the day; null where the request carries none. */
+  start: number | null
+  end: number | null
+  /** What the requested record would be. Null when the request does not say. */
+  workable: boolean | null
+  breakConfigurationId: string | null
+}
+
 export interface TimesheetDay {
   /** `YYYY-MM-DD`, local. */
   date: string
   blocks: TimesheetBlock[]
   /** The day's target, or null when there is none (day off, absence, unknown). */
   expectedMinutes: number | null
+  /** Change requests still waiting for an answer, oldest first. */
+  requests: PendingRequest[]
 }
 
 export interface TimesheetMonth {
@@ -55,6 +94,20 @@ export interface TimesheetMonth {
 export interface DayEdit {
   date: string
   blocks: TimesheetBlock[]
+}
+
+/**
+ * What a save actually achieved.
+ *
+ * `day` is deliberately the day as Factorial *still* holds it, not the edit:
+ * this app may only ask for changes, never make them (see `timesheet.ts`), so
+ * an editor that showed the requested times would be showing something that is
+ * not in the timesheet and may never be. `requested` is how many change
+ * requests went out, which is the only thing that did happen.
+ */
+export interface DaySaveResult {
+  day: TimesheetDay
+  requested: number
 }
 
 /** How a saved day differs from the stored one, as the three mutations. */

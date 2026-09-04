@@ -27,7 +27,7 @@
 
 import type { AttendanceState } from './attendance-state'
 import type { LanguageSetting } from './i18n'
-import type { DayEdit, TimesheetDay, TimesheetMonth } from './timesheet'
+import type { DayEdit, DaySaveResult, TimesheetDay, TimesheetMonth } from './timesheet'
 
 export const IPC = {
   getSnapshot: 'attendance:getSnapshot',
@@ -47,6 +47,7 @@ export const IPC = {
   cursorMoved: 'widget:cursorMoved',
   getTimesheetMonth: 'timesheet:getMonth',
   saveTimesheetDay: 'timesheet:saveDay',
+  withdrawTimesheetRequest: 'timesheet:withdrawRequest',
   openMainWindow: 'window:openMain',
   navigate: 'window:navigate',
   getAppInfo: 'app:getInfo',
@@ -453,8 +454,10 @@ export interface FactorialBridge {
   popupMenu(items: PopupMenuItem[], anchor: Point): Promise<string | null>
   /** A month of the timesheet — every day, with its records as blocks. */
   getTimesheetMonth(year: number, month: number): Promise<TimesheetMonth>
-  /** Writes an edited day and resolves with the day as Factorial now holds it. */
-  saveTimesheetDay(edit: DayEdit): Promise<TimesheetDay>
+  /** Requests an edited day; resolves with the day as Factorial still holds it. */
+  saveTimesheetDay(edit: DayEdit): Promise<DaySaveResult>
+  /** Takes one pending change request back; resolves with its day, re-read. */
+  withdrawTimesheetRequest(requestId: string, date: string): Promise<TimesheetDay>
   /** Opens the app window, optionally at a section. */
   openMainWindow(page?: MainWindowPage): Promise<void>
   /** The app window is told which section to show; returns its own unsubscribe. */

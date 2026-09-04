@@ -148,10 +148,28 @@ export const nl: Catalogue = {
   'timesheet.addWork': 'Werk toevoegen',
   'timesheet.addBreak': 'Pauze toevoegen',
   'timesheet.remove': 'Verwijderen',
-  'timesheet.save': 'Opslaan',
+  'timesheet.save': 'Wijzigingen aanvragen',
   'timesheet.discard': 'Verwerpen',
-  'timesheet.saved': 'Opgeslagen',
-  'timesheet.saveFailed': 'Opslaan mislukt: {reason}',
+  'timesheet.saved': 'Wijzigingen aangevraagd',
+  'timesheet.saveFailed': 'Aanvragen mislukt: {reason}',
+
+  'timesheet.noChanges': 'Niets aan te vragen',
+
+  'timesheet.pendingHint': 'Wijzigingen moeten worden goedgekeurd. Tot dan blijft de dag ongewijzigd.',
+
+  'timesheet.pendingCount': '{count} aangevraagd',
+
+  'timesheet.pendingTitle': 'Aangevraagde wijzigingen',
+
+  'timesheet.pendingNew': 'Nieuw',
+
+  'timesheet.pendingDelete': 'Verwijderen',
+
+  'timesheet.withdraw': 'Intrekken',
+
+  'timesheet.withdrawn': 'Aanvraag ingetrokken',
+
+  'timesheet.withdrawFailed': 'Intrekken mislukt: {reason}',
   'timesheet.loadFailed': 'De maand kon niet worden geladen: {reason}',
   'timesheet.unsaved': 'Niet-opgeslagen wijzigingen',
   'timesheet.runningHint': 'De lopende registratie eindigt bij het uitklokken.',
