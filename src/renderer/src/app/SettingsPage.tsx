@@ -1,11 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { ChevronDownIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { LANGUAGE_NAMES, LOCALES } from '@shared/i18n'
 import type { AppInfo, AppSettings } from '@shared/ipc-contract'
 import { useAttendance } from '@renderer/hooks/useAttendance'
 import { useSettings } from '@renderer/hooks/useSettings'
 import { useTranslate } from '@renderer/hooks/useTranslate'
+import { MenuButton } from './MenuButton'
 
 /** The hour choices for the two long-shift settings; null is "off". */
 const HOUR_CHOICES: (number | null)[] = [null, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 24]
@@ -39,7 +39,7 @@ export function SettingsPage(): React.JSX.Element {
           <Switch checked={settings.openAtLogin} onChange={(v) => set({ openAtLogin: v })} />
         </Row>
         <Row label={t('settings.language')}>
-          <Select
+          <MenuButton
             value={settings.language}
             onChange={(v) => set({ language: v as AppSettings['language'] })}
             options={[
@@ -158,34 +158,11 @@ function Segmented({
   )
 }
 
-function Select({
-  value,
-  options,
-  onChange,
-}: {
-  value: string
-  options: { value: string; label: string }[]
-  onChange: (value: string) => void
-}): React.JSX.Element {
-  return (
-    <span className="relative inline-flex items-center">
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="app-input app-select text-[13px]">
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDownIcon className="app-faint pointer-events-none absolute right-2.5 size-3.5" />
-    </span>
-  )
-}
-
 function HoursSelect({ value, onChange }: { value: number | null; onChange: (value: number | null) => void }): React.JSX.Element {
   const t = useTranslate()
   const choices = HOUR_CHOICES.includes(value) ? HOUR_CHOICES : [...HOUR_CHOICES, value]
   return (
-    <Select
+    <MenuButton
       value={value === null ? 'off' : String(value)}
       onChange={(v) => onChange(v === 'off' ? null : Number(v))}
       options={choices.map((hours) => ({

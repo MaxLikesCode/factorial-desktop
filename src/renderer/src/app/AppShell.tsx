@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react'
 import { CalendarDaysIcon, HouseIcon, SettingsIcon, type LucideIcon } from 'lucide-react'
-import type { MainWindowPage } from '@shared/ipc-contract'
+import type { AppInfo, MainWindowPage } from '@shared/ipc-contract'
 import type { MessageKey } from '@shared/i18n'
 import { useTranslate } from '@renderer/hooks/useTranslate'
 import { Toaster } from '@renderer/components/ui/sonner'
+import logo from '../update/app-icon.png'
 import { OverviewPage } from './OverviewPage'
 import { SettingsPage } from './SettingsPage'
 import { TimesheetPage } from './TimesheetPage'
+
+/** Where the traffic lights are — the one platform fact this page needs. */
+const MAC = navigator.platform.toLowerCase().includes('mac')
 
 const NAV: { page: MainWindowPage; icon: LucideIcon; tint: string; key: MessageKey }[] = [
   { page: 'overview', icon: HouseIcon, tint: 'linear-gradient(180deg, #ff9a3c, #ef6a1f)', key: 'app.overview' },
@@ -30,12 +34,22 @@ export function AppShell(): React.JSX.Element {
   const t = useTranslate()
   const [page, setPage] = useState<MainWindowPage>('overview')
   const [headerSlot, setHeaderSlot] = useState<HTMLDivElement | null>(null)
+  const [info, setInfo] = useState<AppInfo | null>(null)
 
   useEffect(() => window.factorial.onNavigate(setPage), [])
+  useEffect(() => {
+    void window.factorial.getAppInfo().then(setInfo, () => {})
+  }, [])
 
   return (
     <div className="flex h-screen w-screen">
-      <aside className="flex w-[232px] shrink-0 flex-col px-3 pt-9 pb-4" style={{ background: 'var(--app-sidebar)' }}>
+      <aside
+        // The same 12 px above the first entry as beside it. PLATFORM: macOS
+        // paints its traffic lights over this corner, so there the column
+        // starts below them.
+        className={`flex w-[232px] shrink-0 flex-col px-3 pb-3 ${MAC ? 'pt-9' : 'pt-3'}`}
+        style={{ background: 'var(--app-sidebar)' }}
+      >
         <nav className="flex flex-col gap-1">
           {NAV.map(({ page: target, icon: Icon, tint, key }) => (
             <button
@@ -53,9 +67,16 @@ export function AppShell(): React.JSX.Element {
           ))}
         </nav>
         <div className="flex-1" />
-        <div className="app-card flex items-center gap-2.5 px-3.5 py-3" style={{ borderRadius: 12 }}>
-          <span className="size-[22px] shrink-0 rounded-md" style={{ background: 'linear-gradient(180deg, #ff6a3d, #e0362e)' }} />
-          <span className="text-sm font-semibold">Factorial Desktop</span>
+        <div className="app-card flex items-center gap-2.5 px-3 py-2.5" style={{ borderRadius: 12 }}>
+          <img src={logo} alt="" className="size-7 shrink-0 rounded-lg" draggable={false} />
+          <span className="flex min-w-0 flex-col leading-tight">
+            <span className="truncate text-sm font-semibold">Factorial Desktop</span>
+            {info !== null && (
+              <span className="app-faint text-[11px]" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {t('about.version', { version: info.version })}
+              </span>
+            )}
+          </span>
         </div>
       </aside>
 

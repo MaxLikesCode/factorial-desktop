@@ -16,6 +16,7 @@ import {
 } from '@shared/timesheet'
 import { useTranslate } from '@renderer/hooks/useTranslate'
 import { describeActionError } from '@renderer/lib/errors'
+import { MenuButton } from './MenuButton'
 import { Timeline } from './Timeline'
 
 interface Props {
@@ -94,33 +95,29 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
       <div className="flex flex-col gap-2">
         {blocks.map((block, index) => (
           <div key={block.id ?? `new-${index}`} className="flex items-center gap-3 rounded-[10px] px-2.5 py-2 text-sm" style={{ background: 'var(--app-fill)' }} data-slot="block-row">
-            <span className="app-chip w-[132px] shrink-0">
-              <span className={`app-dot ${block.kind === 'work' ? 'app-dot-work' : 'app-dot-break'}`} />
-              {block.kind === 'work'
-                ? t('timesheet.work')
-                : breakOptions.length > 1
-                  ? t('timesheet.break')
-                  : (block.breakName ?? t('timesheet.break'))}
-            </span>
-            {block.kind === 'break' && breakOptions.length > 1 && (
-              <select
+            {block.kind === 'break' && breakOptions.length > 1 ? (
+              // The chip is the picker: the type opens the platform's menu,
+              // and the row keeps its columns whatever the type is called.
+              <MenuButton
+                className="app-btn-sm w-[160px] shrink-0 justify-start"
+                leading={<span className="app-dot app-dot-break" />}
+                disabled={saving}
                 value={block.breakConfigurationId ?? ''}
-                onChange={(event) => {
-                  const option = breakOptions.find((o) => o.id === event.target.value)
+                options={breakOptions.map((o) => ({ value: o.id, label: o.name }))}
+                onChange={(id) => {
+                  const option = breakOptions.find((o) => o.id === id)
                   change(
                     blocks.map((b, i) =>
                       i === index ? { ...b, breakConfigurationId: option?.id ?? null, breakName: option?.name ?? null } : b,
                     ),
                   )
                 }}
-                className="app-input h-7 text-xs"
-              >
-                {breakOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                  </option>
-                ))}
-              </select>
+              />
+            ) : (
+              <span className="app-chip w-[160px] shrink-0">
+                <span className={`app-dot ${block.kind === 'work' ? 'app-dot-work' : 'app-dot-break'}`} />
+                <span className="truncate">{block.kind === 'work' ? t('timesheet.work') : (block.breakName ?? t('timesheet.break'))}</span>
+              </span>
             )}
             <TimeField label={t('timesheet.from')} value={block.start} disabled={saving} onCommit={(v) => setTime(index, 'start', v)} />
             <TimeField
