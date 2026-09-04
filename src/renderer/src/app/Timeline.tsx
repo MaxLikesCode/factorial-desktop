@@ -109,9 +109,13 @@ export function Timeline({ blocks, now, onChange, disabled = false, nowLabel }: 
         ))}
       </div>
       <div ref={track} className="tl-track" data-slot="timeline">
-        {ticks.map((minute) => (
-          <span key={minute} className="absolute inset-y-0 w-px" style={{ left: pct(minute), background: 'var(--app-line)' }} />
-        ))}
+        {ticks
+          // The first and last tick sit on the strip's own edge; a line there
+          // doubles the border.
+          .filter((minute) => minute > lo && minute < hi)
+          .map((minute) => (
+            <span key={minute} className="absolute inset-y-0 w-px" style={{ left: pct(minute), background: 'var(--app-line)' }} />
+          ))}
         {blocks.map((block, index) => {
           const end = block.end ?? now ?? block.start
           const running = block.end === null
