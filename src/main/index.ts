@@ -17,6 +17,7 @@ import { resolveUserDataPath } from './app-identity'
 import { createAttendanceStore, type ClockInInput } from './attendance'
 import { ensureAuthenticated, openLoginWindow } from './auth'
 import { classifySignInFailure } from './auth-flow'
+import { runIntrospection } from './debug-introspect'
 import { installNetDebug } from './debug-net'
 import { createClient } from './factorial/client'
 import { createOperations, type Operations } from './factorial/operations'
@@ -176,13 +177,16 @@ async function bootstrap(): Promise<void> {
   // Off unless FACTORIAL_DEBUG_NET=1; see debug-net.ts for what it does and does
   // not record.
   installNetDebug(factorialSession)
-  const ops = createOperations(createClient(createNetFetch(factorialSession)))
+  const client = createClient(createNetFetch(factorialSession))
+  const ops = createOperations(client)
 
   const identity = await signInOrOfferAnother(ops)
   // Nothing this app does works without a session, and it has no offline mode by
   // design: opening a window that can only show wrong data would be worse than
   // not opening one. `signInOrOfferAnother` has already quit in that case.
   if (identity === null) return
+  // Off unless FACTORIAL_INTROSPECT names a type; see debug-introspect.ts.
+  await runIntrospection(client)
   const employeeId = identity.employeeId
   console.log('[auth] signed in as', identity.fullName, '/', identity.companyName)
 

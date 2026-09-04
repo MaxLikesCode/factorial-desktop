@@ -79,3 +79,42 @@ Three lessons from this one node:
 
 On days off, expect `expectedMinutes: 0` or an empty `nodes` array. Both mean "no
 target" and are not filled in with eight hours.
+
+## Introspection is switched off now (2026-09)
+
+`__schema` and `__type` answer *"Field '__type' doesn't exist on type
+'root_query'"* since some point after August 2026. What still works is
+**validation**: a document that names candidate fields next to one that
+certainly does not exist fails validation as a whole, so nothing executes — a
+mutation included — and the error list names every field that was unknown.
+Whatever is not in that list exists, and graphql-ruby's *"Did you mean …?"*
+points at neighbours. Run it through the app's own session:
+
+```bash
+FACTORIAL_PROBE_MUTATIONS=updateAttendanceShift,deleteAttendanceShift npm run dev
+FACTORIAL_PROBE_SHIFT_FIELDS=clockIn,clockOut,observations npm run dev
+FACTORIAL_PROBE_DOC='mutation Probe { attendanceMutations { updateAttendanceShift(id: 1, foo: 1) { __typename } __thisFieldCannotExist } }' npm run dev
+```
+
+See `src/main/debug-introspect.ts`; the raw document must contain the
+sentinel `__thisFieldCannotExist`, or the tool refuses to send it.
+
+### Editing shifts — found this way on 2026-09-04
+
+Three more fields on `attendanceMutations`:
+
+| Mutation | Required | Accepted |
+|---|---|---|
+| `createAttendanceShift` | `date: ISO8601Date!` | `clockIn`, `clockOut` (ISO8601DateTime), `locationType`, `workplaceId`, `observations`, `workable`, `timeSettingsBreakConfigurationId`, `referenceDate`, `source`, `employeeId`, `halfDay` |
+| `updateAttendanceShift` | `id: Int!` | `clockIn`, `clockOut`, `date`, `locationType`, `workplaceId`, `observations`, `timeSettingsBreakConfigurationId`, `referenceDate` — **not** `workable`, `source`, `halfDay`, `now` |
+| `deleteAttendanceShift` | `id: Int!` | nothing else |
+
+Not yet verified: whether they return `{ errors, shift }` like the four clock
+mutations (assume so), and what an approved month answers.
+
+`AttendanceShift` also has `clockOut`, `clockOutOffset`, `observations`,
+`locationType`, `workplaceId`, `halfDay`, `attendancePeriodId`, `inSource`,
+`outSource`, `referenceDate`, `employeeId` — none of `status`, `approved`,
+`editable`. The month's approval state is not on the shift; `AttendanceEmployee`
+has `attendanceCyclesConnection` and `attendanceBalancesConnection(startOn,
+endOn)`, neither of which carries an approval field under any obvious name.
