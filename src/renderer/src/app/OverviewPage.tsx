@@ -5,10 +5,9 @@ import { breakMinutes, type DaySegment } from '@shared/day-timeline'
 import { useAttendance, useTicker } from '@renderer/hooks/useAttendance'
 import { useSettings } from '@renderer/hooks/useSettings'
 import { useTranslate } from '@renderer/hooks/useTranslate'
-import { BreakMenu } from '@renderer/components/BreakMenu'
+import { Dropdown } from './Dropdown'
 import { LOCATIONS } from '@renderer/components/LocationSelect'
 import { describeActionError } from '@renderer/lib/errors'
-import { clockInFromButton } from '@renderer/lib/clock-in'
 import { toast } from 'sonner'
 
 /**
@@ -92,15 +91,11 @@ export function OverviewPage({ onEditToday }: { onEditToday: () => void }): Reac
             busy={busy || state.kind === 'unknown'}
             state={state.kind}
             breakOptions={snapshot.breakOptions}
-            onClockIn={(anchor) =>
+            askLocation={settings?.askLocationOnClockIn ?? false}
+            lastLocationType={settings?.lastLocationType ?? 'office'}
+            onClockIn={(locationType) =>
               run(() =>
-                clockInFromButton({
-                  ask: settings?.askLocationOnClockIn ?? false,
-                  lastLocationType: settings?.lastLocationType ?? 'office',
-                  workplaceId: settings?.lastWorkplaceId ?? null,
-                  anchor,
-                  t,
-                }),
+                window.factorial.clockIn({ locationType, workplaceId: settings?.lastWorkplaceId ?? null }),
               )
             }
             onClockOut={() => run(() => window.factorial.clockOut())}
@@ -178,6 +173,8 @@ function Actions({
   busy,
   state,
   breakOptions,
+  askLocation,
+  lastLocationType,
   onClockIn,
   onClockOut,
   onStartBreak,
@@ -187,7 +184,10 @@ function Actions({
   busy: boolean
   state: string
   breakOptions: { id: string; name: string }[]
-  onClockIn: (anchor: DOMRect) => void
+  askLocation: boolean
+  lastLocationType: string
+  /** With the location to clock in at — asked for first when the setting says so. */
+  onClockIn: (locationType: string) => void
   onClockOut: () => void
   onStartBreak: (id: string) => void
   onEndBreak: () => void
@@ -202,13 +202,27 @@ function Actions({
     )
   }
   if (state === 'out' || state === 'unknown') {
+    if (askLocation) {
+      // The question as the window's own list: pick the place, and the pick
+      // is the clock-in. The choice is remembered as the new default too.
+      return (
+        <Dropdown
+          items={LOCATIONS.map((l) => ({ value: l.value, label: t(l.key) }))}
+          value={lastLocationType}
+          disabled={busy}
+          className="app-btn app-btn-primary app-btn-lg"
+          align="end"
+          onSelect={(locationType) => {
+            void window.factorial.setSettings({ lastLocationType: locationType }).catch(() => {})
+            onClockIn(locationType)
+          }}
+        >
+          <PlayIcon /> {t('tray.clockIn')}
+        </Dropdown>
+      )
+    }
     return (
-      <button
-        type="button"
-        className="app-btn app-btn-primary app-btn-lg"
-        disabled={busy}
-        onClick={(event) => onClockIn(event.currentTarget.getBoundingClientRect())}
-      >
+      <button type="button" className="app-btn app-btn-primary app-btn-lg" disabled={busy} onClick={() => onClockIn(lastLocationType)}>
         <PlayIcon /> {t('tray.clockIn')}
       </button>
     )
@@ -216,7 +230,14 @@ function Actions({
   return (
     <div className="flex items-center gap-2.5 pt-1">
       {state === 'in' ? (
-        <BreakMenu options={breakOptions} disabled={busy} onSelect={onStartBreak} className="app-btn app-btn-secondary app-btn-lg" />
+        <Dropdown
+          items={breakOptions.map((o) => ({ value: o.id, label: o.name }))}
+          disabled={busy || breakOptions.length === 0}
+          className="app-btn app-btn-secondary app-btn-lg"
+          onSelect={onStartBreak}
+        >
+          <PauseIcon /> {t('tray.break')}
+        </Dropdown>
       ) : (
         <button type="button" className="app-btn app-btn-secondary app-btn-lg" disabled={busy} onClick={onEndBreak}>
           <PauseIcon /> {t('tray.resume')}
