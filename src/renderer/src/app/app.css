@@ -85,7 +85,8 @@
 html,
 body,
 #root {
-    background: var(--app-sidebar);
+    /* The window is transparent; the page draws the frame (`.app-frame`). */
+    background: transparent;
     color: var(--app-text);
     overflow: hidden;
     /* An app, not a page: dragging across it selects nothing. Fields are the
@@ -407,3 +408,29 @@ img {
 }
 .app-menu-item:hover { background: var(--app-fill-strong); }
 .app-menu-item[aria-selected='true'] { font-weight: 600; }
+
+/* --- the drawn window (frameless, transparent) ------------------------ */
+.app-frame {
+    position: absolute;
+    /* FRAME_MARGIN in main-window.ts: the transparent room for the shadow. */
+    inset: 32px;
+    border-radius: 22px;
+    overflow: hidden;
+    background: var(--app-sidebar);
+    border: 1px solid var(--app-card-border);
+    /* Offset plus blur stays inside the 32 px margin, or the shadow is cut off
+     * at the window's edge with a hard line. */
+    box-shadow: 0 1px 0 var(--app-edge-top) inset, 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(0, 0, 0, 0.3);
+}
+.app-window-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 32px;
+    border-radius: 8px;
+    color: var(--app-muted);
+}
+.app-window-btn svg { width: 15px; height: 15px; }
+.app-window-btn:hover { background: var(--app-fill-strong); color: var(--app-text); }
+.app-window-btn-close:hover { background: #e5484d; color: #fff; }

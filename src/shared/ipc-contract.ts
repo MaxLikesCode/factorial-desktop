@@ -51,6 +51,7 @@ export const IPC = {
   navigate: 'window:navigate',
   getAppInfo: 'app:getInfo',
   checkForUpdates: 'update:check',
+  controlWindow: 'window:control',
 } as const
 
 /**
@@ -76,6 +77,12 @@ export const MAIN_WINDOW_PAGES: readonly MainWindowPage[] = ['overview', 'timesh
 
 export function isMainWindowPage(value: unknown): value is MainWindowPage {
   return typeof value === 'string' && (MAIN_WINDOW_PAGES as readonly string[]).includes(value)
+}
+
+export type WindowControl = 'minimize' | 'close'
+
+export function isWindowControl(value: unknown): value is WindowControl {
+  return value === 'minimize' || value === 'close'
 }
 
 /** What the settings page's About section shows. */
@@ -455,4 +462,6 @@ export interface FactorialBridge {
   getAppInfo(): Promise<AppInfo>
   /** A manual update check; the answer arrives in the update window. */
   checkForUpdates(): Promise<void>
+  /** The frameless app window's own minimise / maximise / close. */
+  controlWindow(action: WindowControl): Promise<void>
 }

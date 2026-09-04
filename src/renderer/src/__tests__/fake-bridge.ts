@@ -112,6 +112,7 @@ export function createFakeBridge(
     onNavigate: () => () => {},
     getAppInfo: vi.fn(async () => ({ version: '0.0.0', electron: '0', chromium: '0', user: { fullName: 'Max', email: 'm@x', companyName: 'X' } })),
     checkForUpdates: vi.fn(async () => {}),
+    controlWindow: vi.fn(async () => {}),
     pushSettings(patch) {
       currentSettings = { ...currentSettings, ...patch }
       for (const listener of [...settingsListeners]) listener(currentSettings)

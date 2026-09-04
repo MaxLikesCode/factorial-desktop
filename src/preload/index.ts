@@ -82,6 +82,7 @@ const bridge: FactorialBridge = {
   },
   getAppInfo: () => ipcRenderer.invoke(IPC.getAppInfo),
   checkForUpdates: () => ipcRenderer.invoke(IPC.checkForUpdates),
+  controlWindow: (action) => ipcRenderer.invoke(IPC.controlWindow, action),
 }
 
 contextBridge.exposeInMainWorld('factorial', bridge)

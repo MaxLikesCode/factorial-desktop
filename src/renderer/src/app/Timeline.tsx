@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { MINUTES_PER_DAY, formatMinuteOfDay, type TimesheetBlock } from '@shared/timesheet'
 
 interface Props {
@@ -31,7 +31,16 @@ export function Timeline({ blocks, now, onChange, disabled = false, nowLabel }: 
   const track = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<{ index: number; part: 'start' | 'end' | 'body'; grabOffset: number } | null>(null)
 
-  const [lo, hi] = rangeOf(blocks, now)
+  // The hours shown. Frozen while a drag runs — recomputing per move made the
+  // scale jump under the pointer whenever a block crossed an hour — and only
+  // ever widened afterwards, so the strip never shifts while the day is edited.
+  const [range, setRange] = useState<[number, number]>(() => rangeOf(blocks, now))
+  useEffect(() => {
+    if (drag !== null) return
+    const [nextLo, nextHi] = rangeOf(blocks, now)
+    setRange(([lo, hi]) => (nextLo < lo || nextHi > hi ? [Math.min(lo, nextLo), Math.max(hi, nextHi)] : [lo, hi]))
+  }, [blocks, now, drag])
+  const [lo, hi] = range
   const span = hi - lo
   const pct = (minute: number): string => `${((minute - lo) / span) * 100}%`
 
@@ -60,7 +69,7 @@ export function Timeline({ blocks, now, onChange, disabled = false, nowLabel }: 
     const floor = previous === undefined ? 0 : (previous.end ?? previous.start)
     const ceiling = next === undefined ? MINUTES_PER_DAY : next.start
     const endNow = block.end ?? now ?? block.start
-    const minute = minuteAt(event.clientX)
+    const minute = clamp(minuteAt(event.clientX), lo, hi)
 
     let start = block.start
     let end = block.end

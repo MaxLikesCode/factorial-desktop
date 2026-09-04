@@ -74,6 +74,7 @@ function handlersFor(store: IpcStore, settings = fakeSettings(), onSignOut = vi.
       openMainWindow: vi.fn(),
       getAppInfo: () => ({ version: '0.0.0', electron: '0', chromium: '0', user: { fullName: 'Max', email: 'm@x', companyName: 'X' } }),
       checkForUpdates: vi.fn(),
+      controlWindow: vi.fn(),
     }),
     settings,
     onSignOut,
@@ -115,6 +116,7 @@ describe('createIpcHandlers', () => {
         IPC.openMainWindow,
         IPC.getAppInfo,
         IPC.checkForUpdates,
+        IPC.controlWindow,
       ].sort(),
     )
     expect(Object.keys(handlers)).not.toContain(IPC.snapshotChanged)

@@ -13,10 +13,10 @@
  * widget stay, so this is never the app's last window.
  */
 
-import { BrowserWindow, app, nativeTheme } from 'electron'
+import { BrowserWindow, app, webContents } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { IPC, MAIN_WINDOW_PAGES, type MainWindowPage } from '@shared/ipc-contract'
+import { IPC, MAIN_WINDOW_PAGES, type MainWindowPage, type WindowControl } from '@shared/ipc-contract'
 
 let win: BrowserWindow | null = null
 /** The section asked for before the page had loaded, delivered on `did-finish-load`. */
@@ -44,28 +44,23 @@ export function showMainWindow(page: MainWindowPage | null = null): void {
 
   pendingPage = page
   const created = new BrowserWindow({
-    width: 980,
-    height: 680,
-    minWidth: 760,
-    minHeight: 520,
+    // The page draws the window: its rounded corners, border and shadow. The
+    // extra 2 x FRAME_MARGIN is the transparent room the shadow needs.
+    width: 980 + 2 * FRAME_MARGIN,
+    height: 680 + 2 * FRAME_MARGIN,
+    // One size. The frame is drawn by the page, so there is no edge to grab
+    // anyway, and a fixed window has no maximised state to draw differently.
+    resizable: false,
+    maximizable: false,
     show: false,
     title: 'Factorial Desktop',
-    // The sidebar is the title bar: the platform draws only its own controls
-    // over the page, which is what lets the sidebar run to the very top.
-    // PLATFORM: on Windows `titleBarOverlay` draws minimise/maximise/close in
-    // the top-right; on macOS the traffic lights sit top-left. Both tinted to
-    // match the page so they do not float on a white strip.
-    titleBarStyle: 'hidden',
-    // The overlay sits over the content column's title strip, so it is tinted
-    // to that strip (`--app-surface-a` in app.css), not to the sidebar — a
-    // block of a different grey behind the three buttons reads as a widget
-    // stuck onto the window.
-    titleBarOverlay: {
-      color: nativeTheme.shouldUseDarkColors ? '#1c1d21' : '#fbfaf8',
-      symbolColor: nativeTheme.shouldUseDarkColors ? '#e5e5e5' : '#2a2a2e',
-      height: 56,
-    },
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#131318' : '#f3f2ef',
+    // Frameless and transparent, like the widget: the platform's own corner
+    // radius cannot be changed, so the window is drawn by the page — a
+    // larger radius, at the price of Aero Snap and edge resizing. The
+    // controls are the page's own too (`controlWindow`).
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
     webPreferences: {
       preload: join(import.meta.dirname, '../preload/index.mjs'),
       contextIsolation: true,
@@ -91,21 +86,6 @@ export function showMainWindow(page: MainWindowPage | null = null): void {
   created.on('closed', () => {
     if (win === created) win = null
   })
-
-  // The theme can change while the window is open; the overlay does not
-  // follow `prefers-color-scheme` by itself the way the page does.
-  const retint = (): void => {
-    if (created.isDestroyed()) return
-    const dark = nativeTheme.shouldUseDarkColors
-    created.setTitleBarOverlay?.({
-      color: dark ? '#1c1d21' : '#fbfaf8',
-      symbolColor: dark ? '#e5e5e5' : '#2a2a2e',
-      height: 56,
-    })
-    created.setBackgroundColor(dark ? '#131318' : '#f3f2ef')
-  }
-  nativeTheme.on('updated', retint)
-  created.on('closed', () => nativeTheme.removeListener('updated', retint))
 
   created.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
 
@@ -144,4 +124,16 @@ export function showMainWindow(page: MainWindowPage | null = null): void {
   } else {
     void created.loadFile(join(import.meta.dirname, '../renderer/app.html'))
   }
+}
+
+/** The transparent margin around the drawn window, in DIP: room for its shadow. */
+export const FRAME_MARGIN = 32
+
+/** The page's own window buttons. Acts on the window that asked. */
+export function controlMainWindow(action: WindowControl, senderId?: number): void {
+  const sender = senderId === undefined ? null : webContents.fromId(senderId)
+  const target = (sender ? BrowserWindow.fromWebContents(sender) : null) ?? getMainWindow()
+  if (target === null || target.isDestroyed()) return
+  if (action === 'minimize') target.minimize()
+  else if (action === 'close') target.close()
 }

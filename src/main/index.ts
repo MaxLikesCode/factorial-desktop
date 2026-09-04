@@ -28,7 +28,7 @@ import { buildLoginItemSettings, createSettings, type Settings } from './setting
 import { createTray, hasTray, refreshTray } from './tray'
 import { createTimesheet } from './timesheet'
 import { watchLongShifts } from './long-shift'
-import { closeMainWindow, getMainWindow, showMainWindow } from './main-window'
+import { closeMainWindow, controlMainWindow, getMainWindow, showMainWindow } from './main-window'
 import { createUpdateLog } from './update-log'
 import { maybePreviewUpdateWindow } from './update-preview'
 import { createUpdater } from './updater'
@@ -315,6 +315,7 @@ async function bootstrap(): Promise<void> {
       user: { fullName: identity.fullName, email: identity.email, companyName: identity.companyName },
     }),
     checkForUpdates: () => void updater.checkNow(true),
+    controlWindow: controlMainWindow,
     // The widget and the app window listen. The login window loads a
     // third-party page with no preload, so a broadcast there is at best wasted
     // and at worst hands app state to someone else's renderer. Both getters are

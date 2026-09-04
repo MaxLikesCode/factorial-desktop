@@ -35,6 +35,8 @@ import {
   type SerialisedSnapshot,
   isMainWindowPage,
   isWidgetDesign,
+  isWindowControl,
+  type WindowControl,
   type AppInfo,
   type MainWindowPage,
 } from '@shared/ipc-contract'
@@ -98,6 +100,8 @@ export interface IpcHandlerDeps {
   getAppInfo: () => AppInfo
   /** A manual update check. Owned by `updater.ts`. */
   checkForUpdates: () => void
+  /** Minimise, maximise or close the window that asked. Owned by `main-window.ts`. */
+  controlWindow: (action: WindowControl, senderId?: number) => void
 }
 
 /** `senderId` is the asking `webContents`' id, for handlers that answer in a window. */
@@ -279,6 +283,7 @@ export function createIpcHandlers({
   openMainWindow,
   getAppInfo,
   checkForUpdates,
+  controlWindow,
 }: IpcHandlerDeps): IpcHandlers {
   const handlers: IpcHandlers = {
     [IPC.getSnapshot]: async () => serialiseSnapshot(store.getSnapshot()),
@@ -355,6 +360,9 @@ export function createIpcHandlers({
     [IPC.getAppInfo]: async () => getAppInfo(),
     [IPC.checkForUpdates]: async () => {
       checkForUpdates()
+    },
+    [IPC.controlWindow]: async (payload, senderId) => {
+      if (isWindowControl(payload)) controlWindow(payload, senderId)
     },
   }
 

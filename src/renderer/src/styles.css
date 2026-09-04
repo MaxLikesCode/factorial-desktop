@@ -317,7 +317,9 @@ body {
     border-radius: 18px;
     border-color: rgba(0, 0, 0, 0.08);
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.86) 55%, rgba(255, 255, 255, 0.92));
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.95) inset, 0 -1px 0 rgba(0, 0, 0, 0.06) inset, 0 12px 32px rgba(0, 0, 0, 0.14);
+    /* Edges only, no drop shadow: the card floats over the desktop, and a
+     * shadow there read as a smudge rather than depth. */
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.95) inset, 0 -1px 0 rgba(0, 0, 0, 0.06) inset;
 }
 .morph-card[data-design='glass'] [data-slot='button'] {
     border-radius: 999px;
@@ -339,7 +341,7 @@ body {
     .morph-card[data-design='glass'] {
         border-color: rgba(255, 255, 255, 0.16);
         background: linear-gradient(135deg, rgba(48, 50, 56, 0.97), rgba(30, 31, 36, 0.94) 55%, rgba(38, 39, 44, 0.96));
-        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.2) inset, 0 -1px 0 rgba(0, 0, 0, 0.35) inset, 0 0 0 0.5px rgba(255, 255, 255, 0.06), 0 20px 50px rgba(0, 0, 0, 0.45);
+        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.2) inset, 0 -1px 0 rgba(0, 0, 0, 0.35) inset, 0 0 0 0.5px rgba(255, 255, 255, 0.06);
     }
     .morph-card[data-design='glass'] [data-slot='button'][class*='outline'],
     .morph-card[data-design='glass'] [data-slot='button'][class*='secondary'] {

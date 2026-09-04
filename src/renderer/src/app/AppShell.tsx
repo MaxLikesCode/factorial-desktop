@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { CalendarDaysIcon, HouseIcon, SettingsIcon, type LucideIcon } from 'lucide-react'
-import type { AppInfo, MainWindowPage } from '@shared/ipc-contract'
+import { useEffect, useState, type ReactNode } from 'react'
+import { CalendarDaysIcon, HouseIcon, MinusIcon, SettingsIcon, XIcon, type LucideIcon } from 'lucide-react'
+import type { AppInfo, MainWindowPage, WindowControl } from '@shared/ipc-contract'
 import type { MessageKey } from '@shared/i18n'
 import { useTranslate } from '@renderer/hooks/useTranslate'
 import { Toaster } from '@renderer/components/ui/sonner'
@@ -42,7 +42,7 @@ export function AppShell(): React.JSX.Element {
   }, [])
 
   return (
-    <div className="flex h-screen w-screen">
+    <div className="app-frame flex">
       <aside
         // The same 12 px above the first entry as beside it. PLATFORM: macOS
         // paints its traffic lights over this corner, so there the column
@@ -81,10 +81,20 @@ export function AppShell(): React.JSX.Element {
       </aside>
 
       <main className="app-surface flex min-w-0 flex-1 flex-col">
-        <div className="titlebar flex h-14 shrink-0 items-center justify-between px-7 text-[13px] font-medium app-muted" style={{ borderBottom: '1px solid var(--app-line)' }}>
+        <div className="titlebar flex h-14 shrink-0 items-center justify-between pr-3 pl-7 text-[13px] font-medium app-muted" style={{ borderBottom: '1px solid var(--app-line)' }}>
           <div ref={setHeaderSlot} className="flex min-w-0 flex-1 items-center">
             {page !== 'timesheet' && <span>{t(NAV.find((n) => n.page === page)?.key ?? 'app.overview')}</span>}
           </div>
+          {!MAC && (
+            <div className="flex items-center gap-1">
+              <WindowButton action="minimize">
+                <MinusIcon />
+              </WindowButton>
+              <WindowButton action="close" close>
+                <XIcon />
+              </WindowButton>
+            </div>
+          )}
         </div>
         <div className="app-scroll flex-1 px-8 pb-10">
           {page === 'overview' && <OverviewPage onEditToday={() => setPage('timesheet')} />}
@@ -94,5 +104,19 @@ export function AppShell(): React.JSX.Element {
       </main>
       <Toaster position="bottom-right" />
     </div>
+  )
+}
+
+/** One of the frameless window's own buttons. PLATFORM: macOS keeps its traffic lights. */
+function WindowButton({ action, close = false, children }: { action: WindowControl; close?: boolean; children: ReactNode }): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      aria-label={action}
+      className={`app-window-btn no-drag ${close ? 'app-window-btn-close' : ''}`}
+      onClick={() => void window.factorial.controlWindow(action).catch(() => {})}
+    >
+      {children}
+    </button>
   )
 }
