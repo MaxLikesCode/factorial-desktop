@@ -71,7 +71,14 @@ export function OverviewPage({ onEditToday }: { onEditToday: () => void }): Reac
               <span>{t(`state.${state.kind}`)}</span>
             </div>
             <div className="app-num text-[64px] leading-none font-semibold" style={{ letterSpacing: '-0.03em' }}>
-              {running ? formatDuration(runningMs) : formatHoursMinutes(worked)}
+              {/* The same number the widget shows: the day's worked time,
+                  running record included, to the second — and during a break
+                  the break itself, which is what is ticking then. */}
+              {state.kind === 'break'
+                ? formatDuration(runningMs)
+                : running
+                  ? formatDuration(snapshot.todayMinutes * 60_000 + runningMs)
+                  : formatHoursMinutes(worked)}
             </div>
             <div className="app-muted text-sm">
               {running
