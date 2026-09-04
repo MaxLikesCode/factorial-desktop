@@ -26,6 +26,12 @@ export function getMainWindow(): BrowserWindow | null {
   return win !== null && !win.isDestroyed() ? win : null
 }
 
+/** Closes the window if it is open — signing out takes the settings away. */
+export function closeMainWindow(): void {
+  const existing = getMainWindow()
+  if (existing !== null) existing.close()
+}
+
 export function showMainWindow(page: MainWindowPage | null = null): void {
   const existing = getMainWindow()
   if (existing !== null) {

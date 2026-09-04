@@ -11,7 +11,7 @@
 
 import { Notification, app, dialog, nativeTheme, powerMonitor } from 'electron'
 import { join } from 'node:path'
-import { IPC, isMainWindowPage, type ThemeSetting } from '@shared/ipc-contract'
+import { IPC, isMainWindowPage, type MainWindowPage, type ThemeSetting } from '@shared/ipc-contract'
 import type { ExpandDirection } from '@shared/widget-size'
 import { resolveUserDataPath } from './app-identity'
 import { createAttendanceStore, type ClockInInput } from './attendance'
@@ -28,7 +28,7 @@ import { buildLoginItemSettings, createSettings, type Settings } from './setting
 import { createTray, hasTray, refreshTray } from './tray'
 import { createTimesheet } from './timesheet'
 import { watchLongShifts } from './long-shift'
-import { getMainWindow, showMainWindow } from './main-window'
+import { closeMainWindow, getMainWindow, showMainWindow } from './main-window'
 import { createUpdateLog } from './update-log'
 import { maybePreviewUpdateWindow } from './update-preview'
 import { createUpdater } from './updater'
@@ -233,8 +233,25 @@ async function bootstrap(): Promise<void> {
    * name, so both routes do exactly the same thing.
    */
   async function signInAgain(): Promise<void> {
+    // The app window is for a signed-in user; with the session gone it goes
+    // away, and the login page is the one window left to look at.
+    closeMainWindow()
     await clearSession()
     openLoginWindow()
+  }
+
+  /**
+   * The app window — for a signed-in user only. Without a session the login
+   * window is offered instead: settings and the timesheet are Factorial's
+   * data, and a page that can only show "not signed in" is not worth a
+   * window.
+   */
+  function openApp(page: MainWindowPage | null): void {
+    if (store.getSnapshot().state.kind === 'unauthenticated') {
+      openLoginWindow()
+      return
+    }
+    showMainWindow(page)
   }
 
   /**
@@ -290,7 +307,7 @@ async function bootstrap(): Promise<void> {
     settings: settingsWithWindowEffects,
     onSignOut: signInAgain,
     timesheet,
-    openMainWindow: (page) => showMainWindow(page),
+    openMainWindow: (page) => openApp(page),
     getAppInfo: () => ({
       version: app.getVersion(),
       electron: process.versions.electron,
@@ -321,7 +338,7 @@ async function bootstrap(): Promise<void> {
     },
     onCheckForUpdates: () => void updater.checkNow(true),
     getUpdateStatus: () => updater.getStatus(),
-    onOpenWindow: (page) => showMainWindow(page),
+    onOpenWindow: (page) => openApp(page),
     onQuit: () => app.quit(),
   })
 
