@@ -439,6 +439,10 @@ img {
     border: 1px solid var(--app-card-border);
     box-shadow: 0 1px 0 var(--app-edge-top) inset, 0 -1px 0 var(--app-edge-bottom) inset, var(--app-card-shadow);
     animation: app-menu-in 120ms ease-out;
+    /* Dropdown.tsx caps the height at the window's edge; the rest scrolls. */
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--app-text) 20%, transparent) transparent;
 }
 @keyframes app-menu-in {
     from { opacity: 0; transform: translateY(-4px) scale(0.98); }
@@ -449,6 +453,8 @@ img {
     align-items: center;
     gap: 10px;
     height: 34px;
+    /* A capped list must not squash its items to fit. */
+    flex: none;
     padding: 0 10px;
     border-radius: 9px;
     font-size: 13px;
