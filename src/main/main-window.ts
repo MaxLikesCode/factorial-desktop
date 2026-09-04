@@ -50,8 +50,12 @@ export function showMainWindow(page: MainWindowPage | null = null): void {
     // the top-right; on macOS the traffic lights sit top-left. Both tinted to
     // match the page so they do not float on a white strip.
     titleBarStyle: 'hidden',
+    // The overlay sits over the content column's title strip, so it is tinted
+    // to that strip (`--app-surface-a` in app.css), not to the sidebar — a
+    // block of a different grey behind the three buttons reads as a widget
+    // stuck onto the window.
     titleBarOverlay: {
-      color: nativeTheme.shouldUseDarkColors ? '#131318' : '#f3f2ef',
+      color: nativeTheme.shouldUseDarkColors ? '#1c1d21' : '#fbfaf8',
       symbolColor: nativeTheme.shouldUseDarkColors ? '#e5e5e5' : '#2a2a2e',
       height: 56,
     },
@@ -88,7 +92,7 @@ export function showMainWindow(page: MainWindowPage | null = null): void {
     if (created.isDestroyed()) return
     const dark = nativeTheme.shouldUseDarkColors
     created.setTitleBarOverlay?.({
-      color: dark ? '#131318' : '#f3f2ef',
+      color: dark ? '#1c1d21' : '#fbfaf8',
       symbolColor: dark ? '#e5e5e5' : '#2a2a2e',
       height: 56,
     })

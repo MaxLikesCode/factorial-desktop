@@ -87,8 +87,19 @@ body,
 #root {
     background: var(--app-sidebar);
     color: var(--app-text);
-    user-select: text;
     overflow: hidden;
+    /* An app, not a page: dragging across it selects nothing. Fields are the
+     * one place text is meant to be selected, and they opt back in. */
+    user-select: none;
+    -webkit-user-select: none;
+}
+input,
+textarea {
+    user-select: text;
+    -webkit-user-select: text;
+}
+img {
+    -webkit-user-drag: none;
 }
 
 /* The top strip is the platform's: its window controls sit over it on Windows,
