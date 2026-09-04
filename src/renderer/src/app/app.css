@@ -145,6 +145,9 @@ img {
     gap: 12px;
     padding: 9px 12px;
     border-radius: 10px;
+    /* Every entry carries the border the active one shows, so switching
+     * entries moves nothing by a pixel. */
+    border: 1px solid transparent;
     text-align: left;
     font-size: 15px;
     font-weight: 500;
@@ -155,7 +158,7 @@ img {
 .app-nav[aria-current='page'] {
     background: linear-gradient(180deg, var(--app-fill-strong), var(--app-fill));
     box-shadow: 0 1px 0 var(--app-secondary-edge) inset;
-    border: 1px solid var(--app-line);
+    border-color: var(--app-line);
     color: var(--app-text);
     font-weight: 600;
 }
