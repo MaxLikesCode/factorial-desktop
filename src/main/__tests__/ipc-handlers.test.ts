@@ -71,6 +71,12 @@ function handlersFor(store: IpcStore, settings = fakeSettings(), onSignOut = vi.
       setWindowDragging,
       popupMenu,
       timesheet: { getMonth: vi.fn(async () => ({ year: 2026, month: 9, days: [] })), saveDay: vi.fn(), withdraw: vi.fn() },
+      overview: {
+        getInsights: vi.fn(async () => ({
+          leaves: [],
+          month: { startOn: '2026-09-01', endOn: '2026-09-30', workedMinutes: 0, expectedToDate: 0, expectedTotal: 0, pendingInconsistencies: 0 },
+        })),
+      },
       openMainWindow: vi.fn(),
       getAppInfo: () => ({ version: '0.0.0', electron: '0', chromium: '0', user: { fullName: 'Max', email: 'm@x', companyName: 'X' } }),
       checkForUpdates: vi.fn(),
@@ -114,6 +120,7 @@ describe('createIpcHandlers', () => {
         IPC.getTimesheetMonth,
         IPC.saveTimesheetDay,
         IPC.withdrawTimesheetRequest,
+        IPC.getOverviewInsights,
         IPC.openMainWindow,
         IPC.getAppInfo,
         IPC.checkForUpdates,

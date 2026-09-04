@@ -28,6 +28,7 @@ import { applyBrowserUserAgent, clearSession, createNetFetch, getFactorialSessio
 import { buildLoginItemSettings, createSettings, type Settings } from './settings'
 import { createTray, hasTray, refreshTray } from './tray'
 import { createTimesheet } from './timesheet'
+import { createOverview } from './overview'
 import { watchLongShifts } from './long-shift'
 import { closeMainWindow, controlMainWindow, getMainWindow, showMainWindow } from './main-window'
 import { createUpdateLog } from './update-log'
@@ -304,6 +305,8 @@ async function bootstrap(): Promise<void> {
     },
   })
 
+  const overview = createOverview({ ops, employeeId })
+
   // Before the window exists: the renderer asks for a snapshot as it mounts, and
   // an unanswered `invoke` would reject in its first effect.
   registerIpc({
@@ -314,6 +317,7 @@ async function bootstrap(): Promise<void> {
     settings: settingsWithWindowEffects,
     onSignOut: signInAgain,
     timesheet,
+    overview,
     openMainWindow: (page) => openApp(page),
     getAppInfo: () => ({
       version: app.getVersion(),

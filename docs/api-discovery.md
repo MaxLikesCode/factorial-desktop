@@ -216,3 +216,41 @@ a pending request; payload `DeleteAttendanceEditTimesheetRequestPayload` with
 the usual `errors` union and `editTimesheetRequest`. There is also an
 `updateAttendanceEditTimesheetRequest`, not probed.
 
+## The profile widgets — 2026-09-05
+
+`app.factorialhr.com/profile` shows five cards: status, absences, timesheet,
+tasks and salary. The documents behind them are not in the bundle as text —
+the app ships them as pre-parsed GraphQL ASTs — but the AST objects can be
+found by operation name (`value:"TimeoffWidget"`), evaluated, and printed
+with a thirty-line printer from the page console. The bundle declares every
+id variable as `ID`; the server wants `Int` (K4), as everywhere else.
+
+**Absences** (`TimeoffWidget`): `timeoff.leavesConnection` answers one
+question per read. `approved: true` returns approved leaves only,
+`includePending: true` returns pending ones only, and neither contains the
+other's — the web app reads both and shows the union. `from:` is the first
+day to consider; `employeeIds: [Int]`, `first`, `includeDuration: true` and
+`sortOrder: {field: "start_on", order: "asc"}` are accepted. A real node:
+
+```jsonc
+{ "id": 33401718, "approved": true, "startOn": "2026-11-19", "finishOn": "2026-11-20",
+  "halfDay": null, "hoursAmountInCents": null,
+  "durationAttributes": "{\"workable_units\":{\"days\":{\"2026\":2.0},\"hours\":{\"2026\":16.0}}, …}",
+  "leaveType": { "id": 2740693, "color": "07A2AD", "identifier": "holiday", "translatedName": "Urlaub" } }
+```
+
+`durationAttributes` is a JSON **string**, and its `workable_units.days`
+(keyed by year) is the only place the "2 Tage" of the card lives.
+
+**Timesheet** (`TimesheetInsight`):
+`attendance.employee(id:).attendanceAggregatedWorkedTime(startOn:, endOn:)`
+returns `{ id, minutes, trackedMinutes }` — Factorial's own sum, which read
+1856 for a month the web app showed as "30h 56m". The card's planned hours
+are the sum of `attendanceEstimatedTimesConnection`'s per-day `minutes`
+(see "The target time in particular" for why `expectedMinutes` is used
+here instead). `timeInsights.inconsistenciesConnection(employeeIds:,
+startOn:, endOn:, state: pending) { totalCount }` is the "zu
+vervollständigen" count.
+
+**Tasks** (`TasksInsight`) hang off `tasks.tasksSummariesConnection(assigneeId:)`
+with an *access* id, not the employee id, and are not read by this app.

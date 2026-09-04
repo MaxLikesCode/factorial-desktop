@@ -32,7 +32,9 @@ import type {
   EditRequestRecord,
   EditRequestType,
   Identity,
+  LeaveRecord,
   LocationType,
+  MonthWorkedTime,
   MutationError,
   ShiftRecord,
   ShiftSummary,
@@ -267,6 +269,49 @@ const MUTATION_RESULT = `
         ... on StructuredError { field messages }
       }
 `
+
+const LEAVE_FIELDS = `
+                id approved startOn finishOn halfDay durationAttributes
+                leaveType { id color translatedName }
+`
+
+/**
+ * One `TimeoffLeave`. `durationAttributes` is a JSON *string* holding, among
+ * other things, the working days per year the leave covers —
+ * `{"workable_units":{"days":{"2026":2.0}}}` — and is the only place the day
+ * count lives. It is read tolerantly: a card that says "Urlaub 19.–20. Nov"
+ * without "2 Tage" is still right, a card that failed to load is not.
+ */
+function parseLeave(value: unknown, path: string): LeaveRecord {
+  const leave = asRecord(value, path)
+  const type = asRecord(leave.leaveType, `${path}.leaveType`)
+  return {
+    id: asId(leave.id, `${path}.id`),
+    approved: asNullableBoolean(leave.approved, `${path}.approved`),
+    startOn: asString(leave.startOn, `${path}.startOn`),
+    finishOn: asString(leave.finishOn, `${path}.finishOn`),
+    name: asString(type.translatedName, `${path}.leaveType.translatedName`),
+    color: asNullableString(type.color, `${path}.leaveType.color`),
+    days: leaveDays(leave.durationAttributes),
+  }
+}
+
+function leaveDays(raw: unknown): number | null {
+  if (typeof raw !== 'string') return null
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    const units = asRecord(asRecord(parsed, 'durationAttributes').workable_units, 'workable_units')
+    const days = asRecord(units.days, 'days')
+    let total = 0
+    for (const amount of Object.values(days)) {
+      if (typeof amount !== 'number' || !Number.isFinite(amount)) return null
+      total += amount
+    }
+    return total
+  } catch {
+    return null
+  }
+}
 
 // --- operations -------------------------------------------------------------
 
@@ -563,6 +608,91 @@ export function createOperations(client: GraphQLClient) {
     },
 
     /**
+     * Absences from a day on, approved and still-pending alike — the profile
+     * page's "Abwesenheiten" card (docs/api-discovery.md, "The profile
+     * widgets"). Two reads because the connection answers one question at a
+     * time: `approved: true` returns approved leaves only, `includePending:
+     * true` returns pending ones only, and neither returns the other's. Merged
+     * by id and ordered by start, at most `first` of each.
+     *
+     * `employeeIds` is `[Int]` on the server; the web app's bundle declares
+     * `ID`, which is the same mismatch as everywhere else (K4).
+     */
+    async fetchUpcomingLeaves(employeeId: number, from: string, first = 5): Promise<LeaveRecord[]> {
+      const data = await client.execute<unknown>({
+        operationName: 'UpcomingLeaves',
+        variables: { employeeId, from, first },
+        query: `query UpcomingLeaves($employeeId: Int!, $from: ISO8601Date!, $first: Int!) {
+          timeoff {
+            approved: leavesConnection(approved: true, employeeIds: [$employeeId], first: $first, from: $from,
+                                       includeDuration: true, sortOrder: {field: "start_on", order: "asc"}) {
+              nodes {${LEAVE_FIELDS}              }
+            }
+            pending: leavesConnection(employeeIds: [$employeeId], first: $first, from: $from,
+                                      includeDuration: true, includePending: true,
+                                      sortOrder: {field: "start_on", order: "asc"}) {
+              nodes {${LEAVE_FIELDS}              }
+            }
+          }
+        }`,
+      })
+
+      const timeoff = field(data, 'UpcomingLeaves.data', 'timeoff')
+      const byId = new Map<string, LeaveRecord>()
+      for (const list of ['approved', 'pending'] as const) {
+        const base = `UpcomingLeaves.data.timeoff.${list}`
+        connectionNodes(field(timeoff, 'UpcomingLeaves.data.timeoff', list), base).forEach((node, index) => {
+          const leave = parseLeave(node, `${base}.nodes[${index}]`)
+          if (!byId.has(leave.id)) byId.set(leave.id, leave)
+        })
+      }
+      return [...byId.values()].sort((a, b) => a.startOn.localeCompare(b.startOn))
+    },
+
+    /**
+     * Factorial's own sum of a range's worked minutes, plus how many days in it
+     * it flags as inconsistent — the profile page's "Stundenzettel" card. The
+     * sum is `attendanceAggregatedWorkedTime.minutes`; verified on 2026-09-05
+     * to match the web app's "30h 56m" for the month to date.
+     *
+     * The inconsistency count is decoration: a malformed answer there is
+     * `null`, not a failed card.
+     */
+    async fetchMonthWorkedTime(employeeId: number, startOn: string, endOn: string): Promise<MonthWorkedTime> {
+      const data = await client.execute<unknown>({
+        operationName: 'MonthWorkedTime',
+        variables: { id: employeeId, startOn, endOn },
+        query: `query MonthWorkedTime($id: Int!, $startOn: ISO8601Date!, $endOn: ISO8601Date!) {
+          attendance { employee(id: $id) {
+            attendanceAggregatedWorkedTime(startOn: $startOn, endOn: $endOn) { id minutes trackedMinutes }
+          } }
+          timeInsights {
+            inconsistenciesConnection(employeeIds: [$id], startOn: $startOn, endOn: $endOn, state: pending) { totalCount }
+          }
+        }`,
+      })
+
+      const employee = attendanceEmployee(data, 'MonthWorkedTime')
+      const aggregated = employee.attendanceAggregatedWorkedTime
+      const base = 'MonthWorkedTime.data.attendance.employee.attendanceAggregatedWorkedTime'
+      // No record in the range at all comes back as null; that is zero minutes.
+      const minutes =
+        aggregated === null || aggregated === undefined ? 0 : asInteger(field(aggregated, base, 'minutes'), `${base}.minutes`)
+
+      let pendingInconsistencies: number | null = null
+      try {
+        const insights = field(data, 'MonthWorkedTime.data', 'timeInsights')
+        const connection = field(insights, 'MonthWorkedTime.data.timeInsights', 'inconsistenciesConnection')
+        pendingInconsistencies = asInteger(
+          field(connection, 'MonthWorkedTime.data.timeInsights.inconsistenciesConnection', 'totalCount'),
+          'MonthWorkedTime.data.timeInsights.inconsistenciesConnection.totalCount',
+        )
+      } catch {
+        pendingInconsistencies = null
+      }
+      return { minutes, pendingInconsistencies }
+    },
+
     /**
      * The next three write attendance shifts directly, which is the *manager's*
      * side of the timesheet: an ordinary account is refused by all of them with

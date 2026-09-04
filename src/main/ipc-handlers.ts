@@ -43,6 +43,7 @@ import {
 import { MINUTES_PER_DAY, parseIsoDate, type DayEdit, type TimesheetBlock } from '@shared/timesheet'
 import { asHoursSetting } from './long-shift'
 import type { Timesheet } from './timesheet'
+import type { Overview } from './overview'
 import {
   ACTION_IN_FLIGHT_MESSAGE,
   type AttendanceSnapshot,
@@ -95,6 +96,8 @@ export interface IpcHandlerDeps {
   onSignOut: () => Promise<void>
   /** Recorded time, by month and by day. Owned by `timesheet.ts`. */
   timesheet: Pick<Timesheet, 'getMonth' | 'saveDay' | 'withdraw'>
+  /** The overview's absences and month cards. Owned by `overview.ts`. */
+  overview: Pick<Overview, 'getInsights'>
   /** Opens the app window at a section. Owned by `main-window.ts`. */
   openMainWindow: (page: MainWindowPage | null) => void
   getAppInfo: () => AppInfo
@@ -280,6 +283,7 @@ export function createIpcHandlers({
   setWindowDragging,
   popupMenu,
   timesheet,
+  overview,
   openMainWindow,
   getAppInfo,
   checkForUpdates,
@@ -361,6 +365,7 @@ export function createIpcHandlers({
       }
       return timesheet.withdraw(raw.requestId, raw.date)
     },
+    [IPC.getOverviewInsights]: async () => overview.getInsights(),
     [IPC.openMainWindow]: async (payload) => {
       openMainWindow(isMainWindowPage(payload) ? payload : null)
     },

@@ -734,3 +734,104 @@ describe('requestTimesheetEdit', () => {
   })
 })
 
+describe('fetchUpcomingLeaves', () => {
+  /** Verified TimeoffLeave (2026-09-05): numeric id, the day count inside a JSON string. */
+  const leave = (over: Record<string, unknown> = {}) => ({
+    id: 33401718,
+    approved: true,
+    startOn: '2026-11-19',
+    finishOn: '2026-11-20',
+    halfDay: null,
+    durationAttributes: '{"workable_units":{"days":{"2026":2.0},"hours":{"2026":16.0}}}',
+    leaveType: { id: 2740693, color: '07A2AD', translatedName: 'Urlaub' },
+    ...over,
+  })
+
+  it('asks both lists with the id as an integer, from the given day', async () => {
+    const { client, calls } = recordingClient({ timeoff: { approved: { nodes: [] }, pending: { nodes: [] } } })
+    await createOperations(client).fetchUpcomingLeaves(1111111, '2026-09-05')
+    expect(only(calls).variables).toEqual({ employeeId: 1111111, from: '2026-09-05', first: 5 })
+    expect(only(calls).query).toContain('approved: true')
+    expect(only(calls).query).toContain('includePending: true')
+  })
+
+  it('merges the approved and the pending list by id and orders by start', async () => {
+    const { client } = recordingClient({
+      timeoff: {
+        approved: { nodes: [leave({ id: 2, startOn: '2026-11-23', finishOn: '2026-11-27' }), leave()] },
+        pending: { nodes: [leave({ id: 3, approved: null, startOn: '2026-10-01', finishOn: '2026-10-01' }), leave()] },
+      },
+    })
+    const leaves = await createOperations(client).fetchUpcomingLeaves(1111111, '2026-09-05')
+    expect(leaves.map((l) => [l.id, l.approved, l.startOn])).toEqual([
+      ['3', null, '2026-10-01'],
+      ['33401718', true, '2026-11-19'],
+      ['2', true, '2026-11-23'],
+    ])
+  })
+
+  it('reads the day count out of the JSON string, and gives it up rather than failing', async () => {
+    const { client } = recordingClient({
+      timeoff: {
+        approved: {
+          nodes: [
+            leave(),
+            leave({ id: 2, durationAttributes: 'not json' }),
+            leave({ id: 3, durationAttributes: null }),
+            leave({ id: 4, durationAttributes: '{"workable_units":{"days":{"2026":1.0,"2027":1.5}}}' }),
+          ],
+        },
+        pending: { nodes: [] },
+      },
+    })
+    const leaves = await createOperations(client).fetchUpcomingLeaves(1111111, '2026-09-05')
+    expect(leaves.map((l) => l.days)).toEqual([2, null, null, 2.5])
+    expect(leaves[0]).toMatchObject({ name: 'Urlaub', color: '07A2AD', finishOn: '2026-11-20' })
+  })
+
+  it('reports a leave without a type as malformed', async () => {
+    const { client } = recordingClient({ timeoff: { approved: { nodes: [leave({ leaveType: null })] }, pending: { nodes: [] } } })
+    await expect(createOperations(client).fetchUpcomingLeaves(1111111, '2026-09-05')).rejects.toMatchObject({ kind: 'malformed' })
+  })
+})
+
+describe('fetchMonthWorkedTime', () => {
+  it('returns Factorial’s own sum and the pending inconsistency count', async () => {
+    const { client, calls } = recordingClient({
+      attendance: { employee: { attendanceAggregatedWorkedTime: { id: '1111111_2026-09-01', minutes: 1856, trackedMinutes: 1856 } } },
+      timeInsights: { inconsistenciesConnection: { totalCount: 2 } },
+    })
+    await expect(createOperations(client).fetchMonthWorkedTime(1111111, '2026-09-01', '2026-09-30')).resolves.toEqual({
+      minutes: 1856,
+      pendingInconsistencies: 2,
+    })
+    expect(only(calls).variables).toEqual({ id: 1111111, startOn: '2026-09-01', endOn: '2026-09-30' })
+  })
+
+  it('reads an absent aggregate as zero minutes', async () => {
+    const { client } = recordingClient({
+      attendance: { employee: { attendanceAggregatedWorkedTime: null } },
+      timeInsights: { inconsistenciesConnection: { totalCount: 0 } },
+    })
+    await expect(createOperations(client).fetchMonthWorkedTime(1111111, '2026-09-01', '2026-09-30')).resolves.toEqual({
+      minutes: 0,
+      pendingInconsistencies: 0,
+    })
+  })
+
+  it('keeps the sum when the inconsistency count is unreadable', async () => {
+    const { client } = recordingClient({
+      attendance: { employee: { attendanceAggregatedWorkedTime: { minutes: 10 } } },
+      timeInsights: null,
+    })
+    await expect(createOperations(client).fetchMonthWorkedTime(1111111, '2026-09-01', '2026-09-30')).resolves.toEqual({
+      minutes: 10,
+      pendingInconsistencies: null,
+    })
+  })
+
+  it('does not read a missing employee as an empty month', async () => {
+    const { client } = recordingClient({ attendance: { employee: null }, timeInsights: null })
+    await expect(createOperations(client).fetchMonthWorkedTime(1111111, '2026-09-01', '2026-09-30')).rejects.toMatchObject({ kind: 'malformed' })
+  })
+})

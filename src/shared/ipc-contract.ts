@@ -28,6 +28,7 @@
 import type { AttendanceState } from './attendance-state'
 import type { LanguageSetting } from './i18n'
 import type { DayEdit, DaySaveResult, TimesheetDay, TimesheetMonth } from './timesheet'
+import type { OverviewInsights } from './overview'
 
 export const IPC = {
   getSnapshot: 'attendance:getSnapshot',
@@ -48,6 +49,7 @@ export const IPC = {
   getTimesheetMonth: 'timesheet:getMonth',
   saveTimesheetDay: 'timesheet:saveDay',
   withdrawTimesheetRequest: 'timesheet:withdrawRequest',
+  getOverviewInsights: 'overview:getInsights',
   openMainWindow: 'window:openMain',
   navigate: 'window:navigate',
   getAppInfo: 'app:getInfo',
@@ -458,6 +460,8 @@ export interface FactorialBridge {
   saveTimesheetDay(edit: DayEdit): Promise<DaySaveResult>
   /** Takes one pending change request back; resolves with its day, re-read. */
   withdrawTimesheetRequest(requestId: string, date: string): Promise<TimesheetDay>
+  /** The overview's absences and month cards, read fresh. */
+  getOverviewInsights(): Promise<OverviewInsights>
   /** Opens the app window, optionally at a section. */
   openMainWindow(page?: MainWindowPage): Promise<void>
   /** The app window is told which section to show; returns its own unsubscribe. */

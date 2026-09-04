@@ -73,6 +73,7 @@ const bridge: FactorialBridge = {
   getTimesheetMonth: (year, month) => ipcRenderer.invoke(IPC.getTimesheetMonth, { year, month }),
   saveTimesheetDay: (edit) => ipcRenderer.invoke(IPC.saveTimesheetDay, edit),
   withdrawTimesheetRequest: (requestId, date) => ipcRenderer.invoke(IPC.withdrawTimesheetRequest, { requestId, date }),
+  getOverviewInsights: () => ipcRenderer.invoke(IPC.getOverviewInsights),
   openMainWindow: (page) => ipcRenderer.invoke(IPC.openMainWindow, page ?? null),
   onNavigate: (callback) => {
     const handler = (_event: unknown, page: MainWindowPage): void => callback(page)

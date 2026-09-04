@@ -113,6 +113,10 @@ export function createFakeBridge(
       requested: edit.blocks.length,
     })),
     withdrawTimesheetRequest: vi.fn(async (_id, date) => ({ date, blocks: [], expectedMinutes: null, requests: [] })),
+    getOverviewInsights: vi.fn(async () => ({
+      leaves: [],
+      month: { startOn: '2026-09-01', endOn: '2026-09-30', workedMinutes: 0, expectedToDate: 0, expectedTotal: 0, pendingInconsistencies: 0 },
+    })),
     openMainWindow: vi.fn(async () => {}),
     onNavigate: () => () => {},
     getAppInfo: vi.fn(async () => ({ version: '0.0.0', electron: '0', chromium: '0', user: { fullName: 'Max', email: 'm@x', companyName: 'X' } })),

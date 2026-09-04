@@ -137,3 +137,18 @@ export type MutationError =
   | { kind: 'simple'; typename: string; message: string | null; type: string | null }
   | { kind: 'structured'; typename: string; field: string | null; messages: string[] }
   | { kind: 'unknown'; typename: string }
+
+/**
+ * One `TimeoffLeave` from `timeoff.leavesConnection`, as the overview's
+ * absences card shows it. The same shape as `UpcomingLeave` in
+ * `@shared/overview` — it is the shared type, re-exported under the name this
+ * module uses for what it reads.
+ */
+import type { UpcomingLeave } from '@shared/overview'
+export type LeaveRecord = UpcomingLeave
+
+/** `attendanceAggregatedWorkedTime` plus the pending inconsistency count. */
+export interface MonthWorkedTime {
+  minutes: number
+  pendingInconsistencies: number | null
+}
