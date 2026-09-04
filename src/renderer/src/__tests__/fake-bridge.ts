@@ -110,7 +110,7 @@ export function createFakeBridge(
     saveTimesheetDay: vi.fn(async (edit) => ({ date: edit.date, blocks: edit.blocks, expectedMinutes: null })),
     openMainWindow: vi.fn(async () => {}),
     onNavigate: () => () => {},
-    getAppInfo: vi.fn(async () => ({ version: '0.0.0', electron: '0', chromium: '0' })),
+    getAppInfo: vi.fn(async () => ({ version: '0.0.0', electron: '0', chromium: '0', user: { fullName: 'Max', email: 'm@x', companyName: 'X' } })),
     checkForUpdates: vi.fn(async () => {}),
     pushSettings(patch) {
       currentSettings = { ...currentSettings, ...patch }

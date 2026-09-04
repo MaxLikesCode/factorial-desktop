@@ -72,7 +72,7 @@ function handlersFor(store: IpcStore, settings = fakeSettings(), onSignOut = vi.
       popupMenu,
       timesheet: { getMonth: vi.fn(async () => ({ year: 2026, month: 9, days: [] })), saveDay: vi.fn() },
       openMainWindow: vi.fn(),
-      getAppInfo: () => ({ version: '0.0.0', electron: '0', chromium: '0' }),
+      getAppInfo: () => ({ version: '0.0.0', electron: '0', chromium: '0', user: { fullName: 'Max', email: 'm@x', companyName: 'X' } }),
       checkForUpdates: vi.fn(),
     }),
     settings,

@@ -295,6 +295,7 @@ async function bootstrap(): Promise<void> {
       version: app.getVersion(),
       electron: process.versions.electron,
       chromium: process.versions.chrome,
+      user: { fullName: identity.fullName, email: identity.email, companyName: identity.companyName },
     }),
     checkForUpdates: () => void updater.checkNow(true),
     // The widget and the app window listen. The login window loads a

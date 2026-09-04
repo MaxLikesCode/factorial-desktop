@@ -83,6 +83,8 @@ export interface AppInfo {
   version: string
   electron: string
   chromium: string
+  /** Who is signed in, as Factorial names them. */
+  user: { fullName: string; email: string; companyName: string }
 }
 
 export interface BreakOption {

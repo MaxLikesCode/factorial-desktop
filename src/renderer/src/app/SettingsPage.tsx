@@ -111,16 +111,42 @@ export function SettingsPage(): React.JSX.Element {
       </Section>
 
       <Section title={t('settingsPage.account')}>
-        <Row
-          label={snapshot.state.kind === 'unauthenticated' ? t('state.unauthenticated') : t('settingsPage.signedInAs')}
-        >
-          <button type="button" className="app-btn app-btn-secondary" onClick={() => void window.factorial.signOut().catch(() => {})}>
+        <div className="flex items-center justify-between gap-6 px-[18px] py-3.5">
+          <span className="flex min-w-0 items-center gap-3">
+            <span
+              className="flex size-10 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold text-white"
+              style={{ background: 'linear-gradient(180deg, #ff9a3c, #ef6a1f)' }}
+            >
+              {initials(info?.user.fullName ?? '')}
+            </span>
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span className="truncate text-[15px] font-medium">
+                {info?.user.fullName ?? (snapshot.state.kind === 'unauthenticated' ? t('state.unauthenticated') : t('settingsPage.signedInAs'))}
+              </span>
+              {info !== null && (
+                <span className="app-muted truncate text-[13px]">
+                  {info.user.email} · {info.user.companyName}
+                </span>
+              )}
+            </span>
+          </span>
+          <button type="button" className="app-btn app-btn-secondary shrink-0" onClick={() => void window.factorial.signOut().catch(() => {})}>
             {snapshot.state.kind === 'unauthenticated' ? t('tray.signIn') : t('tray.signOut')}
           </button>
-        </Row>
+        </div>
       </Section>
     </div>
   )
+}
+
+/** "Max Gieß" → "MG"; one letter for a single name, nothing for none. */
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter((part) => part !== '')
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('')
 }
 
 function Section({ title, children, wide = false }: { title: string; children: ReactNode; wide?: boolean }): React.JSX.Element {
