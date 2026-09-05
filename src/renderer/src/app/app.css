@@ -267,6 +267,10 @@ img {
     border-radius: 6px;
     color: var(--app-muted);
     font-weight: 500;
+    /* The same 120 ms `.app-nav` uses, so the two "which one is on" controls
+       change hands the same way. A cross-fade, not a sliding thumb: a thumb
+       needs a measured indicator and buys nothing at a setting's frequency. */
+    transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
 }
 .app-seg button[aria-pressed='true'] {
     background: var(--app-fill-strong);
@@ -321,6 +325,17 @@ img {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 .tl-block:active { cursor: grabbing; }
+/* A block added with "+ Work" fades onto the strip instead of appearing in one
+   frame. Opacity only, on purpose: `left` and `width` must never transition,
+   or a drag would trail the pointer. */
+.tl-block {
+    transition: opacity 160ms var(--ease-out);
+}
+@starting-style {
+    .tl-block {
+        opacity: 0;
+    }
+}
 .tl-block[data-kind='work'] {
     background: linear-gradient(180deg, var(--app-work-2), var(--app-work));
     color: #04291b;
@@ -424,6 +439,47 @@ img {
 .app-dot-break { background: var(--app-break); }
 .app-dot-pending { background: var(--app-pending); }
 .app-row-hover:hover { background: var(--app-fill); }
+
+/* --- things that arrive ---------------------------------------------- */
+
+/*
+ * Enter only, throughout. Leaving stays instant — the widget's own rule,
+ * "leaving should not keep anyone waiting" — and an exit would need the
+ * element kept mounted past its state, which none of these are.
+ *
+ * `@starting-style` is what lets a plain transition run on the first frame:
+ * without it an element is born at its final value and nothing moves.
+ * Reduced motion is handled once, in styles.css, by collapsing every
+ * transition to 1 ms.
+ */
+
+/* The day editor opening under a timesheet row. It is the tallest thing
+   the app window ever adds in one step, and without this every row below
+   it teleports down. `interpolate-size` lets the height run to `auto`, so
+   the editor may be any height and still resize normally once open. */
+.app-expand {
+    interpolate-size: allow-keywords;
+    overflow: hidden;
+    height: auto;
+    transition: height 240ms var(--ease-out), opacity 160ms var(--ease-out);
+}
+@starting-style {
+    .app-expand {
+        height: 0;
+        opacity: 0;
+    }
+}
+
+/* A row added to a list — an editor's block, the hint under it. */
+.app-row-enter {
+    transition: opacity 160ms var(--ease-out), transform 200ms var(--ease-out);
+}
+@starting-style {
+    .app-row-enter {
+        opacity: 0;
+        transform: translateY(-3px);
+    }
+}
 
 /* --- dropdown list (Dropdown.tsx) ------------------------------------- */
 .app-menu {

@@ -114,7 +114,7 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
 
       <div className="flex flex-col gap-2">
         {blocks.map((block, index) => (
-          <div key={block.id ?? `new-${index}`} className="flex items-center gap-3 rounded-[10px] px-2.5 py-2 text-sm" style={{ background: 'var(--app-fill)' }} data-slot="block-row">
+          <div key={block.id ?? `new-${index}`} className="app-row-enter flex items-center gap-3 rounded-[10px] px-2.5 py-2 text-sm" style={{ background: 'var(--app-fill)' }} data-slot="block-row">
             {block.kind === 'break' && breakOptions.length > 1 ? (
               // The chip is the picker: the type opens the platform's menu,
               // and the row keeps its columns whatever the type is called.
@@ -224,7 +224,7 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
 
       {/* Shown while there is something to send, which is when it matters: the
           times snap back after the request, and unexplained that looks broken. */}
-      {dirty && <div className="app-faint text-xs">{t('timesheet.pendingHint')}</div>}
+      {dirty && <div className="app-row-enter app-faint text-xs">{t('timesheet.pendingHint')}</div>}
     </div>
   )
 }

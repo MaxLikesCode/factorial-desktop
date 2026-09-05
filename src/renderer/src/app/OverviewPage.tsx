@@ -69,7 +69,16 @@ export function OverviewPage({ onEditToday }: { onEditToday: () => void }): Reac
         <div className="flex items-center justify-between gap-6">
           <div className="flex flex-col gap-1">
             <div className="app-muted flex items-center gap-2 text-[13px] font-medium">
-              <span className="size-2 rounded-full" style={{ background: tone, boxShadow: running ? `0 0 0 4px color-mix(in oklch, ${tone} 22%, transparent)` : undefined }} />
+              <span
+              className="size-2 rounded-full"
+              style={{
+                background: tone,
+                boxShadow: running ? `0 0 0 4px color-mix(in oklch, ${tone} 22%, transparent)` : undefined,
+                // The same 300 ms the widget's dot takes (WidgetCard.tsx), so a
+                // clock-in changes colour at one speed on both surfaces.
+                transition: 'background 300ms var(--ease-out), box-shadow 300ms var(--ease-out)',
+              }}
+            />
               <span>{t(`state.${state.kind}`)}</span>
             </div>
             <div className="app-num text-[40px] leading-none font-semibold" style={{ letterSpacing: '-0.03em' }}>

@@ -200,19 +200,23 @@ export function TimesheetPage({ headerSlot }: { headerSlot: HTMLElement | null }
                 </span>
               </button>
               {opened && (
-                <DayEditor
-                  day={day}
-                  breakOptions={snapshot.breakOptions}
-                  now={now}
-                  onSaved={(saved) =>
-                    setMonth((current) => {
-                      if (current === null) return current
-                      const next = { ...current, days: current.days.map((d) => (d.date === saved.date ? saved : d)) }
-                      loadedMonths.set(monthKey(cursor), next)
-                      return next
-                    })
-                  }
-                />
+                // Grows open rather than appearing whole (`.app-expand`);
+                // closing is instant, the row simply takes its place back.
+                <div className="app-expand">
+                  <DayEditor
+                    day={day}
+                    breakOptions={snapshot.breakOptions}
+                    now={now}
+                    onSaved={(saved) =>
+                      setMonth((current) => {
+                        if (current === null) return current
+                        const next = { ...current, days: current.days.map((d) => (d.date === saved.date ? saved : d)) }
+                        loadedMonths.set(monthKey(cursor), next)
+                        return next
+                      })
+                    }
+                  />
+                </div>
               )}
             </div>
           )
