@@ -1,14 +1,75 @@
 /*
- * The update window is an ordinary window, not the widget: it has a
- * background, and its text may be selected. Both are undone from `styles.css`
- * here, which is imported after it so these rules win.
+ * The update window's own rules, on top of `app.css`.
+ *
+ * The window is dressed as the app window — same tokens, same cards, same
+ * buttons — so everything visual lives in `app.css` and this file holds only
+ * what is different here: the surface is drawn by the page rather than by
+ * `.app-frame` (this window is opaque and the platform draws its corners),
+ * text may be selected, and the release notes are prose, which nothing else
+ * in the app is.
  */
 html,
 body,
 #root {
-    background: var(--background);
+    background: var(--app-surface-a);
     user-select: text;
+    -webkit-user-select: text;
 }
+
+/* The app's content column, without the sidebar beside it. */
+.update-surface {
+    background: linear-gradient(180deg, var(--app-surface-a), var(--app-surface-b));
+    color: var(--app-text);
+}
+
+/*
+ * A state arriving — offer, download, ready, failed. This window is seen a
+ * few times a month, which is what affords it 200 ms where the widget gets
+ * none. `@starting-style` runs the transition on the first frame; reduced
+ * motion collapses it to 1 ms through styles.css.
+ */
+.update-state {
+    transition: opacity 200ms var(--ease-out), transform 260ms var(--ease-out);
+}
+@starting-style {
+    .update-state {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+}
+
+/* --- the download bar -------------------------------------------------- */
+
+/*
+ * The same accent gradient as the primary button, on the same track colour
+ * the switch uses when it is off.
+ */
+.update-bar {
+    height: 8px;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--app-fill-strong);
+    box-shadow: 0 1px 0 var(--app-secondary-edge) inset;
+}
+.update-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(180deg, var(--app-accent-2), var(--app-accent));
+    transition: width 200ms var(--ease-out);
+}
+/* macOS's second pass reports no bytes; a full bar that breathes says
+   "working", where one parked at 100 % would say "done". */
+.update-bar-pulse {
+    width: 100%;
+    opacity: 0.55;
+    animation: update-bar-pulse 1.6s ease-in-out infinite;
+}
+@keyframes update-bar-pulse {
+    50% { opacity: 0.9; }
+}
+
+/* --- release notes ----------------------------------------------------- */
 
 /*
  * The release notes arrive as HTML from GitHub's release feed, already
@@ -24,10 +85,10 @@ body,
     font-weight: 600;
     margin: 1em 0 0.4em;
 }
-.release-notes h1 { font-size: 1.15rem; }
-.release-notes h2 { font-size: 1.05rem; }
+.release-notes h1 { font-size: 1.05rem; }
+.release-notes h2 { font-size: 0.95rem; }
 .release-notes h3,
-.release-notes h4 { font-size: 0.95rem; }
+.release-notes h4 { font-size: 0.9rem; }
 .release-notes > :first-child { margin-top: 0; }
 .release-notes p { margin: 0.4em 0; }
 .release-notes ul,
@@ -35,10 +96,11 @@ body,
 .release-notes ul { list-style: disc; }
 .release-notes ol { list-style: decimal; }
 .release-notes li { margin: 0.2em 0; }
+.release-notes li::marker { color: var(--app-faint); }
 .release-notes code {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 0.85em;
-    background: color-mix(in oklch, var(--foreground) 8%, transparent);
+    background: var(--app-fill-strong);
     padding: 0.1em 0.35em;
     border-radius: 0.3em;
 }
@@ -46,13 +108,17 @@ body,
     overflow-x: auto;
     padding: 0.6em 0.8em;
     border-radius: 0.5em;
-    background: color-mix(in oklch, var(--foreground) 8%, transparent);
+    background: var(--app-fill-strong);
 }
 .release-notes pre code { background: none; padding: 0; }
-.release-notes a { text-decoration: underline; text-underline-offset: 2px; }
-.release-notes blockquote {
-    border-left: 3px solid var(--border);
-    padding-left: 0.8em;
-    color: var(--muted-foreground);
+.release-notes a {
+    color: var(--app-accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
 }
-.release-notes hr { border-color: var(--border); margin: 0.8em 0; }
+.release-notes blockquote {
+    border-left: 3px solid var(--app-line);
+    padding-left: 0.8em;
+    color: var(--app-muted);
+}
+.release-notes hr { border-color: var(--app-line); margin: 0.8em 0; }

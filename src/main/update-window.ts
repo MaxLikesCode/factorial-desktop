@@ -92,8 +92,9 @@ export function showUpdateWindow(
     fullscreenable: false,
     title: 'Factorial Desktop',
     // What shows before the page paints — matched to the page's own
-    // background so the window does not flash white in the dark theme.
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#252525' : '#ffffff',
+    // background (`--app-surface-a`) so the window does not flash white in
+    // the dark theme, or grey in the light one.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#232326' : '#fbfaf9',
     webPreferences: {
       preload: join(import.meta.dirname, '../preload/update.mjs'),
       contextIsolation: true,

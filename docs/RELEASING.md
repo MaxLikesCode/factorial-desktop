@@ -129,7 +129,9 @@ else a user could notice under "Other changes". `docs:`, `test:`, `chore:`,
 is the sentence somebody reads before deciding to install — write it for
 them. Preview the notes for the next tag with
 `scripts/release-notes.sh v0.3.4`, and the window itself with
-`FACTORIAL_PREVIEW_UPDATE=1 npm run dev` — see `src/main/update-preview.ts`.
+`npm run dev:update` — which opens it on a made-up release. An argument picks
+which card it opens in: `offer` (the default), `downloading`, `preparing`,
+`ready`, `failed`, `uptodate`, `about`. See `src/main/update-preview.ts`.
 
 **A fix to the updater only takes effect one release later.** The restart is
 performed by the code in the *running* version. Shipping a fix for it in

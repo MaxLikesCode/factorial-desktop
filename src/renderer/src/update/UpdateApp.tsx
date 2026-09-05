@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { XIcon } from 'lucide-react'
 import { translatorFor } from '@shared/locales'
 import type { Translate } from '@shared/i18n'
@@ -8,7 +8,6 @@ import {
   type UpdateWindowState,
   type UpdateWindowView,
 } from '@shared/update-window'
-import { Button } from '@renderer/components/ui/button'
 import icon from './app-icon.png'
 import { isBlank, sanitiseReleaseNotes } from './release-notes'
 
@@ -21,6 +20,11 @@ import { isBlank, sanitiseReleaseNotes } from './release-notes'
  * it is told. That keeps the two sides from disagreeing about what is going
  * on, and it makes the page a function of one value, which is the kind of page
  * that is easy to test.
+ *
+ * It is dressed as the app window, not as a dialog: the same surface gradient,
+ * glass cards, pill buttons and title-bar close control, from `app.css`, which
+ * this window now imports (see `main.tsx`). Two windows that open from the
+ * same tray menu should not look like they came from two programs.
  *
  * The window is frameless, so the top of the page is its title bar: the whole
  * surface is a drag region and the controls opt out of it, the same way the
@@ -58,34 +62,69 @@ export function UpdateApp(): React.JSX.Element | null {
   const { state } = view
 
   return (
-    <div className="drag-region relative flex h-screen w-screen flex-col overflow-hidden text-foreground">
-      <button
-        type="button"
-        aria-label={t('updateWindow.close')}
-        onClick={() => respond({ kind: 'close' })}
-        className="no-drag absolute top-3 right-3 z-10 flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-      >
-        <XIcon className="size-4" />
-      </button>
-      {state.kind === 'available' ? (
-        <Offer state={state} t={t} />
-      ) : state.kind === 'upToDate' ? (
-        <Card
-          title={t('updateWindow.upToDate')}
-          lines={[t('updateWindow.upToDateDetail', { current: state.current })]}
-          ok={t('updateWindow.ok')}
-        />
-      ) : state.kind === 'notice' ? (
-        <Card title={state.title} lines={state.lines} ok={t('updateWindow.ok')} />
-      ) : (
-        <Progress state={state} t={t} />
-      )}
+    <div className="update-surface drag-region flex h-screen w-screen flex-col overflow-hidden">
+      {/* The app window's title bar, minus the entries: an empty strip to
+          drag by, with the same close button in the same corner. */}
+      <div className="flex h-11 shrink-0 items-center justify-end px-2.5">
+        <button
+          type="button"
+          aria-label={t('updateWindow.close')}
+          onClick={() => respond({ kind: 'close' })}
+          className="app-window-btn app-window-btn-close no-drag"
+        >
+          <XIcon />
+        </button>
+      </div>
+      {/*
+        Keyed by state so each of the seven states is a fresh mount and
+        fades in (`.update-state`) instead of replacing the whole window's
+        content in one frame. Enter only; the outgoing state is replaced.
+      */}
+      <div key={state.kind} className="update-state flex min-h-0 flex-1 flex-col">
+        {state.kind === 'available' ? (
+          <Offer state={state} t={t} />
+        ) : state.kind === 'upToDate' ? (
+          <Card
+            title={t('updateWindow.upToDate')}
+            lines={[t('updateWindow.upToDateDetail', { current: state.current })]}
+            ok={t('updateWindow.ok')}
+          />
+        ) : state.kind === 'notice' ? (
+          <Card title={state.title} lines={state.lines} ok={t('updateWindow.ok')} />
+        ) : (
+          <Progress state={state} t={t} />
+        )}
+      </div>
     </div>
   )
 }
 
 function respond(action: UpdateWindowAction): void {
   void window.updateBridge.respond(action).catch(() => {})
+}
+
+/** The app's pill button, in the three weights the window uses. */
+function Btn({
+  variant = 'secondary',
+  large = false,
+  className = '',
+  children,
+  ...rest
+}: {
+  variant?: 'primary' | 'secondary' | 'ghost'
+  large?: boolean
+  className?: string
+  children: ReactNode
+} & React.ButtonHTMLAttributes<HTMLButtonElement>): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      className={`app-btn app-btn-${variant} ${large ? 'app-btn-lg' : ''} no-drag ${className}`}
+      {...rest}
+    >
+      {children}
+    </button>
+  )
 }
 
 function Offer({
@@ -95,7 +134,7 @@ function Offer({
   state: Extract<UpdateWindowState, { kind: 'available' }>
   t: Translate
 }): React.JSX.Element {
-  // Mirrored locally so the box flips on the click rather than on the round
+  // Mirrored locally so the switch flips on the click rather than on the round
   // trip; the stored value comes back with the next view either way.
   const [autoInstall, setAutoInstall] = useState(state.autoInstall)
   useEffect(() => setAutoInstall(state.autoInstall), [state.autoInstall])
@@ -116,57 +155,69 @@ function Offer({
     if (href !== null) void window.updateBridge.openExternal(href).catch(() => {})
   }
 
+  function toggleAuto(): void {
+    setAutoInstall(!autoInstall)
+    respond({ kind: 'autoInstall', value: !autoInstall })
+  }
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 p-6">
-      <div className="flex gap-5">
-        <img src={icon} alt="" className="size-16 shrink-0 rounded-2xl" draggable={false} />
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5 pt-1">
-          <h1 className="text-lg font-semibold leading-tight">{t('updateWindow.title')}</h1>
-          <p className="text-sm text-muted-foreground">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-1 pb-6">
+      <div className="flex items-center gap-4">
+        <img src={icon} alt="" className="size-14 shrink-0 rounded-2xl" draggable={false} />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <h1 className="text-[17px] leading-tight font-semibold">{t('updateWindow.title')}</h1>
+          <p className="app-muted text-[13px]">
             {t('updateWindow.summary', { version: state.version, current: state.current })}
           </p>
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-2 pl-21">
-        <div className="text-sm font-medium">{t('updateWindow.releaseNotes')}</div>
+      <div className="flex min-h-0 flex-1 flex-col gap-2">
+        <div className="app-eyebrow px-1">{t('updateWindow.releaseNotes')}</div>
         {notes === null ? (
-          <div className="flex-1 rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
+          <div className="app-card app-muted flex-1 p-4 text-[13px]" style={{ borderRadius: 14 }}>
             {t('updateWindow.noReleaseNotes')}
           </div>
         ) : (
           <div
-            className="release-notes no-drag min-h-0 flex-1 overflow-auto rounded-lg border bg-muted/40 p-4 text-sm"
+            className="release-notes app-card app-scroll no-drag min-h-0 flex-1 p-4 text-[13px]"
+            style={{ borderRadius: 14 }}
             onClick={onNotesClick}
             dangerouslySetInnerHTML={{ __html: notes }}
           />
         )}
+      </div>
 
-        <label className="no-drag mt-1 flex cursor-pointer items-center gap-2 text-sm select-none">
-          <input
-            type="checkbox"
-            className="size-4 accent-primary"
-            checked={autoInstall}
-            onChange={(event) => {
-              setAutoInstall(event.target.checked)
-              respond({ kind: 'autoInstall', value: event.target.checked })
-            }}
-          />
+      {/* The setting sits on the same row as the answers: it is about every
+          future update, not about this one, and a full-width row of its own
+          would give it the weight of a question being asked. */}
+      <div className="flex items-center gap-3 px-1 select-none">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={autoInstall}
+          aria-label={t('updateWindow.autoInstall')}
+          className="app-switch no-drag"
+          onClick={toggleAuto}
+        />
+        {/* The text is part of the control, as in the settings page: the
+            switch is 40 px wide and nobody aims for it. */}
+        <span className="app-muted no-drag cursor-pointer text-[13px]" onClick={toggleAuto}>
           {t('updateWindow.autoInstall')}
-        </label>
+        </span>
+      </div>
 
-        <div className="mt-1 flex items-center gap-2">
-          <Button variant="secondary" onClick={() => respond({ kind: 'skip' })}>
-            {t('updateWindow.skip')}
-          </Button>
-          <span className="flex-1" />
-          <Button variant="secondary" onClick={() => respond({ kind: 'later' })}>
-            {t('updateWindow.later')}
-          </Button>
-          <Button autoFocus onClick={() => respond({ kind: 'install' })}>
-            {t('updateWindow.install')}
-          </Button>
-        </div>
+      <div className="flex items-center gap-2">
+        <Btn variant="ghost" onClick={() => respond({ kind: 'skip' })}>
+          {t('updateWindow.skip')}
+        </Btn>
+        <span className="flex-1" />
+        <Btn variant="secondary" onClick={() => respond({ kind: 'later' })}>
+          {t('updateWindow.later')}
+        </Btn>
+        <Btn variant="primary" autoFocus onClick={() => respond({ kind: 'install' })}>
+          {t('updateWindow.install')}
+        </Btn>
       </div>
     </div>
   )
@@ -186,19 +237,21 @@ function Card({
   ok: string
 }): React.JSX.Element {
   return (
-    <div className="flex flex-1 flex-col items-center justify-between gap-5 px-8 pt-10 pb-6 text-center">
-      <img src={icon} alt="" className="size-20 rounded-2xl" draggable={false} />
-      <div className="flex flex-col gap-3">
-        <h1 className="text-xl font-semibold leading-tight">{title}</h1>
+    <div className="flex flex-1 flex-col items-center justify-between gap-4 px-8 pt-2 pb-6 text-center">
+      <img src={icon} alt="" className="size-16 rounded-2xl" draggable={false} />
+      <div className="flex flex-col gap-2">
+        <h1 className="text-[19px] leading-tight font-semibold">{title}</h1>
         {lines.map((line, index) => (
-          <p key={index} className="text-sm text-muted-foreground">
+          <p key={index} className="app-muted app-num text-[13px]">
             {line}
           </p>
         ))}
       </div>
-      <Button autoFocus className="w-full" size="lg" onClick={() => respond({ kind: 'close' })}>
+      {/* Wide enough to be the obvious answer, not so wide that a one-word
+          button becomes a bar across the window. */}
+      <Btn variant="primary" large autoFocus className="min-w-44" onClick={() => respond({ kind: 'close' })}>
         {ok}
-      </Button>
+      </Btn>
     </div>
   )
 }
@@ -220,14 +273,14 @@ function Progress({
           : t('updateWindow.failedTitle')
 
   return (
-    <div className="flex flex-1 flex-col justify-between gap-5 p-6">
-      <div className="flex items-center gap-4">
-        <img src={icon} alt="" className="size-12 shrink-0 rounded-xl" draggable={false} />
-        <h1 className="text-lg font-semibold leading-tight">{title}</h1>
+    <div className="flex flex-1 flex-col justify-between gap-4 px-6 pt-1 pb-6">
+      <div className="flex items-center gap-3.5">
+        <img src={icon} alt="" className="size-11 shrink-0 rounded-xl" draggable={false} />
+        <h1 className="text-[15px] leading-tight font-semibold">{title}</h1>
       </div>
 
       {state.kind === 'failed' ? (
-        <p className="text-sm text-muted-foreground" data-slot="reason">
+        <p className="app-muted text-[13px]" data-slot="reason">
           {state.reason}
         </p>
       ) : (
@@ -235,28 +288,22 @@ function Progress({
       )}
 
       <div className="flex items-center justify-between gap-4">
-        <span className="text-sm tabular-nums text-muted-foreground" data-slot="progress">
+        <span className="app-faint app-num text-[13px]" data-slot="progress">
           {state.kind === 'failed' ? '' : progressText(state, t)}
         </span>
         {state.kind === 'downloading' && (
-          <Button variant="secondary" onClick={() => respond({ kind: 'cancel' })}>
-            {t('updateWindow.cancel')}
-          </Button>
+          <Btn onClick={() => respond({ kind: 'cancel' })}>{t('updateWindow.cancel')}</Btn>
         )}
         {state.kind === 'preparing' && (
-          <Button variant="secondary" disabled>
-            {t('updateWindow.installAndRelaunch')}
-          </Button>
+          <Btn disabled>{t('updateWindow.installAndRelaunch')}</Btn>
         )}
         {state.kind === 'ready' && (
-          <Button autoFocus onClick={() => respond({ kind: 'restart' })}>
+          <Btn variant="primary" autoFocus onClick={() => respond({ kind: 'restart' })}>
             {t('updateWindow.installAndRelaunch')}
-          </Button>
+          </Btn>
         )}
         {state.kind === 'failed' && (
-          <Button variant="secondary" onClick={() => respond({ kind: 'close' })}>
-            {t('updateWindow.close')}
-          </Button>
+          <Btn onClick={() => respond({ kind: 'close' })}>{t('updateWindow.close')}</Btn>
         )}
       </div>
     </div>
@@ -296,12 +343,10 @@ function ProgressBar({
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={state.kind === 'preparing' ? undefined : Math.round(percent)}
-      className="h-2 w-full overflow-hidden rounded-full bg-muted"
+      className="update-bar"
     >
       <div
-        className={`h-full rounded-full bg-primary transition-[width] duration-200 ${
-          state.kind === 'preparing' ? 'w-full animate-pulse opacity-60' : ''
-        }`}
+        className={`update-bar-fill ${state.kind === 'preparing' ? 'update-bar-pulse' : ''}`}
         style={state.kind === 'preparing' ? undefined : { width: `${percent}%` }}
       />
     </div>
