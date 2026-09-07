@@ -31,8 +31,11 @@ describe('DayEditor with pending requests', () => {
     render(<DayEditor day={day()} breakOptions={[]} now={null} onSaved={vi.fn()} />)
     await act(async () => {})
 
-    expect(screen.getByText('Beantragte Änderungen')).toBeTruthy()
-    const row = document.querySelector('[data-slot="pending-row"]')
+    // The request hangs off the row of the record it is about.
+    const block = document.querySelector('[data-slot="rows"] > [data-slot="block"][data-pending]')
+    const row = block?.querySelector('[data-slot="pending-row"]')
+    expect(block?.querySelector('[data-slot="block-row"]')).toBeTruthy()
+    expect(row?.textContent).toContain('Beantragt')
     expect(row?.textContent).toContain('13:12 – 18:07')
     expect(row?.textContent).toContain('13:12 – 18:55')
     // The field still says 18:07: the request is not in the timesheet.
@@ -57,7 +60,7 @@ describe('DayEditor with pending requests', () => {
     installBridge()
     render(<DayEditor day={day({ requests: [] })} breakOptions={[]} now={null} onSaved={vi.fn()} />)
     await act(async () => {})
-    expect(screen.queryByText('Beantragte Änderungen')).toBeNull()
+    expect(document.querySelector('[data-slot="pending-row"]')).toBeNull()
     expect(document.querySelector('[data-slot="ghost"]')).toBeNull()
   })
 })
@@ -107,6 +110,41 @@ describe('DayEditor work location', () => {
     render(<DayEditor day={day({ requests: [{ ...day().requests[0]!, end: 1087 }] })} breakOptions={[]} now={null} onSaved={vi.fn()} />)
     await act(async () => {})
     expect(document.querySelector('[data-slot="pending-row"]')?.textContent).toContain('Arbeitsort geändert')
+  })
+})
+
+describe('DayEditor projected sum', () => {
+  it('shows what the day would sum to once the request is approved', async () => {
+    installBridge()
+    // 13:12–18:07 is 4:55 h; the request ends it at 18:55, which is 5:43 h.
+    render(<DayEditor day={day()} breakOptions={[]} now={null} onSaved={vi.fn()} />)
+    await act(async () => {})
+    expect(document.querySelector('[data-slot="sums"]')?.textContent).toContain('4:55 h')
+    const projected = document.querySelector('[data-slot="projected"]')?.textContent ?? ''
+    expect(projected).toContain('5:43 h')
+    expect(projected).toContain('(−2:17 h)')
+    expect(projected).toContain('nach Genehmigung')
+  })
+
+  it('shows no projection when the request changes no time', async () => {
+    installBridge()
+    render(<DayEditor day={day({ requests: [{ ...day().requests[0]!, end: 1087, locationType: 'work_from_home' }] })} breakOptions={[]} now={null} onSaved={vi.fn()} />)
+    await act(async () => {})
+    expect(document.querySelector('[data-slot="projected"]')).toBeNull()
+  })
+})
+
+describe('DayEditor with a requested new block', () => {
+  it('puts the block that was only asked for where it would sit, marked new', async () => {
+    installBridge()
+    const created = { id: 'c', requestType: 'create_shift' as const, shiftId: null, start: 540, end: 600, workable: true, breakConfigurationId: null, locationType: 'office' }
+    render(<DayEditor day={day({ requests: [created] })} breakOptions={[]} now={null} onSaved={vi.fn()} />)
+    await act(async () => {})
+    const rows = [...document.querySelectorAll('[data-slot="rows"] > [data-slot="block"], [data-slot="rows"] > [data-slot="pending-row"]')]
+    // 09:00 comes before the 13:12 record.
+    expect(rows.map((r) => r.getAttribute('data-slot'))).toEqual(['pending-row', 'block'])
+    expect(rows[0]?.textContent).toContain('Neu')
+    expect(rows[0]?.textContent).toContain('09:00 – 10:00 · Büro')
   })
 })
 

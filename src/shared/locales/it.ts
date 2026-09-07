@@ -171,12 +171,13 @@ export const it: Catalogue = {
 
   'timesheet.pendingCount': '{count} richieste',
 
-  'timesheet.pendingTitle': 'Modifiche richieste',
+  'timesheet.pending': 'Richiesto',
 
   'timesheet.pendingNew': 'Nuovo',
 
   'timesheet.pendingDelete': 'Elimina',
   'timesheet.pendingLocation': 'Luogo modificato',
+  'timesheet.afterApproval': 'dopo l’approvazione',
 
   'timesheet.withdraw': 'Ritira',
 

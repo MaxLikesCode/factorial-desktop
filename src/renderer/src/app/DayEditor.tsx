@@ -3,6 +3,7 @@ import { ArrowRightIcon, Trash2Icon } from 'lucide-react'
 import { toast } from 'sonner'
 import type { BreakOption } from '@shared/ipc-contract'
 import {
+  applyRequests,
   breakMinutes,
   diffDay,
   formatHours,
@@ -47,6 +48,12 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
   const dirty = hasChanges(diffDay(day.blocks, blocks))
   const worked = workedMinutes(blocks, now)
   const breaks = breakMinutes(blocks, now)
+  // The day if everything pending were approved, on top of what is being
+  // edited — the answer to "did I cut it back far enough" before the answer.
+  const projected = useMemo(() => applyRequests(blocks, day.requests), [blocks, day.requests])
+  const projectedWorked = workedMinutes(projected, now)
+  const projectedBreaks = breakMinutes(projected, now)
+  const shifts = day.requests.length > 0 && (projectedWorked !== worked || projectedBreaks !== breaks)
 
   // What has been asked for, drawn over the strip. Memoised because the strip
   // widens its scale to fit these and must not see a fresh list every render.
@@ -57,6 +64,40 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
     const known = LOCATIONS.find((o) => o.value === location)
     return known === undefined ? (location ?? '') : t(known.key)
   }
+
+  /**
+   * Each side names what the request touches: the times when they move, the
+   * place when it does. A request that moves neither yet names no place — the
+   * server did not say where — can only have changed the place, and is called
+   * that. A deletion has no "after" worth a time.
+   */
+  function describeChange(request: PendingRequest, target: TimesheetBlock): { before: string | null; after: string } {
+    if (request.requestType === 'delete_shift') return { before: span(target.start, target.end), after: t('timesheet.pendingDelete') }
+    const sameTimes = request.start === target.start && request.end === target.end
+    const movedPlace = typeof request.locationType === 'string' && request.locationType !== target.locationType
+    if (sameTimes && !movedPlace) return { before: null, after: t('timesheet.pendingLocation') }
+    const before = sameTimes ? [] : [span(target.start, target.end)]
+    const after = sameTimes ? [] : [span(request.start, request.end)]
+    if (movedPlace) {
+      before.push(placeName(target.locationType))
+      after.push(placeName(request.locationType))
+    }
+    return { before: before.join(' · '), after: after.join(' · ') }
+  }
+
+  // The rows in the order of the day: the blocks as edited, and between them
+  // the blocks that were only asked for, each where it would be. A request
+  // about a record that is no longer in the edited copy has nothing to hang
+  // off and is shown as its own row too.
+  const rows = useMemo(() => {
+    const present = new Set(blocks.map((b) => b.id))
+    const loose = day.requests.filter((r) => r.shiftId === null || !present.has(r.shiftId))
+    const out: Array<{ kind: 'block'; block: TimesheetBlock; index: number; start: number } | { kind: 'new'; request: PendingRequest; start: number }> = [
+      ...blocks.map((block, index) => ({ kind: 'block' as const, block, index, start: block.start })),
+      ...loose.map((request) => ({ kind: 'new' as const, request, start: request.start ?? Number.POSITIVE_INFINITY })),
+    ]
+    return out.sort((a, b) => a.start - b.start)
+  }, [blocks, day.requests])
 
   async function withdraw(request: PendingRequest): Promise<void> {
     setSaving(true)
@@ -122,118 +163,28 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
   }
 
   return (
-    <div className="app-editor flex flex-col gap-[18px] px-5 py-5" data-slot="day-editor">
+    <div className="app-editor flex flex-col gap-4 px-5 py-5" data-slot="day-editor">
       <Timeline blocks={blocks} ghosts={ghosts} now={now} onChange={change} disabled={saving} nowLabel={t('timesheet.now')} />
 
-      <div className="flex flex-col gap-2">
-        {blocks.map((block, index) => (
-          <div key={block.id ?? `new-${index}`} className="app-row-enter flex items-center gap-3 rounded-[10px] px-2.5 py-2 text-sm" style={{ background: 'var(--app-fill)' }} data-slot="block-row">
-            {block.kind === 'work' ? (
-              // The chip is the picker, for work as for breaks: the place opens
-              // the list, and the row keeps its columns whatever it is called.
-              <MenuButton
-                className="app-btn-sm w-[160px] shrink-0 justify-start"
-                leading={<span className="app-dot app-dot-work" />}
-                disabled={saving}
-                value={block.locationType ?? ''}
-                placeholder={t('timesheet.work')}
-                options={LOCATIONS.map((o) => ({ value: o.value, label: t(o.key) }))}
-                onChange={(location) => change(blocks.map((b, i) => (i === index ? { ...b, locationType: location } : b)))}
-              />
-            ) : block.kind === 'break' && breakOptions.length > 1 ? (
-              <MenuButton
-                className="app-btn-sm w-[160px] shrink-0 justify-start"
-                leading={<span className="app-dot app-dot-break" />}
-                disabled={saving}
-                value={block.breakConfigurationId ?? ''}
-                options={breakOptions.map((o) => ({ value: o.id, label: o.name }))}
-                onChange={(id) => {
-                  const option = breakOptions.find((o) => o.id === id)
-                  change(
-                    blocks.map((b, i) =>
-                      i === index ? { ...b, breakConfigurationId: option?.id ?? null, breakName: option?.name ?? null } : b,
-                    ),
-                  )
-                }}
-              />
-            ) : (
-              <span className="app-chip w-[160px] shrink-0">
-                <span className="app-dot app-dot-break" />
-                <span className="truncate">{block.breakName ?? t('timesheet.break')}</span>
-              </span>
-            )}
-            <TimeField label={t('timesheet.from')} value={block.start} disabled={saving} onCommit={(v) => setTime(index, 'start', v)} />
-            <TimeField
-              label={t('timesheet.to')}
-              value={block.end}
-              disabled={saving || block.end === null}
-              placeholder={block.end === null ? t('timesheet.running') : undefined}
-              onCommit={(v) => setTime(index, 'end', v)}
-            />
-            <span className="app-muted w-16 text-right text-[13px]" style={{ fontVariantNumeric: 'tabular-nums' }}>
-              {formatHours((block.end ?? now ?? block.start) - block.start)}
-            </span>
-            <span className="flex-1" />
-            {block.end !== null && (
-              <button type="button" className="app-btn app-btn-ghost app-btn-icon" aria-label={t('timesheet.remove')} disabled={saving} onClick={() => change(blocks.filter((_, i) => i !== index))}>
-                <Trash2Icon />
-              </button>
-            )}
-          </div>
-        ))}
-        {blocks.some((b) => b.end === null) && <div className="app-faint text-xs">{t('timesheet.runningHint')}</div>}
-      </div>
-
-      {day.requests.length > 0 && (
-        <div className="flex flex-col gap-2" data-slot="pending">
-          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase" style={{ letterSpacing: '0.06em', color: 'var(--app-pending)' }}>
-            <span className="app-dot app-dot-pending" style={{ borderRadius: 999 }} />
-            {t('timesheet.pendingTitle')}
-          </div>
-          {day.requests.map((request) => {
-            const target = day.blocks.find((b) => b.id === request.shiftId) ?? null
-            const isBreak = request.workable === false || request.breakConfigurationId !== null || target?.kind === 'break'
-            const breakName = breakOptions.find((o) => o.id === (request.breakConfigurationId ?? target?.breakConfigurationId))?.name ?? target?.breakName ?? null
-            // Each side names what the request touches: the times when they
-            // move, the place when it does. A request that moves neither yet
-            // names no place — the server did not say where — can only have
-            // changed the place, and is called that.
-            const sameTimes = target !== null && request.start === target.start && request.end === target.end
-            const movedPlace = typeof request.locationType === 'string' && request.locationType !== target?.locationType
-            const beforeParts = target === null ? [t('timesheet.pendingNew')] : [span(target.start, target.end)]
-            const afterParts = [span(request.start, request.end)]
-            if (movedPlace) {
-              if (target !== null) beforeParts.push(placeName(target.locationType))
-              afterParts.push(placeName(request.locationType))
-            }
-            if (sameTimes && movedPlace) {
-              beforeParts.shift()
-              afterParts.shift()
-            }
-            const before = beforeParts.join(' · ')
-            const after =
-              request.requestType === 'delete_shift'
-                ? t('timesheet.pendingDelete')
-                : request.requestType === 'update_shift' && sameTimes && !movedPlace
-                  ? t('timesheet.pendingLocation')
-                  : afterParts.join(' · ')
+      <div className="flex flex-col gap-2" data-slot="rows">
+        {rows.map((row) => {
+          if (row.kind === 'new') {
+            // A block that was asked for and does not exist yet: a row of its
+            // own, where it would sit, in the pending dress the strip uses.
+            const request = row.request
+            const isBreak = request.workable === false || request.breakConfigurationId !== null
+            const breakName = breakOptions.find((o) => o.id === request.breakConfigurationId)?.name ?? null
+            const parts = [span(request.start, request.end)]
+            if (!isBreak && typeof request.locationType === 'string') parts.push(placeName(request.locationType))
             return (
-              <div
-                key={request.id}
-                className="flex items-center gap-3 rounded-[10px] px-2.5 py-2 text-sm"
-                style={{ background: 'var(--app-pending-soft)', border: '1px dashed color-mix(in oklch, var(--app-pending) 45%, transparent)' }}
-                data-slot="pending-row"
-              >
+              <div key={request.id} className="app-row-enter flex items-center gap-3 rounded-[10px] px-2.5 py-2 text-sm" style={PENDING_ROW} data-slot="pending-row" data-pending="new">
                 <span className="app-chip w-[160px] shrink-0">
                   <span className={`app-dot ${isBreak ? 'app-dot-break' : 'app-dot-work'}`} />
                   <span className="truncate">{isBreak ? (breakName ?? t('timesheet.break')) : t('timesheet.work')}</span>
+                  <span className="app-pending-badge">{t('timesheet.pendingNew')}</span>
                 </span>
-                <span className="app-muted" style={{ fontVariantNumeric: 'tabular-nums', textDecoration: target === null ? undefined : 'line-through' }}>
-                  {before}
-                </span>
-                <ArrowRightIcon className="size-3.5 shrink-0" style={{ color: 'var(--app-pending)' }} />
                 <span className="font-semibold" style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--app-pending)' }}>
-                  {after}
+                  {parts.join(' · ')}
                 </span>
                 <span className="flex-1" />
                 <button type="button" className="app-btn app-btn-ghost app-btn-sm" disabled={saving} onClick={() => void withdraw(request)}>
@@ -241,9 +192,128 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
                 </button>
               </div>
             )
-          })}
-        </div>
-      )}
+          }
+
+          const { block, index } = row
+          // The requests about this record hang off its row, so what was asked
+          // for is read next to what is there — not matched up from a list.
+          const attached = block.id === null ? [] : day.requests.filter((r) => r.shiftId === block.id)
+          return (
+            <div
+              key={block.id ?? `new-${index}`}
+              className="app-row-enter overflow-hidden rounded-[10px]"
+              style={{ background: 'var(--app-fill)', outline: attached.length > 0 ? PENDING_OUTLINE : undefined }}
+              data-slot="block"
+              data-pending={attached.length > 0 || undefined}
+            >
+              <div className="flex items-center gap-3 px-2.5 py-2 text-sm" data-slot="block-row">
+                {block.kind === 'work' ? (
+                  // The chip is the picker, for work as for breaks: the place opens
+                  // the list, and the row keeps its columns whatever it is called.
+                  <MenuButton
+                    className="app-btn-sm w-[160px] shrink-0 justify-start"
+                    leading={<span className="app-dot app-dot-work" />}
+                    disabled={saving}
+                    value={block.locationType ?? ''}
+                    placeholder={t('timesheet.work')}
+                    options={LOCATIONS.map((o) => ({ value: o.value, label: t(o.key) }))}
+                    onChange={(location) => change(blocks.map((b, i) => (i === index ? { ...b, locationType: location } : b)))}
+                  />
+                ) : block.kind === 'break' && breakOptions.length > 1 ? (
+                  <MenuButton
+                    className="app-btn-sm w-[160px] shrink-0 justify-start"
+                    leading={<span className="app-dot app-dot-break" />}
+                    disabled={saving}
+                    value={block.breakConfigurationId ?? ''}
+                    options={breakOptions.map((o) => ({ value: o.id, label: o.name }))}
+                    onChange={(id) => {
+                      const option = breakOptions.find((o) => o.id === id)
+                      change(
+                        blocks.map((b, i) =>
+                          i === index ? { ...b, breakConfigurationId: option?.id ?? null, breakName: option?.name ?? null } : b,
+                        ),
+                      )
+                    }}
+                  />
+                ) : (
+                  <span className="app-chip w-[160px] shrink-0">
+                    <span className="app-dot app-dot-break" />
+                    <span className="truncate">{block.breakName ?? t('timesheet.break')}</span>
+                  </span>
+                )}
+                <TimeField label={t('timesheet.from')} value={block.start} disabled={saving} onCommit={(v) => setTime(index, 'start', v)} />
+                <TimeField
+                  label={t('timesheet.to')}
+                  value={block.end}
+                  disabled={saving || block.end === null}
+                  placeholder={block.end === null ? t('timesheet.running') : undefined}
+                  onCommit={(v) => setTime(index, 'end', v)}
+                />
+                <span className="app-muted w-16 text-right text-[13px]" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                  {formatHours((block.end ?? now ?? block.start) - block.start)}
+                </span>
+                <span className="flex-1" />
+                {block.end !== null && (
+                  <button type="button" className="app-btn app-btn-ghost app-btn-icon" aria-label={t('timesheet.remove')} disabled={saving} onClick={() => change(blocks.filter((_, i) => i !== index))}>
+                    <Trash2Icon />
+                  </button>
+                )}
+              </div>
+              {attached.map((request) => {
+                // The record as Factorial holds it, not the row's edited copy:
+                // the request was made against the record.
+                const target = day.blocks.find((b) => b.id === request.shiftId) ?? block
+                const { before, after } = describeChange(request, target)
+                return (
+                  <div key={request.id} className="flex items-center gap-3 px-2.5 py-1.5 text-sm" style={PENDING_LINE} data-slot="pending-row">
+                    <span className="w-[160px] shrink-0">
+                      <span className="app-pending-badge">{t('timesheet.pending')}</span>
+                    </span>
+                    {before !== null && (
+                      <>
+                        <span className="app-muted" style={{ fontVariantNumeric: 'tabular-nums', textDecoration: 'line-through' }}>
+                          {before}
+                        </span>
+                        <ArrowRightIcon className="size-3.5 shrink-0" style={{ color: 'var(--app-pending)' }} />
+                      </>
+                    )}
+                    <span className="font-semibold" style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--app-pending)' }}>
+                      {after}
+                    </span>
+                    <span className="flex-1" />
+                    <button type="button" className="app-btn app-btn-ghost app-btn-sm" disabled={saving} onClick={() => void withdraw(request)}>
+                      {t('timesheet.withdraw')}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })}
+        {blocks.some((b) => b.end === null) && <div className="app-faint text-xs">{t('timesheet.runningHint')}</div>}
+      </div>
+
+      {/* The sums on a line of their own, so the buttons cannot push them
+          about: what is there, and right after it what the requests would
+          make of it. */}
+      <div className="app-muted flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[13px]" style={{ fontVariantNumeric: 'tabular-nums' }} data-slot="sums">
+        <span>
+          {t('overview.worked')} <strong className="font-semibold" style={{ color: 'var(--app-text)' }}>{formatHours(worked)}</strong>
+          {day.expectedMinutes !== null && day.expectedMinutes > 0 ? ` / ${formatHours(day.expectedMinutes)}` : ''}
+          {breaks > 0 ? ` · ${t('overview.breaks')} ${formatHours(breaks)}` : ''}
+        </span>
+        {shifts && (
+          <span className="app-row-enter flex items-center gap-1.5 whitespace-nowrap" style={{ color: 'var(--app-pending)' }} data-slot="projected">
+            <ArrowRightIcon className="size-3.5 shrink-0" />
+            <strong className="font-semibold">{formatHours(projectedWorked)}</strong>
+            {day.expectedMinutes !== null && day.expectedMinutes > 0 && (
+              <span>{`(${projectedWorked - day.expectedMinutes < 0 ? '−' : '+'}${formatHours(Math.abs(projectedWorked - day.expectedMinutes))})`}</span>
+            )}
+            {projectedBreaks !== breaks && <span>{`· ${t('overview.breaks')} ${formatHours(projectedBreaks)}`}</span>}
+            <span>{t('timesheet.afterApproval')}</span>
+          </span>
+        )}
+      </div>
 
       <div className="flex items-center gap-2.5">
         <button type="button" className="app-btn app-btn-secondary" disabled={saving} onClick={() => add('work')}>
@@ -253,11 +323,6 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
           + {t('timesheet.break')}
         </button>
         <span className="flex-1" />
-        <span className="app-muted text-[13px]" style={{ fontVariantNumeric: 'tabular-nums' }} data-slot="sums">
-          {t('overview.worked')} <strong className="font-semibold" style={{ color: 'var(--app-text)' }}>{formatHours(worked)}</strong>
-          {day.expectedMinutes !== null && day.expectedMinutes > 0 ? ` / ${formatHours(day.expectedMinutes)}` : ''}
-          {breaks > 0 ? ` · ${t('overview.breaks')} ${formatHours(breaks)}` : ''}
-        </span>
         <button type="button" className="app-btn app-btn-ghost" disabled={!dirty || saving} onClick={() => setBlocks(day.blocks)}>
           {t('timesheet.discard')}
         </button>
@@ -311,6 +376,11 @@ function TimeField({
     </label>
   )
 }
+
+/** The dress of a change that is only asked for: the strip's ghost, as a row. */
+const PENDING_OUTLINE = '1px dashed color-mix(in oklch, var(--app-pending) 45%, transparent)'
+const PENDING_ROW: React.CSSProperties = { background: 'var(--app-pending-soft)', border: PENDING_OUTLINE }
+const PENDING_LINE: React.CSSProperties = { background: 'var(--app-pending-soft)', borderTop: PENDING_OUTLINE }
 
 /** `13:12 – 18:07`, or an open end as `…`. */
 function span(start: number | null, end: number | null): string {

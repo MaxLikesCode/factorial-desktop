@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyRequests,
   breakMinutes,
   daysOfMonth,
   diffDay,
@@ -10,6 +11,7 @@ import {
   parseIsoDate,
   parseTimeOfDay,
   workedMinutes,
+  type PendingRequest,
   type TimesheetBlock,
 } from '../timesheet'
 
@@ -119,5 +121,38 @@ describe('diffDay', () => {
     const changes = diffDay(running, after)
     expect(changes.update.map((b) => b.id)).toEqual(['1'])
     expect(changes.delete).toEqual([])
+  })
+})
+
+describe('applyRequests', () => {
+  const blocks = [work('1', 510, 735), rest('2', 735, 765), work('3', 765, 1100)]
+  const pending = (over: Partial<PendingRequest>): PendingRequest => ({
+    id: 'r',
+    requestType: 'update_shift',
+    shiftId: '3',
+    start: 765,
+    end: 1012,
+    workable: null,
+    breakConfigurationId: null,
+    locationType: null,
+    ...over,
+  })
+
+  it('shortens a record the way the request asks, and sums accordingly', () => {
+    const after = applyRequests(blocks, [pending({})])
+    expect(after.find((b) => b.id === '3')).toMatchObject({ start: 765, end: 1012, locationType: 'office' })
+    expect(workedMinutes(after)).toBe(225 + 247)
+  })
+
+  it('drops a deleted record and adds a requested one, as its kind', () => {
+    const after = applyRequests(blocks, [
+      pending({ id: 'd', requestType: 'delete_shift', shiftId: '2', start: null, end: null }),
+      pending({ id: 'c', requestType: 'create_shift', shiftId: null, start: 1100, end: 1130, workable: false, breakConfigurationId: '19613' }),
+    ])
+    expect(after.map((b) => [b.id, b.kind])).toEqual([['1', 'work'], ['3', 'work'], [null, 'break']])
+  })
+
+  it('changes nothing without requests', () => {
+    expect(applyRequests(blocks, [])).toEqual(blocks)
   })
 })

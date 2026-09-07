@@ -240,6 +240,42 @@ export function diffDay(before: readonly TimesheetBlock[], after: readonly Times
   return changes
 }
 
+/**
+ * The blocks as they would be if every request were approved: a moved record
+ * takes the requested ends and place, a deleted one goes, a requested new one
+ * arrives. For the sum the editor shows beside the recorded one — somebody who
+ * forgot to clock out and asks for a shorter day wants to see the shorter day's
+ * total before anybody approves it. Nothing here is written anywhere.
+ */
+export function applyRequests(blocks: readonly TimesheetBlock[], requests: readonly PendingRequest[]): TimesheetBlock[] {
+  let out: TimesheetBlock[] = [...blocks]
+  for (const request of requests) {
+    if (request.requestType === 'delete_shift') {
+      out = out.filter((b) => b.id !== request.shiftId)
+      continue
+    }
+    if (request.start === null || request.end === null) continue
+    if (request.requestType === 'update_shift') {
+      out = out.map((b) =>
+        b.id === request.shiftId ? { ...b, start: request.start ?? b.start, end: request.end, locationType: request.locationType ?? b.locationType } : b,
+      )
+      continue
+    }
+    const isBreak = request.workable === false || request.breakConfigurationId !== null
+    out.push({
+      id: null,
+      kind: isBreak ? 'break' : 'work',
+      start: request.start,
+      end: request.end,
+      breakConfigurationId: request.breakConfigurationId,
+      breakName: null,
+      locationType: request.locationType,
+      workplaceId: null,
+    })
+  }
+  return normaliseBlocks(out)
+}
+
 export function hasChanges(changes: DayChanges): boolean {
   return changes.create.length + changes.update.length + changes.delete.length > 0
 }

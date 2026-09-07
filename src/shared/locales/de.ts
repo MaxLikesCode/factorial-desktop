@@ -180,12 +180,13 @@ export const de: Catalogue = {
 
   'timesheet.pendingCount': '{count} beantragt',
 
-  'timesheet.pendingTitle': 'Beantragte Änderungen',
+  'timesheet.pending': 'Beantragt',
 
   'timesheet.pendingNew': 'Neu',
 
   'timesheet.pendingDelete': 'Löschen',
   'timesheet.pendingLocation': 'Arbeitsort geändert',
+  'timesheet.afterApproval': 'nach Genehmigung',
 
   'timesheet.withdraw': 'Zurückziehen',
 

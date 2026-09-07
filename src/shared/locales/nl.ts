@@ -171,12 +171,13 @@ export const nl: Catalogue = {
 
   'timesheet.pendingCount': '{count} aangevraagd',
 
-  'timesheet.pendingTitle': 'Aangevraagde wijzigingen',
+  'timesheet.pending': 'Aangevraagd',
 
   'timesheet.pendingNew': 'Nieuw',
 
   'timesheet.pendingDelete': 'Verwijderen',
   'timesheet.pendingLocation': 'Locatie gewijzigd',
+  'timesheet.afterApproval': 'na goedkeuring',
 
   'timesheet.withdraw': 'Intrekken',
 

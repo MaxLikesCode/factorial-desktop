@@ -262,13 +262,16 @@ export const en = {
 
   'timesheet.pendingCount': '{count} requested',
 
-  'timesheet.pendingTitle': 'Requested changes',
+  /** The badge on a line under a block: this is what was asked for it. */
+  'timesheet.pending': 'Requested',
 
   'timesheet.pendingNew': 'New',
 
   'timesheet.pendingDelete': 'Delete',
   /** A pending `update_shift` whose times equal the record's: only the place can have moved. */
   'timesheet.pendingLocation': 'Location changed',
+  /** After the projected total: what the day sums to once the requests are approved. */
+  'timesheet.afterApproval': 'after approval',
 
   'timesheet.withdraw': 'Withdraw',
 
