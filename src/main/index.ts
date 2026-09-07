@@ -415,6 +415,17 @@ async function bootstrap(): Promise<void> {
 // `app-identity.ts`.
 app.setPath('userData', resolveUserDataPath(app.getPath('appData')))
 
+// PLATFORM: Windows only. Chromium's desktop window layer plays a "drop"
+// animation — a 200 ms fade plus a slight scale — whenever a window is shown,
+// and it starts *after* the OS has already put the window on screen with the
+// last frame it composited before the hide. Measured with a screen capture at
+// 60 fps: one fully drawn frame, then the card snaps to transparent and fades
+// back in. The tray's "Fenster zeigen" therefore looked like it opened twice.
+// The switch is Chromium's own off button for that animation
+// (`ui/wm/core/wm_core_switches.cc`); the card's own motion lives in CSS and is
+// untouched. macOS does not use this layer and keeps its native behaviour.
+if (process.platform === 'win32') app.commandLine.appendSwitch('wm-window-animations-disabled')
+
 // PLATFORM: Windows starts a whole second app on every launch without this lock;
 // macOS reuses the running instance by itself. Harmless on macOS, required there.
 if (app.requestSingleInstanceLock()) {
