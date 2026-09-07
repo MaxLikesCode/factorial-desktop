@@ -673,6 +673,7 @@ describe('requestTimesheetEdit', () => {
       workable: null,
       breakConfigurationId: null,
       locationType: null,
+      workplaceId: null,
       ...over,
     }
   }
@@ -703,6 +704,13 @@ describe('requestTimesheetEdit', () => {
       'employeeId',
       'requestType',
     ])
+  })
+
+  it('carries the place and the workplace together', async () => {
+    const { client, calls } = recordingClient(ok)
+    await createOperations(client).requestTimesheetEdit(request({ locationType: 'work_from_home', workplaceId: 3333333 }))
+    expect(only(calls).variables).toMatchObject({ locationType: 'work_from_home', workplaceId: 3333333 })
+    expect(only(calls).query).toContain('workplaceId: $workplaceId')
   })
 
   it('carries the break type and the location when a block is created', async () => {
@@ -833,5 +841,52 @@ describe('fetchMonthWorkedTime', () => {
   it('does not read a missing employee as an empty month', async () => {
     const { client } = recordingClient({ attendance: { employee: null }, timeInsights: null })
     await expect(createOperations(client).fetchMonthWorkedTime(1111111, '2026-09-01', '2026-09-30')).rejects.toMatchObject({ kind: 'malformed' })
+  })
+})
+
+describe('fetchEditRequests', () => {
+  const node = {
+    id: 13542375,
+    approved: null,
+    requestType: 'update_shift',
+    date: '2026-09-01',
+    clockIn: '13:12',
+    clockOut: '18:55',
+    workable: null,
+    timeSettingsBreakConfigurationId: null,
+    locationType: 'work_from_home',
+    attendanceShift: { id: 554387733 },
+  }
+  const payload = (n: unknown): unknown => ({ attendance: { employee: { attendanceEditTimesheetRequestsConnection: { nodes: [n] } } } })
+
+  it('reads the place a request moves the record to', async () => {
+    const { client, calls } = recordingClient(payload(node))
+    const [request] = await createOperations(client).fetchEditRequests(1, '2026-09-01', '2026-09-30')
+    expect(only(calls).query).toContain('locationType')
+    expect(request).toMatchObject({ id: '13542375', shiftId: '554387733', locationType: 'work_from_home' })
+  })
+
+  it('asks again without the field when the server refuses it, and does not ask for it after', async () => {
+    const { locationType: _dropped, ...bare } = node
+    const { client, calls } = recordingClient(
+      new FactorialError('graphql', "Field 'locationType' doesn't exist on type 'AttendanceEditTimesheetRequest'"),
+      payload(bare),
+      payload(bare),
+    )
+    // The canned error has to be thrown, not returned.
+    const throwing: GraphQLClient = {
+      execute: async <T>(op: Operation): Promise<T> => {
+        const result = await client.execute<unknown>(op)
+        if (result instanceof FactorialError) throw result
+        return result as T
+      },
+    }
+    const ops = createOperations(throwing)
+    const [request] = await ops.fetchEditRequests(1, '2026-09-01', '2026-09-30')
+    expect(request?.locationType).toBeNull()
+    expect(calls.map((c) => c.query.includes('locationType'))).toEqual([true, false])
+    await ops.fetchEditRequests(1, '2026-09-01', '2026-09-30')
+    expect(calls).toHaveLength(3)
+    expect(calls[2]?.query).not.toContain('locationType')
   })
 })

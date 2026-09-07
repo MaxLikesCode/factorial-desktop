@@ -176,6 +176,7 @@ export const nl: Catalogue = {
   'timesheet.pendingNew': 'Nieuw',
 
   'timesheet.pendingDelete': 'Verwijderen',
+  'timesheet.pendingLocation': 'Locatie gewijzigd',
 
   'timesheet.withdraw': 'Intrekken',
 

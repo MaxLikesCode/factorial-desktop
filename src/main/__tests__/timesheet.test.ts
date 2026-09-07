@@ -70,6 +70,7 @@ function editRequest(over: Partial<EditRequestRecord>): EditRequestRecord {
     clockOut: '18:08',
     workable: null,
     breakConfigurationId: null,
+    locationType: null,
     ...over,
   }
 }
@@ -115,8 +116,8 @@ describe('createTimesheet.saveDay', () => {
     const result = await sheet.saveDay({
       date: '2026-09-04',
       blocks: [
-        { id: '1', kind: 'work', start: 510, end: 735, breakConfigurationId: null, breakName: null, locationType: 'office' },
-        { id: null, kind: 'work', start: 780, end: 1000, breakConfigurationId: null, breakName: null, locationType: null },
+        { id: '1', kind: 'work', start: 510, end: 735, breakConfigurationId: null, breakName: null, locationType: 'office', workplaceId: null },
+        { id: null, kind: 'work', start: 780, end: 1000, breakConfigurationId: null, breakName: null, locationType: null, workplaceId: null },
       ],
     })
     expect(ops.calls).toEqual(['delete_shift 2', 'create_shift new 13:00-16:40'])
@@ -132,7 +133,7 @@ describe('createTimesheet.saveDay', () => {
     const sheet = createTimesheet({ ops, employeeId: 1, defaultLocationType: () => 'office' })
     const result = await sheet.saveDay({
       date: '2026-09-04',
-      blocks: [{ id: '1', kind: 'work', start: 480, end: 735, breakConfigurationId: null, breakName: null, locationType: 'office' }],
+      blocks: [{ id: '1', kind: 'work', start: 480, end: 735, breakConfigurationId: null, breakName: null, locationType: 'office', workplaceId: null }],
     })
     // A request changes nothing until it is approved, so the unmoved 08:30 is
     // the honest answer — 08:00 is only what was asked for.
@@ -144,9 +145,44 @@ describe('createTimesheet.saveDay', () => {
     const sheet = createTimesheet({ ops, employeeId: 1, defaultLocationType: () => 'office' })
     await sheet.saveDay({
       date: '2026-09-04',
-      blocks: [{ id: '1', kind: 'work', start: 480, end: 735, breakConfigurationId: null, breakName: null, locationType: 'office' }],
+      blocks: [{ id: '1', kind: 'work', start: 480, end: 735, breakConfigurationId: null, breakName: null, locationType: 'office', workplaceId: null }],
     })
     expect(ops.calls).toEqual(['update_shift 1 08:00-12:15'])
+    // The location did not move, so it is not sent along.
+    expect(ops.requestTimesheetEdit).toHaveBeenCalledWith(expect.objectContaining({ locationType: null }))
+  })
+
+  it('sends the new location with an update when that is what changed', async () => {
+    const ops = fakeOps([record({ id: '1' })])
+    const sheet = createTimesheet({ ops, employeeId: 1, defaultLocationType: () => 'office' })
+    await sheet.saveDay({
+      date: '2026-09-04',
+      blocks: [{ id: '1', kind: 'work', start: 510, end: 735, breakConfigurationId: null, breakName: null, locationType: 'work_from_home', workplaceId: null }],
+    })
+    expect(ops.calls).toEqual(['update_shift 1 08:30-12:15'])
+    expect(ops.requestTimesheetEdit).toHaveBeenCalledWith(
+      expect.objectContaining({ requestType: 'update_shift', shiftId: '1', locationType: 'work_from_home' }),
+    )
+  })
+
+  it('keeps the workplace on a change of place, so approval does not drop it', async () => {
+    const ops = fakeOps([record({ id: '1', workplaceId: 3333333 })])
+    const sheet = createTimesheet({ ops, employeeId: 1, defaultLocationType: () => 'office' })
+    await sheet.saveDay({
+      date: '2026-09-04',
+      blocks: [{ id: '1', kind: 'work', start: 510, end: 735, breakConfigurationId: null, breakName: null, locationType: 'work_from_home', workplaceId: 3333333 }],
+    })
+    expect(ops.requestTimesheetEdit).toHaveBeenCalledWith(expect.objectContaining({ locationType: 'work_from_home', workplaceId: 3333333 }))
+  })
+
+  it('books a new work block at the widget\'s last workplace when the editor names none', async () => {
+    const ops = fakeOps([])
+    const sheet = createTimesheet({ ops, employeeId: 1, defaultLocationType: () => 'office', defaultWorkplaceId: () => 4444 })
+    await sheet.saveDay({
+      date: '2026-09-04',
+      blocks: [{ id: null, kind: 'work', start: 510, end: 735, breakConfigurationId: null, breakName: null, locationType: null, workplaceId: null }],
+    })
+    expect(ops.requestTimesheetEdit).toHaveBeenCalledWith(expect.objectContaining({ requestType: 'create_shift', workplaceId: 4444 }))
   })
 
   it('lists only the pending requests of a day, with their times as minutes', async () => {
@@ -156,7 +192,7 @@ describe('createTimesheet.saveDay', () => {
     const month = await sheet.getMonth(2026, 9)
     const day = month.days.find((d) => d.date === '2026-09-04')
     expect(day?.requests).toEqual([
-      { id: '9', requestType: 'update_shift', shiftId: '1', start: 792, end: 1135, workable: null, breakConfigurationId: null },
+      { id: '9', requestType: 'update_shift', shiftId: '1', start: 792, end: 1135, workable: null, breakConfigurationId: null, locationType: null },
     ])
   })
 

@@ -267,6 +267,8 @@ export const en = {
   'timesheet.pendingNew': 'New',
 
   'timesheet.pendingDelete': 'Delete',
+  /** A pending `update_shift` whose times equal the record's: only the place can have moved. */
+  'timesheet.pendingLocation': 'Location changed',
 
   'timesheet.withdraw': 'Withdraw',
 

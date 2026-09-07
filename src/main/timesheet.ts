@@ -64,6 +64,8 @@ export interface TimesheetDeps {
   employeeId: number
   /** Where a created work block is booked when the editor does not say. */
   defaultLocationType: () => string
+  /** The workplace ("Standort") for a created work block without one; the widget's last. */
+  defaultWorkplaceId?: () => number | null
   /** Injected so tests are deterministic. */
   now?: () => Date
   /** Called after a day was written, with the day; `index.ts` refreshes the store for today. */
@@ -117,6 +119,7 @@ export function blockFromRecord(record: ShiftRecord): TimesheetBlock | null {
     breakConfigurationId: record.breakConfiguration?.id ?? null,
     breakName: record.breakConfiguration?.name ?? null,
     locationType: record.locationType,
+    workplaceId: record.workplaceId,
   }
 }
 
@@ -135,6 +138,7 @@ export function pendingFromRecord(record: EditRequestRecord): PendingRequest | n
     end: record.clockOut === null ? null : parseTimeOfDay(record.clockOut),
     workable: record.workable,
     breakConfigurationId: record.breakConfigurationId,
+    locationType: record.locationType,
   }
 }
 
@@ -216,6 +220,7 @@ export function createTimesheet(deps: TimesheetDeps): Timesheet {
           workable?: boolean | null
           breakConfigurationId?: string | null
           locationType?: LocationType | null
+          workplaceId?: number | null
         },
       ): Promise<void> {
         await ops.requestTimesheetEdit({
@@ -228,6 +233,7 @@ export function createTimesheet(deps: TimesheetDeps): Timesheet {
           workable: fields.workable ?? null,
           breakConfigurationId: fields.breakConfigurationId ?? null,
           locationType: fields.locationType ?? null,
+          workplaceId: fields.workplaceId ?? null,
         })
         requested += 1
       }
@@ -237,21 +243,33 @@ export function createTimesheet(deps: TimesheetDeps): Timesheet {
       for (const id of changes.delete) await request('delete_shift', { shiftId: id })
       for (const block of changes.update) {
         if (block.id === null || block.end === null) continue
+        // The location rides along only when it is what moved: an untouched
+        // one is not re-sent, same as everything else about the record. The
+        // workplace goes with it, because Factorial reads a request that names
+        // a place but no workplace as "Standort: none" (seen in the web app's
+        // own request tooltip on 2026-09-07).
+        const original = before.find((b) => b.id === block.id)
+        const location = block.locationType
+        const moved = block.kind === 'work' && location !== null && location !== original?.locationType && isLocationType(location)
         await request('update_shift', {
           shiftId: block.id,
           clockIn: formatMinuteOfDay(block.start),
           clockOut: formatMinuteOfDay(block.end),
+          locationType: moved ? location : null,
+          workplaceId: moved ? block.workplaceId : null,
         })
       }
       for (const block of changes.create) {
         if (block.end === null) continue
         const location = block.locationType ?? deps.defaultLocationType()
+        const workplace = block.workplaceId ?? deps.defaultWorkplaceId?.() ?? null
         await request('create_shift', {
           clockIn: formatMinuteOfDay(block.start),
           clockOut: formatMinuteOfDay(block.end),
           workable: block.kind === 'work',
           breakConfigurationId: block.kind === 'break' ? block.breakConfigurationId : null,
           locationType: block.kind === 'work' && isLocationType(location) ? location : null,
+          workplaceId: block.kind === 'work' ? workplace : null,
         })
       }
 

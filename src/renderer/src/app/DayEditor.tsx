@@ -17,6 +17,7 @@ import {
 } from '@shared/timesheet'
 import { useTranslate } from '@renderer/hooks/useTranslate'
 import { describeActionError } from '@renderer/lib/errors'
+import { LOCATIONS } from '@renderer/components/LocationSelect'
 import { MenuButton } from './MenuButton'
 import { Timeline, type TimelineGhost } from './Timeline'
 
@@ -51,6 +52,12 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
   // widens its scale to fit these and must not see a fresh list every render.
   const ghosts = useMemo(() => ghostsOf(day, t('timesheet.pendingNew')), [day, t])
 
+  /** A location as the widget calls it, or the raw value for one the list does not know. */
+  function placeName(location: string | null): string {
+    const known = LOCATIONS.find((o) => o.value === location)
+    return known === undefined ? (location ?? '') : t(known.key)
+  }
+
   async function withdraw(request: PendingRequest): Promise<void> {
     setSaving(true)
     try {
@@ -78,6 +85,11 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
     const start = last === undefined ? 9 * 60 : (last.end ?? now ?? last.start)
     const length = kind === 'work' ? 60 : 30
     const option = breakOptions[0]
+    // A new work block is booked where the day's last one was; without one the
+    // main process falls back to the widget's remembered location.
+    const template = [...blocks].reverse().find((b) => b.kind === 'work' && b.locationType !== null)
+    const location = template?.locationType ?? null
+    const workplace = template?.workplaceId ?? null
     change([
       ...blocks,
       {
@@ -87,7 +99,8 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
         end: Math.min(24 * 60, start + length),
         breakConfigurationId: kind === 'break' ? (option?.id ?? null) : null,
         breakName: kind === 'break' ? (option?.name ?? null) : null,
-        locationType: null,
+        locationType: kind === 'work' ? location : null,
+        workplaceId: kind === 'work' ? workplace : null,
       },
     ])
   }
@@ -115,9 +128,19 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
       <div className="flex flex-col gap-2">
         {blocks.map((block, index) => (
           <div key={block.id ?? `new-${index}`} className="app-row-enter flex items-center gap-3 rounded-[10px] px-2.5 py-2 text-sm" style={{ background: 'var(--app-fill)' }} data-slot="block-row">
-            {block.kind === 'break' && breakOptions.length > 1 ? (
-              // The chip is the picker: the type opens the platform's menu,
-              // and the row keeps its columns whatever the type is called.
+            {block.kind === 'work' ? (
+              // The chip is the picker, for work as for breaks: the place opens
+              // the list, and the row keeps its columns whatever it is called.
+              <MenuButton
+                className="app-btn-sm w-[160px] shrink-0 justify-start"
+                leading={<span className="app-dot app-dot-work" />}
+                disabled={saving}
+                value={block.locationType ?? ''}
+                placeholder={t('timesheet.work')}
+                options={LOCATIONS.map((o) => ({ value: o.value, label: t(o.key) }))}
+                onChange={(location) => change(blocks.map((b, i) => (i === index ? { ...b, locationType: location } : b)))}
+              />
+            ) : block.kind === 'break' && breakOptions.length > 1 ? (
               <MenuButton
                 className="app-btn-sm w-[160px] shrink-0 justify-start"
                 leading={<span className="app-dot app-dot-break" />}
@@ -135,8 +158,8 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
               />
             ) : (
               <span className="app-chip w-[160px] shrink-0">
-                <span className={`app-dot ${block.kind === 'work' ? 'app-dot-work' : 'app-dot-break'}`} />
-                <span className="truncate">{block.kind === 'work' ? t('timesheet.work') : (block.breakName ?? t('timesheet.break'))}</span>
+                <span className="app-dot app-dot-break" />
+                <span className="truncate">{block.breakName ?? t('timesheet.break')}</span>
               </span>
             )}
             <TimeField label={t('timesheet.from')} value={block.start} disabled={saving} onCommit={(v) => setTime(index, 'start', v)} />
@@ -171,8 +194,29 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
             const target = day.blocks.find((b) => b.id === request.shiftId) ?? null
             const isBreak = request.workable === false || request.breakConfigurationId !== null || target?.kind === 'break'
             const breakName = breakOptions.find((o) => o.id === (request.breakConfigurationId ?? target?.breakConfigurationId))?.name ?? target?.breakName ?? null
-            const before = target === null ? t('timesheet.pendingNew') : span(target.start, target.end)
-            const after = request.requestType === 'delete_shift' ? t('timesheet.pendingDelete') : span(request.start, request.end)
+            // Each side names what the request touches: the times when they
+            // move, the place when it does. A request that moves neither yet
+            // names no place — the server did not say where — can only have
+            // changed the place, and is called that.
+            const sameTimes = target !== null && request.start === target.start && request.end === target.end
+            const movedPlace = typeof request.locationType === 'string' && request.locationType !== target?.locationType
+            const beforeParts = target === null ? [t('timesheet.pendingNew')] : [span(target.start, target.end)]
+            const afterParts = [span(request.start, request.end)]
+            if (movedPlace) {
+              if (target !== null) beforeParts.push(placeName(target.locationType))
+              afterParts.push(placeName(request.locationType))
+            }
+            if (sameTimes && movedPlace) {
+              beforeParts.shift()
+              afterParts.shift()
+            }
+            const before = beforeParts.join(' · ')
+            const after =
+              request.requestType === 'delete_shift'
+                ? t('timesheet.pendingDelete')
+                : request.requestType === 'update_shift' && sameTimes && !movedPlace
+                  ? t('timesheet.pendingLocation')
+                  : afterParts.join(' · ')
             return (
               <div
                 key={request.id}

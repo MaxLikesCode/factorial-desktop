@@ -298,6 +298,7 @@ async function bootstrap(): Promise<void> {
     ops,
     employeeId,
     defaultLocationType: () => settings.get().lastLocationType,
+    defaultWorkplaceId: () => settings.get().lastWorkplaceId,
     // An edited today changes the widget's bar and sum; the store re-reads
     // rather than being told, so the two can never disagree.
     onSaved: (date) => {

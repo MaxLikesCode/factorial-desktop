@@ -315,6 +315,13 @@ function leaveDays(raw: unknown): number | null {
 
 // --- operations -------------------------------------------------------------
 
+/**
+ * Whether `AttendanceEditTimesheetRequest.locationType` is asked for. Starts
+ * optimistic and is switched off for the rest of the process the first time the
+ * server refuses the document (`fetchEditRequests`).
+ */
+let editRequestHasLocation = true
+
 export function createOperations(client: GraphQLClient) {
   /**
    * The only variable shared by all four mutations (K1). `date`, `startOn` and
@@ -808,6 +815,7 @@ export function createOperations(client: GraphQLClient) {
       workable: boolean | null
       breakConfigurationId: string | null
       locationType: LocationType | null
+      workplaceId: number | null
     }): Promise<void> {
       // Only what this request is actually about is sent. An explicit null on an
       // argument the change does not concern is a different request from leaving
@@ -828,6 +836,7 @@ export function createOperations(client: GraphQLClient) {
         )
       }
       if (input.locationType !== null) variables.locationType = input.locationType
+      if (input.workplaceId !== null) variables.workplaceId = input.workplaceId
 
       const data = await client.execute<unknown>({
         operationName: 'RequestTimesheetEdit',
@@ -837,14 +846,14 @@ export function createOperations(client: GraphQLClient) {
                                               $attendanceShiftId: Int, $clockIn: String, $clockOut: String,
                                               $date: ISO8601Date, $workable: Boolean,
                                               $timeSettingsBreakConfigurationId: Int,
-                                              $locationType: AttendanceShiftLocationTypeEnum) {
+                                              $locationType: AttendanceShiftLocationTypeEnum, $workplaceId: Int) {
           attendanceMutations {
             createAttendanceEditTimesheetRequest(employeeId: $employeeId, requestType: $requestType,
                                                  attendanceShiftId: $attendanceShiftId,
                                                  clockIn: $clockIn, clockOut: $clockOut, date: $date,
                                                  workable: $workable,
                                                  timeSettingsBreakConfigurationId: $timeSettingsBreakConfigurationId,
-                                                 locationType: $locationType) {
+                                                 locationType: $locationType, workplaceId: $workplaceId) {
               editTimesheetRequest { id approved requestType }
 ${MUTATION_RESULT}            }
           }
@@ -860,21 +869,31 @@ ${MUTATION_RESULT}            }
      * 2026-09-05 against a day with one applied and two pending requests.
      */
     async fetchEditRequests(employeeId: number, startOn: string, endOn: string): Promise<EditRequestRecord[]> {
-      const data = await client.execute<unknown>({
-        operationName: 'EditRequests',
-        variables: { id: employeeId, startOn, endOn },
-        query: `query EditRequests($id: Int!, $startOn: ISO8601Date!, $endOn: ISO8601Date!) {
+      const document = (withLocation: boolean): string => `query EditRequests($id: Int!, $startOn: ISO8601Date!, $endOn: ISO8601Date!) {
           attendance { employee(id: $id) {
             attendanceEditTimesheetRequestsConnection(startOn: $startOn, endOn: $endOn) {
               nodes {
                 id approved requestType date clockIn clockOut workable
-                timeSettingsBreakConfigurationId
+                timeSettingsBreakConfigurationId ${withLocation ? 'locationType' : ''}
                 attendanceShift { id }
               }
             }
           } }
-        }`,
-      })
+        }`
+      const variables = { id: employeeId, startOn, endOn }
+      let data: unknown
+      try {
+        data = await client.execute<unknown>({ operationName: 'EditRequests', variables, query: document(editRequestHasLocation) })
+      } catch (error) {
+        // `locationType` on the request type was confirmed live on 2026-09-07
+        // (a place-only request read back as `work_from_home`). The retry is
+        // kept as a guard: a document the server refuses to validate must not
+        // cost the month, so the older shape is asked for instead, once, and
+        // the location is simply unknown from then on.
+        if (!(editRequestHasLocation && error instanceof FactorialError && error.kind === 'graphql')) throw error
+        editRequestHasLocation = false
+        data = await client.execute<unknown>({ operationName: 'EditRequests', variables, query: document(false) })
+      }
 
       const employee = attendanceEmployee(data, 'EditRequests')
       const base = 'EditRequests.data.attendance.employee.attendanceEditTimesheetRequestsConnection'
@@ -894,6 +913,7 @@ ${MUTATION_RESULT}            }
           clockOut: asNullableString(field(node, path, 'clockOut'), `${path}.clockOut`),
           workable: asNullableBoolean(field(node, path, 'workable'), `${path}.workable`),
           breakConfigurationId: breakId === null || breakId === undefined ? null : asId(breakId, `${path}.timeSettingsBreakConfigurationId`),
+          locationType: editRequestHasLocation ? asNullableString(field(node, path, 'locationType'), `${path}.locationType`) : null,
         }
       })
     },

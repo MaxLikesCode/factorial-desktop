@@ -182,6 +182,7 @@ export const pt: Catalogue = {
   'timesheet.pendingNew': 'Novo',
 
   'timesheet.pendingDelete': 'Eliminar',
+  'timesheet.pendingLocation': 'Local alterado',
 
   'timesheet.withdraw': 'Retirar',
 

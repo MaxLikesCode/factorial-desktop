@@ -270,6 +270,7 @@ function asDayEdit(payload: unknown): DayEdit {
       breakName: typeof b.breakName === 'string' ? b.breakName : null,
       locationType:
         typeof b.locationType === 'string' && isLocationType(b.locationType) ? b.locationType : null,
+      workplaceId: typeof b.workplaceId === 'number' && Number.isInteger(b.workplaceId) ? b.workplaceId : null,
     }
   })
   return { date: raw.date, blocks }

@@ -211,6 +211,12 @@ Real answer for 2026-09-01 (trimmed): one applied request (`approved: true`,
 the 18:07 that is now in the record) and the pending ones next to it, each
 naming shift `554387733`.
 
+The request also carries `locationType` (read back as `work_from_home` on
+2026-09-07 for a place-only `update_shift`). A request that names a
+`locationType` but no `workplaceId` shows in the web app's tooltip as
+"Standort: <current> → Keine" — so a change of place has to send the record's
+`workplaceId` along, or approval drops the workplace.
+
 `attendanceMutations.deleteAttendanceEditTimesheetRequest(id: Int!)` withdraws
 a pending request; payload `DeleteAttendanceEditTimesheetRequestPayload` with
 the usual `errors` union and `editTimesheetRequest`. There is also an

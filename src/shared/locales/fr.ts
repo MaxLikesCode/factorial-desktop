@@ -176,6 +176,7 @@ export const fr: Catalogue = {
   'timesheet.pendingNew': 'Nouveau',
 
   'timesheet.pendingDelete': 'Supprimer',
+  'timesheet.pendingLocation': 'Lieu modifié',
 
   'timesheet.withdraw': 'Retirer',
 

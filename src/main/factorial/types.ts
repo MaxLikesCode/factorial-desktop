@@ -122,6 +122,11 @@ export interface EditRequestRecord {
   clockOut: string | null
   workable: boolean | null
   breakConfigurationId: string | null
+  /**
+   * Where the requested record would be booked — `AttendanceEditTimesheetRequest.locationType`,
+   * confirmed live on 2026-09-07. Null when the request does not say.
+   */
+  locationType: string | null
 }
 
 /**

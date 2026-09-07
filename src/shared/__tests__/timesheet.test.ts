@@ -14,10 +14,10 @@ import {
 } from '../timesheet'
 
 function work(id: string | null, start: number, end: number | null): TimesheetBlock {
-  return { id, kind: 'work', start, end, breakConfigurationId: null, breakName: null, locationType: 'office' }
+  return { id, kind: 'work', start, end, breakConfigurationId: null, breakName: null, locationType: 'office', workplaceId: null }
 }
 function rest(id: string | null, start: number, end: number | null): TimesheetBlock {
-  return { id, kind: 'break', start, end, breakConfigurationId: '19613', breakName: 'Mittagspause', locationType: null }
+  return { id, kind: 'break', start, end, breakConfigurationId: '19613', breakName: 'Mittagspause', locationType: null, workplaceId: null }
 }
 
 describe('sums', () => {
@@ -103,6 +103,14 @@ describe('diffDay', () => {
     expect(changes.delete).toEqual(['2'])
     expect(changes.create.map((b) => b.kind)).toEqual(['work'])
     expect(changes.update).toEqual([])
+  })
+
+  it('updates a work block whose location changed, times untouched', () => {
+    const after = [{ ...work('1', 510, 735), locationType: 'work_from_home' }, rest('2', 735, 765), work('3', 765, 1012)]
+    const changes = diffDay(before, after)
+    expect(changes.update.map((b) => b.id)).toEqual(['1'])
+    expect(changes.create).toEqual([])
+    expect(changes.delete).toEqual([])
   })
 
   it('leaves the running block alone', () => {

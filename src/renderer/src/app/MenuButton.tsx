@@ -9,10 +9,12 @@ interface Props {
   className?: string
   /** Something before the label — the break row's colour dot. */
   leading?: React.ReactNode
+  /** Shown when `value` names none of the options — a work block whose location is not known. */
+  placeholder?: string
 }
 
 /** A choice as a button: the current value, a chevron, and the window's own list on click. */
-export function MenuButton({ value, options, onChange, disabled = false, className = '', leading }: Props): React.JSX.Element {
+export function MenuButton({ value, options, onChange, disabled = false, className = '', leading, placeholder }: Props): React.JSX.Element {
   const current = options.find((o) => o.value === value)
   return (
     <Dropdown
@@ -26,7 +28,7 @@ export function MenuButton({ value, options, onChange, disabled = false, classNa
       align="end"
     >
       {leading}
-      <span className="truncate">{current?.label ?? value}</span>
+      <span className="truncate">{current?.label ?? placeholder ?? value}</span>
       <ChevronDownIcon className="app-faint ml-auto" />
     </Dropdown>
   )

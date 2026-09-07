@@ -34,6 +34,12 @@ export interface TimesheetBlock {
   breakConfigurationId: string | null
   breakName: string | null
   locationType: string | null
+  /**
+   * Factorial's "Standort" (`workplaceId`), carried so a request about the
+   * block can send it back: the web app's own edit request names it, and one
+   * that does not would set the record's workplace to none when approved.
+   */
+  workplaceId: number | null
 }
 
 /**
@@ -71,6 +77,8 @@ export interface PendingRequest {
   /** What the requested record would be. Null when the request does not say. */
   workable: boolean | null
   breakConfigurationId: string | null
+  /** The place the record would be booked at, when the request carries one. */
+  locationType: string | null
 }
 
 export interface TimesheetDay {
@@ -190,8 +198,10 @@ export function normaliseBlocks(blocks: readonly TimesheetBlock[]): TimesheetBlo
  *
  * A block whose kind changed is deleted and created rather than updated:
  * `updateAttendanceShift` does not take `workable`, so a work record cannot
- * be turned into a break in place. The running block is never touched — it
- * has no end to write, and ending it is what "clock out" is for.
+ * be turned into a break in place. A work block whose location changed is an
+ * update like a moved one: the request mutation takes `locationType`. The
+ * running block is never touched — it has no end to write, and ending it is
+ * what "clock out" is for.
  */
 export function diffDay(before: readonly TimesheetBlock[], after: readonly TimesheetBlock[]): DayChanges {
   const changes: DayChanges = { create: [], update: [], delete: [] }
@@ -217,7 +227,7 @@ export function diffDay(before: readonly TimesheetBlock[], after: readonly Times
       changes.create.push({ ...block, id: null })
       continue
     }
-    if (original.start !== block.start || original.end !== block.end) {
+    if (original.start !== block.start || original.end !== block.end || original.locationType !== block.locationType) {
       changes.update.push(block)
     }
   }

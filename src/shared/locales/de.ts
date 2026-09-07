@@ -185,6 +185,7 @@ export const de: Catalogue = {
   'timesheet.pendingNew': 'Neu',
 
   'timesheet.pendingDelete': 'Löschen',
+  'timesheet.pendingLocation': 'Arbeitsort geändert',
 
   'timesheet.withdraw': 'Zurückziehen',
 

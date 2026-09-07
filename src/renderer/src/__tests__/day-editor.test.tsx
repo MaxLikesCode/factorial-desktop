@@ -11,10 +11,10 @@ vi.mock('sonner', () => ({ toast: { error: toastError, success: toastSuccess, in
 function day(over: Partial<TimesheetDay> = {}): TimesheetDay {
   return {
     date: '2026-09-01',
-    blocks: [{ id: '554387733', kind: 'work', start: 792, end: 1087, breakConfigurationId: null, breakName: null, locationType: 'office' }],
+    blocks: [{ id: '554387733', kind: 'work', start: 792, end: 1087, breakConfigurationId: null, breakName: null, locationType: 'office', workplaceId: null }],
     expectedMinutes: 480,
     requests: [
-      { id: '13542375', requestType: 'update_shift', shiftId: '554387733', start: 792, end: 1135, workable: null, breakConfigurationId: null },
+      { id: '13542375', requestType: 'update_shift', shiftId: '554387733', start: 792, end: 1135, workable: null, breakConfigurationId: null, locationType: null },
     ],
     ...over,
   }
@@ -62,13 +62,61 @@ describe('DayEditor with pending requests', () => {
   })
 })
 
+describe('DayEditor work location', () => {
+  it('offers the place on a work block and requests the day with it changed', async () => {
+    const bridge = installBridge()
+    render(<DayEditor day={day({ requests: [] })} breakOptions={[]} now={null} onSaved={vi.fn()} />)
+    await act(async () => {})
+
+    const chip = screen.getByRole('button', { name: 'Büro' })
+    await act(async () => void chip.click())
+    await act(async () => void screen.getByRole('option', { name: 'Mobiles Arbeiten' }).click())
+    expect(screen.getByRole('button', { name: 'Mobiles Arbeiten' })).toBeTruthy()
+
+    await act(async () => void screen.getByRole('button', { name: 'Änderungen beantragen' }).click())
+    expect(bridge.saveTimesheetDay).toHaveBeenCalledWith({
+      date: '2026-09-01',
+      blocks: [expect.objectContaining({ id: '554387733', locationType: 'work_from_home' })],
+    })
+  })
+
+  it('shows the place a request moves the record to, next to the one it has', async () => {
+    installBridge()
+    const request = { ...day().requests[0]!, end: 1087, locationType: 'work_from_home' }
+    render(<DayEditor day={day({ requests: [request] })} breakOptions={[]} now={null} onSaved={vi.fn()} />)
+    await act(async () => {})
+    const row = document.querySelector('[data-slot="pending-row"]')?.textContent ?? ''
+    expect(row).toContain('Büro')
+    expect(row).toContain('Mobiles Arbeiten')
+    // Nothing moved in time, so the times are not repeated on both sides.
+    expect(row).not.toContain('13:12')
+  })
+
+  it('shows times and place together when both move', async () => {
+    installBridge()
+    const request = { ...day().requests[0]!, locationType: 'business_trip' }
+    render(<DayEditor day={day({ requests: [request] })} breakOptions={[]} now={null} onSaved={vi.fn()} />)
+    await act(async () => {})
+    const row = document.querySelector('[data-slot="pending-row"]')?.textContent ?? ''
+    expect(row).toContain('13:12 – 18:07 · Büro')
+    expect(row).toContain('13:12 – 18:55 · Dienstreise')
+  })
+
+  it('falls back to naming a change of place when the request does not say where', async () => {
+    installBridge()
+    render(<DayEditor day={day({ requests: [{ ...day().requests[0]!, end: 1087 }] })} breakOptions={[]} now={null} onSaved={vi.fn()} />)
+    await act(async () => {})
+    expect(document.querySelector('[data-slot="pending-row"]')?.textContent).toContain('Arbeitsort geändert')
+  })
+})
+
 describe('ghostsOf', () => {
   it('draws a deletion over the record it would remove, and skips one whose record is gone', () => {
     const d = day({
       requests: [
-        { id: 'a', requestType: 'delete_shift', shiftId: '554387733', start: null, end: null, workable: null, breakConfigurationId: null },
-        { id: 'b', requestType: 'delete_shift', shiftId: 'gone', start: null, end: null, workable: null, breakConfigurationId: null },
-        { id: 'c', requestType: 'create_shift', shiftId: null, start: 540, end: 600, workable: true, breakConfigurationId: null },
+        { id: 'a', requestType: 'delete_shift', shiftId: '554387733', start: null, end: null, workable: null, breakConfigurationId: null, locationType: null },
+        { id: 'b', requestType: 'delete_shift', shiftId: 'gone', start: null, end: null, workable: null, breakConfigurationId: null, locationType: null },
+        { id: 'c', requestType: 'create_shift', shiftId: null, start: 540, end: 600, workable: true, breakConfigurationId: null, locationType: null },
       ],
     })
     expect(ghostsOf(d, 'Neu')).toEqual([
