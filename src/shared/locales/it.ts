@@ -186,7 +186,7 @@ export const it: Catalogue = {
   'timesheet.withdrawFailed': 'Ritiro non riuscito: {reason}',
   'timesheet.loadFailed': 'Impossibile caricare il mese: {reason}',
   'timesheet.unsaved': 'Modifiche non salvate',
-  'timesheet.runningHint': 'La registrazione in corso termina quando timbri l’uscita.',
+  'timesheet.runningHint': 'La registrazione in corso termina quando timbri l’uscita. Fino ad allora non può essere modificata.',
   'settingsPage.general': 'Generale',
   'settingsPage.widget': 'Widget',
   'settingsPage.clockIn': 'Timbratura',

@@ -280,7 +280,7 @@ export const en = {
   'timesheet.withdrawFailed': 'Withdrawing failed: {reason}',
   'timesheet.loadFailed': 'The month could not be loaded: {reason}',
   'timesheet.unsaved': 'Unsaved changes',
-  'timesheet.runningHint': 'The running record ends when you clock out.',
+  'timesheet.runningHint': 'The running record ends when you clock out. Until then it cannot be changed.',
   'settingsPage.general': 'General',
   'settingsPage.widget': 'Widget',
   'settingsPage.clockIn': 'Clocking in',

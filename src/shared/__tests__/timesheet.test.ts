@@ -10,6 +10,7 @@ import {
   normaliseBlocks,
   parseIsoDate,
   parseTimeOfDay,
+  setBlockTime,
   workedMinutes,
   type PendingRequest,
   type TimesheetBlock,
@@ -81,6 +82,40 @@ describe('normaliseBlocks', () => {
       ['2', 470, 500],
       ['1', 500, null],
     ])
+  })
+})
+
+describe('normaliseBlocks pushes rather than drops', () => {
+  it('moves a block off the neighbour it was typed into instead of losing it', () => {
+    // 9:00 work typed to start at 12:30, in a day whose break runs to 13:00.
+    const out = normaliseBlocks([rest('1', 720, 780), work('2', 750, 755)])
+    expect(out.map((b) => [b.id, b.start, b.end])).toEqual([
+      ['1', 720, 780],
+      ['2', 780, 785],
+    ])
+  })
+
+  it('leaves a record shorter than the grid at the length Factorial holds', () => {
+    expect(normaliseBlocks([rest('1', 700, 702)]).map((b) => [b.start, b.end])).toEqual([[700, 702]])
+  })
+})
+
+describe('setBlockTime', () => {
+  it('takes the end along when the start is typed past it', () => {
+    expect(setBlockTime(work('1', 540, 600), 'start', 660)).toMatchObject({ start: 660, end: 665 })
+  })
+
+  it('takes the start along when the end is typed before it', () => {
+    expect(setBlockTime(work('1', 540, 600), 'end', 480)).toMatchObject({ start: 475, end: 480 })
+  })
+
+  it('leaves the other end alone when the times still make sense', () => {
+    expect(setBlockTime(work('1', 540, 600), 'start', 570)).toMatchObject({ start: 570, end: 600 })
+    expect(setBlockTime(work('1', 540, 600), 'end', 630)).toMatchObject({ start: 540, end: 630 })
+  })
+
+  it('keeps a running block running', () => {
+    expect(setBlockTime(work('1', 540, null), 'start', 660)).toMatchObject({ start: 660, end: null })
   })
 })
 

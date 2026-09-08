@@ -11,6 +11,7 @@ import {
   hasChanges,
   normaliseBlocks,
   parseTimeOfDay,
+  setBlockTime,
   workedMinutes,
   type PendingRequest,
   type TimesheetBlock,
@@ -27,6 +28,12 @@ interface Props {
   breakOptions: BreakOption[]
   /** Minutes of the day right now, when `day` is today. */
   now: number | null
+  /**
+   * The place a new work block is booked at when the day itself names none:
+   * where the user is working right now, or where they last worked. Null only
+   * until the snapshot and the settings have arrived.
+   */
+  defaultLocation: string | null
   onSaved: (day: TimesheetDay) => void
 }
 
@@ -39,7 +46,7 @@ interface Props {
  * towards — worked against target — is recomputed from the copy on every
  * change, which is the whole reason the editor exists.
  */
-export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX.Element {
+export function DayEditor({ day, breakOptions, now, defaultLocation, onSaved }: Props): React.JSX.Element {
   const t = useTranslate()
   const [blocks, setBlocks] = useState<TimesheetBlock[]>(day.blocks)
   const [saving, setSaving] = useState(false)
@@ -118,7 +125,10 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
   function setTime(index: number, part: 'start' | 'end', text: string): void {
     const minute = parseTimeOfDay(text)
     if (minute === null) return
-    change(blocks.map((b, i) => (i === index ? { ...b, [part]: minute } : b)))
+    // `setBlockTime`, not a plain assignment: a start typed past the end takes
+    // the end with it. Written straight in, the block would be inside out and
+    // normalising would drop the row the user was in the middle of editing.
+    change(blocks.map((b, i) => (i === index ? setBlockTime(b, part, minute) : b)))
   }
 
   function add(kind: 'work' | 'break'): void {
@@ -126,10 +136,12 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
     const start = last === undefined ? 9 * 60 : (last.end ?? now ?? last.start)
     const length = kind === 'work' ? 60 : 30
     const option = breakOptions[0]
-    // A new work block is booked where the day's last one was; without one the
-    // main process falls back to the widget's remembered location.
+    // A new work block is booked where the day's last one was, and failing that
+    // where the user is working now or worked last. Never nowhere: "Work" is
+    // not a place Factorial knows, and a row that names none reads as a choice
+    // still to be made when the main process would just fill one in anyway.
     const template = [...blocks].reverse().find((b) => b.kind === 'work' && b.locationType !== null)
-    const location = template?.locationType ?? null
+    const location = template?.locationType ?? defaultLocation
     const workplace = template?.workplaceId ?? null
     change([
       ...blocks,
@@ -198,6 +210,12 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
           // The requests about this record hang off its row, so what was asked
           // for is read next to what is there — not matched up from a list.
           const attached = block.id === null ? [] : day.requests.filter((r) => r.shiftId === block.id)
+          // The record that is still running is shown, not edited: Factorial
+          // takes no change to a shift without a clock-out, and `diffDay` drops
+          // it, so every control on it would be a no-op dressed as an edit. It
+          // becomes editable the moment it is clocked out.
+          const running = block.end === null
+          const locked = saving || running
           return (
             <div
               key={block.id ?? `new-${index}`}
@@ -207,7 +225,7 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
               data-pending={attached.length > 0 || undefined}
             >
               <div className="flex items-center gap-3 px-2.5 py-2 text-sm" data-slot="block-row">
-                {block.kind === 'work' ? (
+                {block.kind === 'work' && !running ? (
                   // The chip is the picker, for work as for breaks: the place opens
                   // the list, and the row keeps its columns whatever it is called.
                   <MenuButton
@@ -219,7 +237,7 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
                     options={LOCATIONS.map((o) => ({ value: o.value, label: t(o.key) }))}
                     onChange={(location) => change(blocks.map((b, i) => (i === index ? { ...b, locationType: location } : b)))}
                   />
-                ) : block.kind === 'break' && breakOptions.length > 1 ? (
+                ) : block.kind === 'break' && !running && breakOptions.length > 1 ? (
                   <MenuButton
                     className="app-btn-sm w-[160px] shrink-0 justify-start"
                     leading={<span className="app-dot app-dot-break" />}
@@ -236,24 +254,34 @@ export function DayEditor({ day, breakOptions, now, onSaved }: Props): React.JSX
                     }}
                   />
                 ) : (
-                  <span className="app-chip w-[160px] shrink-0">
-                    <span className="app-dot app-dot-break" />
-                    <span className="truncate">{block.breakName ?? t('timesheet.break')}</span>
+                  // A name, not a picker: either there is nothing to choose from,
+                  // or the record is running and Factorial would refuse the change.
+                  <span
+                    className="app-chip w-[160px] shrink-0"
+                    title={running ? t('timesheet.runningHint') : undefined}
+                    data-slot={running ? 'locked-chip' : undefined}
+                  >
+                    <span className={`app-dot ${block.kind === 'work' ? 'app-dot-work' : 'app-dot-break'}`} />
+                    <span className="truncate">
+                      {block.kind === 'work'
+                        ? placeName(block.locationType) || t('timesheet.work')
+                        : (block.breakName ?? t('timesheet.break'))}
+                    </span>
                   </span>
                 )}
-                <TimeField label={t('timesheet.from')} value={block.start} disabled={saving} onCommit={(v) => setTime(index, 'start', v)} />
+                <TimeField label={t('timesheet.from')} value={block.start} disabled={locked} onCommit={(v) => setTime(index, 'start', v)} />
                 <TimeField
                   label={t('timesheet.to')}
                   value={block.end}
-                  disabled={saving || block.end === null}
-                  placeholder={block.end === null ? t('timesheet.running') : undefined}
+                  disabled={locked}
+                  placeholder={running ? t('timesheet.running') : undefined}
                   onCommit={(v) => setTime(index, 'end', v)}
                 />
                 <span className="app-muted w-16 text-right text-[13px]" style={{ fontVariantNumeric: 'tabular-nums' }}>
                   {formatHours((block.end ?? now ?? block.start) - block.start)}
                 </span>
                 <span className="flex-1" />
-                {block.end !== null && (
+                {!running && (
                   <button type="button" className="app-btn app-btn-ghost app-btn-icon" aria-label={t('timesheet.remove')} disabled={saving} onClick={() => change(blocks.filter((_, i) => i !== index))}>
                     <Trash2Icon />
                   </button>

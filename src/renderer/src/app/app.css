@@ -322,6 +322,11 @@ img {
     font-weight: 600;
     cursor: grab;
     touch-action: none;
+    /* Nothing reaches out of a block: a grip that overflowed a short one used
+       to sit over its neighbour and take the press meant for it. */
+    overflow: hidden;
+    /* A record of a minute or two is a sliver, but never nothing at all. */
+    min-width: 3px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 .tl-block:active { cursor: grabbing; }
@@ -347,6 +352,9 @@ img {
     box-shadow: none;
 }
 .tl-block[data-running='true'] { border-radius: 8px 3px 3px 8px; }
+/* The running record cannot be changed until it is clocked out, so it does not
+   offer a grip either. */
+.tl-block[data-running='true'] { cursor: default; }
 /* A requested change: drawn where it would be, in nobody's colour, and not
    draggable — it is a proposal, and the strip only ever edits the record. */
 .tl-ghost {
@@ -390,13 +398,26 @@ img {
     border-radius: 999px;
     background: var(--app-pending);
 }
+/* The strip either side of a block too short to have grips of its own: the
+   press lands where there is nothing, and resizes the block it belongs to.
+   Invisible on purpose — the cursor is the only sign, the same one the grips
+   show, and a mark in the gap would read as a block that is not there. */
+.tl-reach {
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    cursor: ew-resize;
+    touch-action: none;
+}
+/* Drawn, not pressed: which end a drag takes hold of is decided from where the
+   pointer landed in the block (`grabPart`), so these are only the marks that
+   say an end can be dragged. */
 .tl-handle {
     position: absolute;
     top: 0;
     bottom: 0;
     width: 12px;
-    cursor: ew-resize;
-    touch-action: none;
+    pointer-events: none;
 }
 .tl-handle::after {
     content: '';

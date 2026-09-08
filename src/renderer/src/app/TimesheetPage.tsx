@@ -34,6 +34,12 @@ export function TimesheetPage({ headerSlot }: { headerSlot: HTMLElement | null }
   const snapshot = useAttendance()
   const locale = resolveLocale(settings?.language ?? 'system', navigator.language)
   const today = toLocalDate(new Date())
+  // Where a work block added in the editor is booked: the open shift's own
+  // place while one is running, and otherwise the one the widget remembers
+  // from the last clock-in — the same order the widget itself shows.
+  const state = snapshot.state
+  const defaultLocation =
+    (state.kind === 'in' || state.kind === 'break' ? state.locationType : null) ?? settings?.lastLocationType ?? null
   const tick = useTicker(true)
   const nowMinute = minuteOfDay(new Date(tick))
 
@@ -207,6 +213,7 @@ export function TimesheetPage({ headerSlot }: { headerSlot: HTMLElement | null }
                     day={day}
                     breakOptions={snapshot.breakOptions}
                     now={now}
+                    defaultLocation={defaultLocation}
                     onSaved={(saved) =>
                       setMonth((current) => {
                         if (current === null) return current

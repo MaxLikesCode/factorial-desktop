@@ -186,7 +186,7 @@ export const fr: Catalogue = {
   'timesheet.withdrawFailed': 'Échec du retrait : {reason}',
   'timesheet.loadFailed': 'Impossible de charger le mois : {reason}',
   'timesheet.unsaved': 'Modifications non enregistrées',
-  'timesheet.runningHint': 'L’enregistrement en cours se termine au dépointage.',
+  'timesheet.runningHint': 'L’enregistrement en cours se termine au dépointage. Jusque-là, il ne peut pas être modifié.',
   'settingsPage.general': 'Général',
   'settingsPage.widget': 'Widget',
   'settingsPage.clockIn': 'Pointage',

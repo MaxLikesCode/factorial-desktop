@@ -195,7 +195,7 @@ export const de: Catalogue = {
   'timesheet.withdrawFailed': 'Zurückziehen fehlgeschlagen: {reason}',
   'timesheet.loadFailed': 'Der Monat konnte nicht geladen werden: {reason}',
   'timesheet.unsaved': 'Ungespeicherte Änderungen',
-  'timesheet.runningHint': 'Der laufende Eintrag endet mit dem Ausstempeln.',
+  'timesheet.runningHint': 'Der laufende Eintrag endet mit dem Ausstempeln. Bis dahin lässt er sich nicht ändern.',
   'settingsPage.general': 'Allgemein',
   'settingsPage.widget': 'Widget',
   'settingsPage.clockIn': 'Einstempeln',

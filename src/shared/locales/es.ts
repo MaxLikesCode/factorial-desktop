@@ -196,7 +196,7 @@ export const es: Catalogue = {
   'timesheet.withdrawFailed': 'No se pudo retirar: {reason}',
   'timesheet.loadFailed': 'No se pudo cargar el mes: {reason}',
   'timesheet.unsaved': 'Cambios sin guardar',
-  'timesheet.runningHint': 'El registro en curso termina al fichar la salida.',
+  'timesheet.runningHint': 'El registro en curso termina al fichar la salida. Hasta entonces no se puede modificar.',
   'settingsPage.general': 'General',
   'settingsPage.widget': 'Widget',
   'settingsPage.clockIn': 'Fichaje',

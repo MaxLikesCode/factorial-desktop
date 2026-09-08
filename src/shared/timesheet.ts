@@ -17,6 +17,14 @@
 
 export const MINUTES_PER_DAY = 24 * 60
 
+/**
+ * The shortest block the editor will make: five minutes, the same grid the
+ * strip snaps to. It is what an end is pushed to when a start is typed past
+ * it, and the floor a dragged edge stops at — a block is never squashed to
+ * nothing, because a row that vanishes under the pointer reads as a crash.
+ */
+export const MIN_BLOCK_MINUTES = 5
+
 export type BlockKind = 'work' | 'break'
 
 export interface TimesheetBlock {
@@ -175,9 +183,14 @@ export function formatHours(minutes: number): string {
 
 /**
  * Puts the blocks in order and keeps them from overlapping: each block is
- * clamped between its neighbours, and a block shorter than a minute is
- * dropped. Called after every edit so what the editor shows is always a day
- * Factorial would accept.
+ * clamped between its neighbours. Called after every edit so what the editor
+ * shows is always a day Factorial would accept.
+ *
+ * A block that arrives empty is dropped. A block that would only *become*
+ * empty by being pushed off its neighbour is not: it keeps `MIN_BLOCK_MINUTES`
+ * and moves along. Dropping it is how a mistyped start used to make a whole
+ * row disappear from the editor, which looks like a bug however correct the
+ * arithmetic was.
  */
 export function normaliseBlocks(blocks: readonly TimesheetBlock[]): TimesheetBlock[] {
   const sorted = [...blocks].sort((a, b) => a.start - b.start)
@@ -186,11 +199,38 @@ export function normaliseBlocks(blocks: readonly TimesheetBlock[]): TimesheetBlo
     const previous = out[out.length - 1]
     const floor = previous === undefined ? 0 : (previous.end ?? previous.start)
     const start = Math.min(MINUTES_PER_DAY, Math.max(floor, block.start))
-    const end = block.end === null ? null : Math.min(MINUTES_PER_DAY, Math.max(start, block.end))
-    if (end !== null && end - start < 1) continue
+    if (block.end === null) {
+      out.push({ ...block, start, end: null })
+      continue
+    }
+    const length = block.end - block.start
+    if (length < 1) continue
+    // Trimmed against the neighbour, but never below what it already was: a
+    // record Factorial holds as three minutes stays three minutes.
+    const end = Math.min(MINUTES_PER_DAY, Math.max(block.end, start + Math.min(length, MIN_BLOCK_MINUTES)))
+    if (end - start < 1) continue
     out.push({ ...block, start, end })
   }
   return out
+}
+
+/**
+ * One end of a block set to a typed time, with the other end following rather
+ * than the block collapsing.
+ *
+ * Typing a start past the end is how somebody moves a block: `9:00–10:00` with
+ * `11` typed into the start is not "eleven to ten", it is "the block starts at
+ * eleven now". The end is taken along to `11:05` instead of the block folding
+ * up and being dropped. The same the other way round, so neither field can
+ * make a row disappear on its way to a valid time.
+ */
+export function setBlockTime(block: TimesheetBlock, part: 'start' | 'end', minute: number): TimesheetBlock {
+  if (part === 'start') {
+    const end = block.end === null ? null : Math.min(MINUTES_PER_DAY, Math.max(block.end, minute + MIN_BLOCK_MINUTES))
+    return { ...block, start: Math.min(MINUTES_PER_DAY, Math.max(0, minute)), end }
+  }
+  const end = Math.min(MINUTES_PER_DAY, Math.max(0, minute))
+  return { ...block, start: Math.max(0, Math.min(block.start, end - MIN_BLOCK_MINUTES)), end }
 }
 
 /**

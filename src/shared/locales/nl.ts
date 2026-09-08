@@ -186,7 +186,7 @@ export const nl: Catalogue = {
   'timesheet.withdrawFailed': 'Intrekken mislukt: {reason}',
   'timesheet.loadFailed': 'De maand kon niet worden geladen: {reason}',
   'timesheet.unsaved': 'Niet-opgeslagen wijzigingen',
-  'timesheet.runningHint': 'De lopende registratie eindigt bij het uitklokken.',
+  'timesheet.runningHint': 'De lopende registratie eindigt bij het uitklokken. Tot dan kan die niet worden gewijzigd.',
   'settingsPage.general': 'Algemeen',
   'settingsPage.widget': 'Widget',
   'settingsPage.clockIn': 'Inklokken',

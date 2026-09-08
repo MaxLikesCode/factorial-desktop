@@ -192,7 +192,7 @@ export const pt: Catalogue = {
   'timesheet.withdrawFailed': 'Não foi possível retirar: {reason}',
   'timesheet.loadFailed': 'Não foi possível carregar o mês: {reason}',
   'timesheet.unsaved': 'Alterações por guardar',
-  'timesheet.runningHint': 'O registo em curso termina quando saíres.',
+  'timesheet.runningHint': 'O registo em curso termina quando saíres. Até lá não pode ser alterado.',
   'settingsPage.general': 'Geral',
   'settingsPage.widget': 'Widget',
   'settingsPage.clockIn': 'Registo de ponto',

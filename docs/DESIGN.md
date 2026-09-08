@@ -997,9 +997,20 @@ frame, taskbar entry, remembered size — with a sidebar of three sections:
   as the widget, at full size.
 - **Timesheet**: a month of days; a day opens into an editor with the day as a
   strip of work and break blocks whose ends can be dragged, the same blocks as
-  fields, and the running sum against the target. Saving writes only the diff
-  (`src/shared/timesheet.ts`, `diffDay`) through `createAttendanceShift`,
-  `updateAttendanceShift` and `deleteAttendanceShift` (docs/api-discovery.md).
+  fields, and the running sum against the target. Dragging snaps to the day's
+  own five-minute marks — 12:55, never 12:57 — with Ctrl for single minutes.
+  A block is taken by its ends to resize and anywhere else to move, decided
+  from where the press landed rather than from handle boxes that overlap on a
+  short block (`grabPart`). Every block is drawn exactly as long as it is, so a
+  five-minute record is a sliver; what it has no room for inside it, it gets
+  beside it, as a grip's width of empty strip that resizes it and stops at the
+  gap (`reachOf`). No edit may collapse a block either: a start typed past the
+  end takes the end with it (`setBlockTime`) rather than the row disappearing. The record that is
+  still running is read-only throughout, strip and fields alike, because
+  `diffDay` cannot write a shift that has no clock-out yet. Saving writes only
+  the diff (`src/shared/timesheet.ts`, `diffDay`) through
+  `createAttendanceShift`, `updateAttendanceShift` and `deleteAttendanceShift`
+  (docs/api-discovery.md).
 - **Settings**: everything the tray's submenu used to hold, plus the three
   clock-in settings — ask for the location, remind after N hours, clock out
   after M hours.
