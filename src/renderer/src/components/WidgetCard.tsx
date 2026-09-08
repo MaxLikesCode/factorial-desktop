@@ -1,6 +1,6 @@
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { ChevronDownIcon } from 'lucide-react'
-import { CARD, EXPANDED_ROWS, type ExpandDirection } from '@shared/widget-size'
+import { CARD, EXPANDED_ROWS, collapsedCard, type ExpandDirection } from '@shared/widget-size'
 import type { WidgetDesign } from '@shared/ipc-contract'
 import { useTranslate } from '@renderer/hooks/useTranslate'
 import { ProgressBar } from './ProgressBar'
@@ -70,7 +70,7 @@ interface Props {
  * they were the part that ticks.
  */
 function Timer({ value, className }: { value: string; className: string }): React.JSX.Element {
-  const cut = value.split(':').length > 2 ? value.lastIndexOf(':') : value.length
+  const cut = hasSeconds(value) ? value.lastIndexOf(':') : value.length
   return (
     <span
       data-slot="worked-timer"
@@ -80,6 +80,17 @@ function Timer({ value, className }: { value: string; className: string }): Reac
       <span className="text-muted-foreground">{value.slice(cut)}</span>
     </span>
   )
+}
+
+/**
+ * Whether a reading counts seconds — `7:23:45` against `7:23`.
+ *
+ * Read off the string rather than taken as a prop, because the string is the
+ * only thing the card is given: a flag beside it could disagree with it, and
+ * then the card would be sized for a reading it is not showing.
+ */
+function hasSeconds(value: string): boolean {
+  return value.split(':').length > 2
 }
 
 export function WidgetCard({
@@ -218,7 +229,11 @@ export function WidgetCard({
     withCapture(event.currentTarget, event.pointerId, false)
   }
 
-  const size = open ? CARD.expanded : CARD.collapsed
+  // Collapsed, the card is only as wide as the reading needs: with the seconds
+  // switched off it draws in, on the width transition the morph already uses,
+  // and away from whichever edge it is pinned to — so the corner the user parked
+  // stays where it was put.
+  const size = open ? CARD.expanded : collapsedCard(hasSeconds(view.time))
 
   return (
     <div

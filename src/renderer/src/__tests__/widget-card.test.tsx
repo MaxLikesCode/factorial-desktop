@@ -27,8 +27,9 @@ const CLOCKED_IN: Partial<AppSnapshot> = {
 async function mount(
   direction: 'right' | 'left' = 'right',
   snapshot: Partial<AppSnapshot> = CLOCKED_IN,
+  settings: { showSeconds?: boolean } = {},
 ): Promise<FakeBridge> {
-  const bridge = installBridge(snapshot, { expandDirection: direction })
+  const bridge = installBridge(snapshot, { expandDirection: direction, ...settings })
   render(<StatusWidget />)
   await act(async () => {})
   await act(async () => {
@@ -62,6 +63,26 @@ describe('the two states', () => {
     expect(card().dataset.open).toBe('false')
     expect(card().style.width).toBe(`${CARD.collapsed.width}px`)
     expect(card().style.height).toBe(`${CARD.collapsed.height}px`)
+  })
+
+  it('draws in when the timer stops counting seconds', async () => {
+    await mount('right', CLOCKED_IN, { showSeconds: false })
+    expect(card().style.width).toBe(`${CARD.collapsedCompact.width}px`)
+    // Only the width: the card keeps its height and its edge, so nothing but
+    // the empty end of the row goes.
+    expect(card().style.height).toBe(`${CARD.collapsed.height}px`)
+    expect(card().className).toContain('left-0')
+  })
+
+  it('is the wide one again as soon as there are seconds to show', async () => {
+    await mount('right', CLOCKED_IN, { showSeconds: true })
+    expect(card().style.width).toBe(`${CARD.collapsed.width}px`)
+  })
+
+  it('opens to the same expanded card either way', async () => {
+    await mount('right', CLOCKED_IN, { showSeconds: false })
+    await act(async () => void control().click())
+    expect(card().style.width).toBe(`${CARD.expanded.width}px`)
   })
 
   /**

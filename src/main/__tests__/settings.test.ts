@@ -184,11 +184,16 @@ describe('createSettings and the expand direction', () => {
     })
 
     s.set({ expandDirection: 'right' })
-    expect(applyExpandDirection).toHaveBeenCalledWith('right')
+    // The seconds setting rides along: the card's width decides how far the
+    // window has to move to leave the card where it is.
+    expect(applyExpandDirection).toHaveBeenCalledWith('right', true)
 
     applyExpandDirection.mockClear()
     s.set({ expandDirection: 'right' })
     expect(applyExpandDirection).not.toHaveBeenCalled()
+
+    s.set({ showSeconds: false, expandDirection: 'left' })
+    expect(applyExpandDirection).toHaveBeenCalledWith('left', false)
   })
 
   it('keeps an unusable direction out of the store', () => {

@@ -22,6 +22,7 @@ import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { IPC } from '@shared/ipc-contract'
 import {
+  collapsedCard,
   keepCardInPlace,
   windowSize,
   type ExpandDirection,
@@ -464,7 +465,7 @@ export function setWidgetInteractive(interactive: boolean): void {
  * The renderer is told nothing here. It reads the direction from its settings
  * subscription like any other preference, and the card inside re-anchors itself.
  */
-export function setWidgetExpandDirection(direction: ExpandDirection): void {
+export function setWidgetExpandDirection(direction: ExpandDirection, showSeconds = true): void {
   const before = currentDirection
   currentDirection = direction
   if (!widget || widget.isDestroyed()) return
@@ -473,9 +474,10 @@ export function setWidgetExpandDirection(direction: ExpandDirection): void {
   // Flipping the direction moves the card to the other end of that rectangle, so
   // without this the visible widget would slide the full width of its growth
   // room sideways — 163 px — for a setting that is supposed to change nothing
-  // but which way it opens.
+  // but which way it opens. How far it moves is the room beside the card, so
+  // the card's own width is part of the sum: without seconds it is narrower.
   const bounds = widget.getBounds()
-  const kept = keepCardInPlace({ x: bounds.x, y: bounds.y }, before, direction)
+  const kept = keepCardInPlace({ x: bounds.x, y: bounds.y }, before, direction, collapsedCard(showSeconds).width)
   const next = clampToVisibleArea(
     kept,
     currentDisplays().map((d) => d.bounds),

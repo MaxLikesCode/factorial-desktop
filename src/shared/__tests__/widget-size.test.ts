@@ -6,6 +6,7 @@ import {
   EXPANDED_ROWS,
   EXPAND_DIRECTIONS,
   cardOffsetFor,
+  collapsedCard,
   isExpandDirection,
   keepCardInPlace,
   windowSize,
@@ -25,6 +26,21 @@ describe('the two states', () => {
   it('grows in both directions, so the card never only stretches', () => {
     expect(CARD.expanded.width).toBeGreaterThan(CARD.collapsed.width)
     expect(CARD.expanded.height).toBeGreaterThan(CARD.collapsed.height)
+  })
+
+  /**
+   * The card without seconds is narrower by the room `:SS` took, and by no
+   * more: the timer still has to fit, and the card clips what does not.
+   */
+  it('narrows the collapsed card when the timer drops its seconds', () => {
+    expect(collapsedCard(true)).toEqual(CARD.collapsed)
+    expect(collapsedCard(false)).toEqual(CARD.collapsedCompact)
+    expect(CARD.collapsedCompact.width).toBeLessThan(CARD.collapsed.width)
+    expect(CARD.collapsed.width - CARD.collapsedCompact.width).toBeLessThan(40)
+  })
+
+  it('changes nothing but the width', () => {
+    expect(CARD.collapsedCompact.height).toBe(CARD.collapsed.height)
   })
 })
 
@@ -152,5 +168,21 @@ describe('keepCardInPlace', () => {
     // And exactly back again — the two directions must not drift apart over
     // repeated switching.
     expect(keepCardInPlace(toLeft, 'left', 'right')).toEqual(at(400, 300))
+  })
+
+  /**
+   * The room beside the card is what the window moves by, so a narrower card
+   * moves further. Told the wrong width, the compensation leaves the card 26 px
+   * from where it was — which is the whole thing this function exists to stop.
+   */
+  it('measures the room against the card it is actually given', () => {
+    const compact = CARD.collapsedCompact.width
+    const room = windowSize().width - compact
+
+    expect(cardOffsetFor('left', compact)).toEqual({ x: room, y: 0 })
+    expect(keepCardInPlace(at(400, 300), 'right', 'left', compact)).toEqual(at(400 - room, 300))
+    expect(keepCardInPlace(at(400, 300), 'right', 'left', compact)).not.toEqual(
+      keepCardInPlace(at(400, 300), 'right', 'left'),
+    )
   })
 })

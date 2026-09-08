@@ -3,8 +3,11 @@
  *
  * One card, two states:
  *
- * - **collapsed** 156 × 44. A dot, the timer, the day's bar. This is what is on
- *   screen all day.
+ * - **collapsed** 156 × 44, or 130 × 44 with the seconds switched off. A dot,
+ *   the timer, the day's bar. This is what is on screen all day, so it is only
+ *   as wide as the reading it carries; the narrower one is reached on the same
+ *   width transition the morph already uses, and away from the edge the card is
+ *   pinned to, so the corner it was parked in does not move.
  * - **expanded** 300 × 150. Everything: status, remaining time, the action
  *   buttons, the work-location select and the day's break total.
  *
@@ -33,8 +36,20 @@ export interface Size {
   height: number
 }
 
-export const CARD: { collapsed: Size; expanded: Size } = {
+export const CARD: { collapsed: Size; collapsedCompact: Size; expanded: Size } = {
   collapsed: { width: 156, height: 44 },
+  /**
+   * The collapsed card with a timer that carries no seconds.
+   *
+   * The row is 14 px of padding, a 7 px dot, a 6 px gap, the timer, and then the
+   * expand control: 20 px wide, 10 px from the right edge. At 156 that leaves
+   * the timer 99 px, which is what `12:00:00` needs at 22 px with room to
+   * spare. Dropping `:SS` gives about 30 px back; 26 of them are taken and the
+   * rest left as slack, so a two-digit hour still has more room than the
+   * reading uses. Rounded down on purpose — the card clips what does not fit,
+   * and the cost of the last four pixels is not worth being wrong about.
+   */
+  collapsedCompact: { width: 130, height: 44 },
   // 162, not the 150 the rows themselves need. The work-location select is 24 px
   // tall, not the 16 of a line of text, so the footer ends 24 px below where it
   // starts — and the day's bar sits flush to the very bottom edge. At 150 that
@@ -131,6 +146,11 @@ export function windowSize(): Size {
   }
 }
 
+/** The collapsed card, narrowed when its timer is not counting seconds. */
+export function collapsedCard(showSeconds: boolean): Size {
+  return showSeconds ? CARD.collapsed : CARD.collapsedCompact
+}
+
 export interface Point {
   x: number
   y: number
@@ -147,9 +167,9 @@ export interface Point {
  * keeps the expand control's y fixed in the `left` case and is the only reason
  * that case can leave the pointer where it is.
  */
-export function cardOffsetFor(direction: ExpandDirection): Point {
+export function cardOffsetFor(direction: ExpandDirection, collapsedWidth = CARD.collapsed.width): Point {
   if (direction === 'right') return { x: 0, y: 0 }
-  return { x: windowSize().width - CARD.collapsed.width, y: 0 }
+  return { x: windowSize().width - collapsedWidth, y: 0 }
 }
 
 /**
@@ -168,8 +188,9 @@ export function keepCardInPlace(
   origin: Point,
   from: ExpandDirection,
   to: ExpandDirection,
+  collapsedWidth = CARD.collapsed.width,
 ): Point {
-  const before = cardOffsetFor(from)
-  const after = cardOffsetFor(to)
+  const before = cardOffsetFor(from, collapsedWidth)
+  const after = cardOffsetFor(to, collapsedWidth)
   return { x: origin.x + before.x - after.x, y: origin.y + before.y - after.y }
 }

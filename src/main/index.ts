@@ -106,8 +106,8 @@ function applyTheme(theme: ThemeSetting): void {
  * are properties of the window and neither belongs to a settings store that
  * deliberately knows nothing about Electron.
  */
-function applyExpandDirection(direction: ExpandDirection): void {
-  setWidgetExpandDirection(direction)
+function applyExpandDirection(direction: ExpandDirection, showSeconds: boolean): void {
+  setWidgetExpandDirection(direction, showSeconds)
 }
 
 function applyLoginItem(openAtLogin: boolean): void {

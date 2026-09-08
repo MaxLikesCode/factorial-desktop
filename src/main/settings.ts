@@ -68,8 +68,14 @@ export interface SettingsDeps {
   applyLoginItem: (openAtLogin: boolean) => void
   /** Called with the new value whenever `theme` actually changes. */
   applyTheme: (theme: ThemeSetting) => void
-  /** Called with the new value whenever `expandDirection` actually changes. */
-  applyExpandDirection: (direction: ExpandDirection) => void
+  /**
+   * Called with the new value whenever `expandDirection` actually changes.
+   *
+   * `showSeconds` travels with it because the compensation that keeps the card
+   * from jumping is arithmetic on the card's width, and a card without seconds
+   * is narrower.
+   */
+  applyExpandDirection: (direction: ExpandDirection, showSeconds: boolean) => void
 }
 
 /**
@@ -182,7 +188,7 @@ export function createSettings({
       current = next
       if (loginItemChanged) applyLoginItem(current.openAtLogin)
       if (themeChanged) applyTheme(current.theme)
-      if (directionChanged) applyExpandDirection(current.expandDirection)
+      if (directionChanged) applyExpandDirection(current.expandDirection, current.showSeconds)
       return { ...current }
     },
   }

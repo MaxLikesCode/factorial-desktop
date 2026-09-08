@@ -514,7 +514,13 @@ One card, two states:
 | | Size | Contents |
 |---|---|---|
 | collapsed | 156 × 44 | dot · number · day bar |
+| collapsed, no seconds | 130 × 44 | the same, on a shorter reading |
 | expanded | 300 × 162 | + status · remaining · buttons · work location · break total |
+
+The timer counts seconds unless the settings say otherwise, and the collapsed
+card is only as wide as the reading it carries: switching the seconds off draws
+it in on the width transition the morph already uses, away from the edge it is
+pinned to, so the corner it was parked in stays put.
 
 **The expanded state is a moment of acting, not a view to sit in.** You open it to
 press Pause or clock out, and it closes again. That is why it shows everything at
