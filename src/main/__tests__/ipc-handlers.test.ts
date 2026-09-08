@@ -30,6 +30,7 @@ const SETTINGS: AppSettings = {
   longShiftReminderHours: 8,
   autoClockOutHours: null,
   widgetDesign: 'simple',
+  showSeconds: true,
 }
 
 function fakeStore(overrides: Partial<IpcStore> = {}): IpcStore & { listeners: (() => void)[] } {

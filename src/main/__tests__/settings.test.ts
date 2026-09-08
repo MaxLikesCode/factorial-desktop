@@ -101,6 +101,7 @@ describe('createSettings', () => {
       longShiftReminderHours: DEFAULT_SETTINGS.longShiftReminderHours,
       autoClockOutHours: DEFAULT_SETTINGS.autoClockOutHours,
       widgetDesign: DEFAULT_SETTINGS.widgetDesign,
+      showSeconds: DEFAULT_SETTINGS.showSeconds,
     })
   })
 

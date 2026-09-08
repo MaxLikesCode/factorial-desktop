@@ -116,6 +116,18 @@ describe('formatDuration', () => {
   })
 })
 
+describe('formatDuration without seconds', () => {
+  it('drops them rather than rounding the minute up', () => {
+    expect(formatDuration(2 * 3600_000 + 90_000, false)).toBe('2:01')
+    expect(formatDuration(59_000, false)).toBe('0:00')
+  })
+
+  it('still does not cap the hours or render a minus', () => {
+    expect(formatDuration(26 * 3600_000, false)).toBe('26:00')
+    expect(formatDuration(-5_000, false)).toBe('0:00')
+  })
+})
+
 describe('formatHoursMinutes', () => {
   it('pads to two digits', () => {
     expect(formatHoursMinutes(485)).toBe('08:05')

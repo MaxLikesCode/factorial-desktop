@@ -57,6 +57,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   longShiftReminderHours: 8,
   autoClockOutHours: null,
   widgetDesign: 'glass',
+  // A running clock is how the card shows a shift is running; whoever finds
+  // that restless turns it off.
+  showSeconds: true,
 }
 
 export interface SettingsDeps {
@@ -88,6 +91,7 @@ function sanitise(raw: unknown, base: AppSettings): AppSettings {
   return {
     openAtLogin: typeof r.openAtLogin === 'boolean' ? r.openAtLogin : base.openAtLogin,
     alwaysOnTop: typeof r.alwaysOnTop === 'boolean' ? r.alwaysOnTop : base.alwaysOnTop,
+    showSeconds: typeof r.showSeconds === 'boolean' ? r.showSeconds : base.showSeconds,
     // Whitelisted against the enum, not merely type-checked: see note 3 above.
     lastLocationType:
       typeof r.lastLocationType === 'string' && isLocationType(r.lastLocationType)

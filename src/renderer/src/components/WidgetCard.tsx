@@ -65,10 +65,12 @@ interface Props {
  * Not in size: they tick once a second in the corner of someone's eye for eight
  * hours, and muting settles that movement while every digit stays readable. The
  * split is on the last colon, so the dash placeholder takes the same path rather
- * than needing a branch.
+ * than needing a branch — but only where there is a third field to split off:
+ * with the seconds switched off, `7:23` must not have its minutes greyed as if
+ * they were the part that ticks.
  */
 function Timer({ value, className }: { value: string; className: string }): React.JSX.Element {
-  const cut = value.lastIndexOf(':')
+  const cut = value.split(':').length > 2 ? value.lastIndexOf(':') : value.length
   return (
     <span
       data-slot="worked-timer"

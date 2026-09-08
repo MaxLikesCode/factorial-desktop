@@ -31,6 +31,7 @@ export const de: Catalogue = {
 
   'settings.startAtLogin': 'Autostart',
   'settings.alwaysOnTop': 'Immer im Vordergrund',
+  'settings.showSeconds': 'Sekunden anzeigen',
   'settings.expand': 'Aufklappen',
   'settings.expandRight': 'Nach rechts',
   'settings.expandLeft': 'Nach links',

@@ -45,6 +45,7 @@ export const TEST_SETTINGS: AppSettings = {
   longShiftReminderHours: 8,
   autoClockOutHours: null,
   widgetDesign: 'simple',
+  showSeconds: true,
 }
 
 export interface FakeBridge extends FactorialBridge {

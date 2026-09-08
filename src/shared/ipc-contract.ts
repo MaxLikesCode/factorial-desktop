@@ -313,6 +313,15 @@ export interface AppSettings {
   autoClockOutHours: number | null
   /** The widget card's look. See `WidgetDesign`. */
   widgetDesign: WidgetDesign
+  /**
+   * Whether the widget's timer counts in seconds.
+   *
+   * On by default, because a clock that moves is how the card says the shift
+   * is running. Off, it reads `7:23`: the digits stop twitching in the corner
+   * of the eye all day, which is the whole reason to want it. The widget only
+   * — the tray keeps its seconds, and the timesheet never had any.
+   */
+  showSeconds: boolean
 }
 
 /**

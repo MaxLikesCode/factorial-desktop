@@ -1,7 +1,7 @@
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodeActionError, type AppSnapshot } from '@shared/ipc-contract'
-import { StatusWidget, UNKNOWN_TIME } from '@renderer/components/StatusWidget'
+import { StatusWidget, UNKNOWN_TIME, UNKNOWN_TIME_MINUTES } from '@renderer/components/StatusWidget'
 import { EMPTY_SNAPSHOT, installBridge, type FakeBridge } from './fake-bridge'
 
 const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }))
@@ -62,6 +62,47 @@ afterEach(() => {
   // `globals`, so Testing Library registers no auto-cleanup of its own.
   cleanup()
   vi.useRealTimers()
+})
+
+describe('StatusWidget — seconds on the timer', () => {
+  const running = {
+    state: { kind: 'in' as const, shiftId: '1', since: new Date(NOW.getTime() - 90_000), locationType: 'office', workplaceId: null },
+    todayMinutes: 120,
+  }
+
+  it('counts them unless the settings say otherwise', async () => {
+    await mount(running)
+    expect(timer()).toBe('2:01:30')
+  })
+
+  it('leaves them off when the setting is off', async () => {
+    await mount(running, { showSeconds: false })
+    // The minutes are the same reading, not rounded up by the 30 seconds that
+    // are no longer shown.
+    expect(timer()).toBe('2:01')
+  })
+
+  it('keeps counting the minutes with the seconds hidden', async () => {
+    await mount(running, { showSeconds: false })
+    act(() => void vi.advanceTimersByTime(30_000))
+    expect(timer()).toBe('2:02')
+  })
+
+  it('shortens the placeholder to match', async () => {
+    await mount({ state: { kind: 'unknown' } }, { showSeconds: false })
+    expect(timer()).toBe(UNKNOWN_TIME_MINUTES)
+  })
+
+  it('times a break the same way', async () => {
+    await mount(
+      {
+        state: { kind: 'break', shiftId: '1', since: new Date(NOW.getTime() - 90_000), breakId: 'b', breakName: 'Mittagspause', locationType: 'office' },
+        todayMinutes: 120,
+      },
+      { showSeconds: false },
+    )
+    expect(timer()).toBe('0:01')
+  })
 })
 
 describe('StatusWidget — the three states', () => {

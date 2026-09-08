@@ -99,6 +99,7 @@ export const en = {
   // Tray menu — settings submenu.
   'settings.startAtLogin': 'Start at login',
   'settings.alwaysOnTop': 'Always on top',
+  'settings.showSeconds': 'Show seconds',
   'settings.expand': 'Expand',
   'settings.expandRight': 'To the right',
   'settings.expandLeft': 'To the left',

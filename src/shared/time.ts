@@ -93,13 +93,20 @@ export function reconstructInstant(
   return new Date(asUtc.getTime() - totalOffsetMinutes * 60_000)
 }
 
-/** `"H:MM:SS"` — hours are not capped at 24 and never render as a minus. */
-export function formatDuration(ms: number): string {
+/**
+ * `"H:MM:SS"`, or `"H:MM"` without seconds — hours are not capped at 24 and
+ * never render as a minus.
+ *
+ * The minutes are the same either way: the seconds are dropped, not rounded
+ * into the minute above, so a timer that is switched between the two forms
+ * never jumps a minute ahead of itself.
+ */
+export function formatDuration(ms: number, seconds = true): string {
   const total = Math.max(0, Math.floor(ms / 1000))
   const h = Math.floor(total / 3600)
   const m = Math.floor((total % 3600) / 60)
-  const s = total % 60
-  return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  const hm = `${h}:${String(m).padStart(2, '0')}`
+  return seconds ? `${hm}:${String(total % 60).padStart(2, '0')}` : hm
 }
 
 /** `"HH:MM"` — used for the target time and the remaining-time line. */

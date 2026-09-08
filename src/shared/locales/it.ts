@@ -22,6 +22,7 @@ export const it: Catalogue = {
 
   'settings.startAtLogin': 'Avvia all’accesso',
   'settings.alwaysOnTop': 'Sempre in primo piano',
+  'settings.showSeconds': 'Mostra i secondi',
   'settings.expand': 'Espandi',
   'settings.expandRight': 'Verso destra',
   'settings.expandLeft': 'Verso sinistra',

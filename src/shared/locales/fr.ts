@@ -22,6 +22,7 @@ export const fr: Catalogue = {
 
   'settings.startAtLogin': 'Lancer au démarrage',
   'settings.alwaysOnTop': 'Toujours au premier plan',
+  'settings.showSeconds': 'Afficher les secondes',
   'settings.expand': 'Déplier',
   'settings.expandRight': 'Vers la droite',
   'settings.expandLeft': 'Vers la gauche',

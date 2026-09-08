@@ -20,6 +20,9 @@ import type { WidgetView } from './WidgetView'
  */
 export const UNKNOWN_TIME = '–:––:––'
 
+/** The same placeholder for a timer that is not counting seconds. */
+export const UNKNOWN_TIME_MINUTES = '–:––'
+
 const LABEL_KEY = {
   unknown: 'state.unknown',
   unauthenticated: 'state.unauthenticated',
@@ -198,6 +201,9 @@ export function StatusWidget(): React.JSX.Element {
   const shiftLocation =
     state.kind === 'in' || state.kind === 'break' ? state.locationType : null
   const displayedLocation = shiftLocation ?? settings?.lastLocationType ?? 'office'
+  // Seconds until the settings say otherwise: the card shows a running clock
+  // from its first frame rather than adding the seconds a moment later.
+  const showSeconds = settings?.showSeconds ?? true
 
   /**
    * Remembering the choice is a preference, not part of the clock-in.
@@ -244,10 +250,10 @@ export function StatusWidget(): React.JSX.Element {
      */
     time:
       state.kind === 'break'
-        ? formatDuration(segmentMs)
+        ? formatDuration(segmentMs, showSeconds)
         : workedMs === null
-          ? UNKNOWN_TIME
-          : formatDuration(workedMs),
+          ? (showSeconds ? UNKNOWN_TIME : UNKNOWN_TIME_MINUTES)
+          : formatDuration(workedMs, showSeconds),
     goalLine,
     bar,
     breakLine,

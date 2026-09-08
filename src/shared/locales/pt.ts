@@ -28,6 +28,7 @@ export const pt: Catalogue = {
 
   'settings.startAtLogin': 'Iniciar com o sistema',
   'settings.alwaysOnTop': 'Sempre visível',
+  'settings.showSeconds': 'Mostrar os segundos',
   'settings.expand': 'Expandir',
   'settings.expandRight': 'Para a direita',
   'settings.expandLeft': 'Para a esquerda',

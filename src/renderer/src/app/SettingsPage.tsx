@@ -75,6 +75,9 @@ export function SettingsPage(): React.JSX.Element {
         <Row label={t('settings.alwaysOnTop')}>
           <Switch checked={settings.alwaysOnTop} onChange={(v) => set({ alwaysOnTop: v })} />
         </Row>
+        <Row label={t('settings.showSeconds')}>
+          <Switch checked={settings.showSeconds} onChange={(v) => set({ showSeconds: v })} />
+        </Row>
         <Row label={t('settings.expand')}>
           <Segmented
             value={settings.expandDirection}

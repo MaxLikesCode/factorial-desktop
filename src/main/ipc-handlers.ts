@@ -190,6 +190,7 @@ function asSettingsPatch(payload: unknown): Partial<AppSettings> {
   const patch: Partial<AppSettings> = {}
   if (typeof raw.openAtLogin === 'boolean') patch.openAtLogin = raw.openAtLogin
   if (typeof raw.alwaysOnTop === 'boolean') patch.alwaysOnTop = raw.alwaysOnTop
+  if (typeof raw.showSeconds === 'boolean') patch.showSeconds = raw.showSeconds
   // Whitelisted here as well as in the settings store: a value that is not in
   // `LOCATION_TYPES` fails the clock-in mutation in-band with HTTP 200, so it
   // must never be offered a way to become the remembered default.

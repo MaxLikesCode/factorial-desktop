@@ -32,6 +32,7 @@ export const es: Catalogue = {
 
   'settings.startAtLogin': 'Iniciar al arrancar',
   'settings.alwaysOnTop': 'Siempre visible',
+  'settings.showSeconds': 'Mostrar los segundos',
   'settings.expand': 'Desplegar',
   'settings.expandRight': 'Hacia la derecha',
   'settings.expandLeft': 'Hacia la izquierda',

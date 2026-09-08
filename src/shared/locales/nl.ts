@@ -22,6 +22,7 @@ export const nl: Catalogue = {
 
   'settings.startAtLogin': 'Starten bij aanmelden',
   'settings.alwaysOnTop': 'Altijd op voorgrond',
+  'settings.showSeconds': 'Seconden tonen',
   'settings.expand': 'Uitklappen',
   'settings.expandRight': 'Naar rechts',
   'settings.expandLeft': 'Naar links',
