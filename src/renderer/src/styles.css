@@ -111,6 +111,27 @@ body {
         height 520ms var(--ease-out);
 }
 
+/**
+ * The seconds coming and going with the setting.
+ *
+ * Same curve and same delay as the width the card gives up at that moment, so
+ * the digits and the edge move as one thing rather than two. Only opacity is
+ * animated: the space they occupied is taken back by the card narrowing over
+ * them, which is already a transition and does not need a second one inside it.
+ */
+.timer-seconds {
+    opacity: 1;
+    transition: opacity 420ms var(--ease-out) 60ms;
+}
+@starting-style {
+    .timer-seconds {
+        opacity: 0;
+    }
+}
+.timer-seconds[data-leaving] {
+    opacity: 0;
+}
+
 .morph-move {
     transition:
         top 420ms var(--ease-out) 60ms,

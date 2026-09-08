@@ -520,7 +520,9 @@ One card, two states:
 The timer counts seconds unless the settings say otherwise, and the collapsed
 card is only as wide as the reading it carries: switching the seconds off draws
 it in on the width transition the morph already uses, away from the edge it is
-pinned to, so the corner it was parked in stays put.
+pinned to, so the corner it was parked in stays put. The digits fade on the same
+curve rather than being cut out mid-tick — they stay in the DOM until the fade
+is over and are then really gone, not merely transparent.
 
 **The expanded state is a moment of acting, not a view to sit in.** You open it to
 press Pause or clock out, and it closes again. That is why it shows everything at

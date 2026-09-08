@@ -1,4 +1,4 @@
-import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { ChevronDownIcon } from 'lucide-react'
 import { CARD, EXPANDED_ROWS, collapsedCard, type ExpandDirection } from '@shared/widget-size'
 import type { WidgetDesign } from '@shared/ipc-contract'
@@ -60,6 +60,14 @@ interface Props {
  * had to go and the drag had to be run by hand.
  */
 /**
+ * How long the seconds take to fade away, in step with the width the card gives
+ * up at the same moment. Mirrors `.timer-seconds` in `styles.css`; a transition
+ * that has ended cannot tell React to drop the element, so the number is needed
+ * on both sides.
+ */
+const SECONDS_FADE_MS = 480
+
+/**
  * The worked time, with its seconds a step down in contrast.
  *
  * Not in size: they tick once a second in the corner of someone's eye for eight
@@ -68,16 +76,49 @@ interface Props {
  * than needing a branch — but only where there is a third field to split off:
  * with the seconds switched off, `7:23` must not have its minutes greyed as if
  * they were the part that ticks.
+ *
+ * Switching them off does not cut them out of the reading mid-tick. They stay
+ * for as long as they take to fade, marked `data-leaving` and out of the
+ * accessibility tree, and are gone from the DOM after that — what is switched
+ * off is really absent, not merely transparent. Arriving is the same fade the
+ * other way, from `@starting-style`, which needs no state at all: the element
+ * is simply new.
  */
 function Timer({ value, className }: { value: string; className: string }): React.JSX.Element {
   const cut = hasSeconds(value) ? value.lastIndexOf(':') : value.length
+  const seconds = value.slice(cut)
+
+  const [leaving, setLeaving] = useState('')
+  const previous = useRef(seconds)
+  useEffect(() => {
+    const before = previous.current
+    previous.current = seconds
+    // Nothing fades out of the dash placeholder: it is not a reading, and the
+    // settings arrive a frame after the first paint — without this, everyone
+    // who has the seconds switched off would watch a placeholder's seconds fade
+    // away at every start, having never asked to see them.
+    if (seconds !== '' || !/\d/.test(before)) return
+    setLeaving(before)
+    const id = setTimeout(() => setLeaving(''), SECONDS_FADE_MS)
+    return () => clearTimeout(id)
+  }, [seconds])
+
+  const going = seconds === '' && leaving !== ''
   return (
     <span
       data-slot="worked-timer"
       className={`${className} leading-[1.04] font-semibold tabular-nums`}
     >
       {value.slice(0, cut)}
-      <span className="text-muted-foreground">{value.slice(cut)}</span>
+      {(seconds !== '' || going) && (
+        <span
+          className="timer-seconds text-muted-foreground"
+          data-leaving={going || undefined}
+          aria-hidden={going || undefined}
+        >
+          {going ? leaving : seconds}
+        </span>
+      )}
     </span>
   )
 }

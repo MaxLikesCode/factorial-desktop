@@ -57,6 +57,58 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+/** The muted tail of the timer, while it is in the DOM at all. */
+const seconds = (): HTMLElement | null => document.querySelector<HTMLElement>('.timer-seconds')
+
+const timerText = (): string => document.querySelector('[data-slot="worked-timer"]')?.textContent ?? ''
+
+describe('the seconds coming and going', () => {
+  it('fades them out and only then takes them out of the reading', async () => {
+    const bridge = await mount('right', CLOCKED_IN, { showSeconds: true })
+    expect(seconds()?.textContent).toBe(':30')
+
+    await act(async () => void bridge.pushSettings({ showSeconds: false }))
+
+    // Still there and still saying what it said: React would otherwise drop it
+    // in the same frame the setting changed, and there would be nothing left to
+    // fade. It is out of the accessibility tree while it goes.
+    expect(seconds()?.textContent).toBe(':30')
+    expect(seconds()?.dataset.leaving).toBe('true')
+    expect(seconds()?.getAttribute('aria-hidden')).toBe('true')
+    // The card gives up its width at the same moment, so the two move as one.
+    expect(card().style.width).toBe(`${CARD.collapsedCompact.width}px`)
+
+    await act(async () => void vi.advanceTimersByTime(600))
+
+    // Gone, not merely transparent.
+    expect(seconds()).toBeNull()
+    expect(timerText()).toBe('2:01')
+  })
+
+  it('brings them back as a new element, which is what fades them in', async () => {
+    const bridge = await mount('right', CLOCKED_IN, { showSeconds: false })
+    expect(seconds()).toBeNull()
+
+    await act(async () => void bridge.pushSettings({ showSeconds: true }))
+
+    expect(seconds()?.textContent).toBe(':30')
+    expect(seconds()?.dataset.leaving).toBeUndefined()
+    expect(card().style.width).toBe(`${CARD.collapsed.width}px`)
+  })
+
+  /**
+   * The settings arrive a frame after the first paint, so a widget with the
+   * seconds switched off draws the placeholder with them once. That must not
+   * fade: nobody asked to see it, and a start that animates something away
+   * looks like a glitch.
+   */
+  it('does not fade a placeholder nobody asked for', async () => {
+    await mount('right', { state: { kind: 'unknown' } }, { showSeconds: false })
+    expect(seconds()).toBeNull()
+    expect(timerText()).toBe('–:––')
+  })
+})
+
 describe('the two states', () => {
   it('starts collapsed, at the size that is on screen all day', async () => {
     await mount()
