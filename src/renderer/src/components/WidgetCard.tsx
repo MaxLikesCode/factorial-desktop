@@ -83,6 +83,15 @@ const SECONDS_FADE_MS = 480
  * off is really absent, not merely transparent. Arriving is the same fade the
  * other way, from `@starting-style`, which needs no state at all: the element
  * is simply new.
+ *
+ * **The decision is made while rendering, and it has to be.** Left to an
+ * effect, the render that first sees a reading without seconds returns without
+ * the span, React takes that node out of the DOM, and the effect then puts a
+ * new one back marked `data-leaving`: mounted at `@starting-style`'s nothing
+ * and already told to be nothing, so there is no distance for it to travel and
+ * the seconds simply blink out. Setting the state during the render instead
+ * makes React re-run this component before it commits anything, so the span
+ * that fades is the same node that was already on screen at full contrast.
  */
 function Timer({ value, className }: { value: string; className: string }): React.JSX.Element {
   const cut = hasSeconds(value) ? value.lastIndexOf(':') : value.length
@@ -90,33 +99,40 @@ function Timer({ value, className }: { value: string; className: string }): Reac
 
   const [leaving, setLeaving] = useState('')
   const previous = useRef(seconds)
-  useEffect(() => {
+  if (previous.current !== seconds) {
     const before = previous.current
     previous.current = seconds
     // Nothing fades out of the dash placeholder: it is not a reading, and the
     // settings arrive a frame after the first paint — without this, everyone
     // who has the seconds switched off would watch a placeholder's seconds fade
     // away at every start, having never asked to see them.
-    if (seconds !== '' || !/\d/.test(before)) return
-    setLeaving(before)
-    const id = setTimeout(() => setLeaving(''), SECONDS_FADE_MS)
-    return () => clearTimeout(id)
-  }, [seconds])
+    if (seconds === '' && /\d/.test(before)) setLeaving(before)
+    // Back before they finished going: the same node turns round and fades up
+    // again from wherever it had got to.
+    else if (seconds !== '' && leaving !== '') setLeaving('')
+  }
 
   const going = seconds === '' && leaving !== ''
+  useEffect(() => {
+    if (!going) return
+    const id = setTimeout(() => setLeaving(''), SECONDS_FADE_MS)
+    return () => clearTimeout(id)
+  }, [going])
+
+  const shown = going ? leaving : seconds
   return (
     <span
       data-slot="worked-timer"
       className={`${className} leading-[1.04] font-semibold tabular-nums`}
     >
       {value.slice(0, cut)}
-      {(seconds !== '' || going) && (
+      {shown !== '' && (
         <span
           className="timer-seconds text-muted-foreground"
           data-leaving={going || undefined}
           aria-hidden={going || undefined}
         >
-          {going ? leaving : seconds}
+          {shown}
         </span>
       )}
     </span>

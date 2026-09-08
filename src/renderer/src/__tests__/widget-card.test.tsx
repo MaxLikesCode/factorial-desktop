@@ -67,11 +67,16 @@ describe('the seconds coming and going', () => {
     const bridge = await mount('right', CLOCKED_IN, { showSeconds: true })
     expect(seconds()?.textContent).toBe(':30')
 
+    const node = seconds()
     await act(async () => void bridge.pushSettings({ showSeconds: false }))
 
-    // Still there and still saying what it said: React would otherwise drop it
-    // in the same frame the setting changed, and there would be nothing left to
-    // fade. It is out of the accessibility tree while it goes.
+    // The very same element, not a replacement: a browser fades a node it
+    // already has at full contrast, and a fresh one marked `data-leaving`
+    // mounts at nothing and is told to be nothing, which is no fade at all.
+    // That was the bug — the seconds blinked out, and only now and then, on
+    // whichever frame the DOM happened to be left alone.
+    expect(seconds()).toBe(node)
+    // Still saying what it said, and out of the accessibility tree while it goes.
     expect(seconds()?.textContent).toBe(':30')
     expect(seconds()?.dataset.leaving).toBe('true')
     expect(seconds()?.getAttribute('aria-hidden')).toBe('true')
@@ -93,7 +98,25 @@ describe('the seconds coming and going', () => {
 
     expect(seconds()?.textContent).toBe(':30')
     expect(seconds()?.dataset.leaving).toBeUndefined()
+    // Nothing is left holding the reading open once they are back.
+    expect(timerText()).toBe('2:01:30')
     expect(card().style.width).toBe(`${CARD.collapsed.width}px`)
+  })
+
+  it('turns them round when they come back mid-fade, on the node already there', async () => {
+    const bridge = await mount('right', CLOCKED_IN, { showSeconds: true })
+    const node = seconds()
+
+    await act(async () => void bridge.pushSettings({ showSeconds: false }))
+    await act(async () => void vi.advanceTimersByTime(100))
+    await act(async () => void bridge.pushSettings({ showSeconds: true }))
+
+    expect(seconds()).toBe(node)
+    expect(seconds()?.dataset.leaving).toBeUndefined()
+
+    // And the fade that was running does not take them away behind its back.
+    await act(async () => void vi.advanceTimersByTime(600))
+    expect(seconds()?.textContent).toBe(':30')
   })
 
   /**
