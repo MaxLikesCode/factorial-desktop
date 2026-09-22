@@ -245,6 +245,12 @@ img {
     outline: none;
     font-variant-numeric: tabular-nums;
 }
+
+.app-menu.app-time-picker { width: 248px; padding: 12px; color: var(--app-text); }
+.app-time-column { position: relative; height: 180px; overflow-y: auto; overscroll-behavior: contain; border-radius: 10px; background: var(--app-input); scrollbar-width: thin; }
+.app-time-column .app-menu-item { width: 100%; justify-content: center; }
+.app-time-column .app-menu-item[aria-selected='true'] { background: var(--app-fill-strong); color: var(--app-text); font-weight: 700; }
+.app-time-column .app-menu-item:focus-visible { outline: 2px solid var(--app-accent); outline-offset: -2px; }
 .app-input:focus-visible {
     border-color: color-mix(in oklch, var(--app-accent-2) 70%, transparent);
     box-shadow: 0 0 0 3px var(--app-accent-ring);

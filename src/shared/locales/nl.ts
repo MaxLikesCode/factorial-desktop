@@ -2,6 +2,10 @@ import type { Catalogue } from '../i18n'
 
 /** Dutch. See the caveat in `es.ts` about the work-location labels. */
 export const nl: Catalogue = {
+  'timePicker.title': "Tijd kiezen",
+  'timePicker.hour': "Uur",
+  'timePicker.minute': "Minuut",
+  'timePicker.apply': "Toepassen",
   'settingsPage.breakReminders': "Pauzeherinneringen",
   'settingsPage.breakDuration': "Herinner aan een lopende pauze na",
   'settingsPage.breakDurationHint': "Eén melding per pauze. Jij beslist wanneer je verdergaat.",

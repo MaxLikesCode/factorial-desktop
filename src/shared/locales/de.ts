@@ -11,6 +11,10 @@ import type { Catalogue } from '../i18n'
  * see the note in `es.ts`.
  */
 export const de: Catalogue = {
+  'timePicker.title': "Uhrzeit wählen",
+  'timePicker.hour': "Stunde",
+  'timePicker.minute': "Minute",
+  'timePicker.apply': "Übernehmen",
   'state.unknown': 'Lädt …',
   'state.unauthenticated': 'Nicht angemeldet',
   'state.out': 'Ausgestempelt',

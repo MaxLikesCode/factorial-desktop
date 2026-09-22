@@ -8,6 +8,10 @@ import type { Catalogue } from '../i18n'
  * the market Factorial sells into.
  */
 export const pt: Catalogue = {
+  'timePicker.title': "Escolher hora",
+  'timePicker.hour': "Hora",
+  'timePicker.minute': "Minuto",
+  'timePicker.apply': "Aplicar",
   'settingsPage.breakReminders': "Lembretes de pausa",
   'settingsPage.breakDuration': "Lembrar uma pausa em curso após",
   'settingsPage.breakDurationHint': "Uma notificação por pausa. Tu decides quando retomar.",

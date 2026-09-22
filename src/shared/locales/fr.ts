@@ -2,6 +2,10 @@ import type { Catalogue } from '../i18n'
 
 /** French. See the caveat in `es.ts` about the work-location labels. */
 export const fr: Catalogue = {
+  'timePicker.title': "Choisir l’heure",
+  'timePicker.hour': "Heure",
+  'timePicker.minute': "Minute",
+  'timePicker.apply': "Appliquer",
   'state.unknown': 'Chargement …',
   'state.unauthenticated': 'Non connecté',
   'state.out': 'Pointage terminé',

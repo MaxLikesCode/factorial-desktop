@@ -12,6 +12,10 @@ import type { Catalogue } from '../i18n'
  * with an account in one of these languages should compare and correct.
  */
 export const es: Catalogue = {
+  'timePicker.title': "Elegir hora",
+  'timePicker.hour': "Hora",
+  'timePicker.minute': "Minuto",
+  'timePicker.apply': "Aplicar",
   'state.unknown': 'Cargando …',
   'state.unauthenticated': 'No has iniciado sesión',
   'state.out': 'Jornada finalizada',

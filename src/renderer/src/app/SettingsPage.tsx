@@ -6,9 +6,11 @@ import { useAttendance } from '@renderer/hooks/useAttendance'
 import { useSettings } from '@renderer/hooks/useSettings'
 import { useTranslate } from '@renderer/hooks/useTranslate'
 import { MenuButton } from './MenuButton'
+import { TimePicker } from './TimePicker'
 
 /** The hour choices for the two long-shift settings; null is "off". */
 const HOUR_CHOICES: (number | null)[] = [null, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 24]
+const LUNCH_HOUR_CHOICES: (number | null)[] = [null, 1, 2, 3, 4]
 
 /**
  * Every setting the tray used to hold, as a form. One store behind it: each
@@ -114,21 +116,10 @@ export function SettingsPage(): React.JSX.Element {
           />
         </Row>
         <Row label={t('settingsPage.lunchTime')} hint={t('settingsPage.lunchTimeHint')}>
-          <span className="flex items-center gap-3">
-            {settings.lunchReminderTime !== null && (
-              <input
-                type="time"
-                aria-label={t('settingsPage.lunchTime')}
-                className="app-btn app-btn-secondary w-[110px]"
-                value={settings.lunchReminderTime}
-                onChange={(event) => { if (event.target.value) set({ lunchReminderTime: event.target.value }) }}
-              />
-            )}
-            <Switch checked={settings.lunchReminderTime !== null} onChange={(v) => set({ lunchReminderTime: v ? '12:30' : null })} />
-          </span>
+          <TimePicker label={t('settingsPage.lunchTime')} value={settings.lunchReminderTime} onChange={(v) => set({ lunchReminderTime: v })} />
         </Row>
         <Row label={t('settingsPage.lunchHours')} hint={t('settingsPage.lunchHoursHint')}>
-          <HoursSelect value={settings.lunchReminderHours} onChange={(v) => set({ lunchReminderHours: v })} />
+          <HoursSelect value={settings.lunchReminderHours} choices={LUNCH_HOUR_CHOICES} onChange={(v) => set({ lunchReminderHours: v })} />
         </Row>
       </Section>
 
@@ -227,9 +218,9 @@ function Segmented({
   )
 }
 
-function HoursSelect({ value, onChange }: { value: number | null; onChange: (value: number | null) => void }): React.JSX.Element {
+function HoursSelect({ value, onChange, choices: available = HOUR_CHOICES }: { value: number | null; onChange: (value: number | null) => void; choices?: (number | null)[] }): React.JSX.Element {
   const t = useTranslate()
-  const choices = HOUR_CHOICES.includes(value) ? HOUR_CHOICES : [...HOUR_CHOICES, value]
+  const choices = available.includes(value) ? available : [...available, value]
   return (
     <MenuButton
       value={value === null ? 'off' : String(value)}
