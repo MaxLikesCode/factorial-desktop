@@ -2,15 +2,14 @@
  * The shift that was forgotten.
  *
  * Two settings, both off by nothing but their value: `longShiftReminderHours`
- * says after how many hours on the clock a notification is shown, and
+ * says after how many worked hours today a notification is shown, and
  * `autoClockOutHours` after how many worked hours today the app clocks out. The
  * decision is `longShiftDecision`, pure and tested; `watchLongShifts` is the
  * timer around it.
  *
  * Automatic clock-out writes to a real timesheet without a click, which is
- * why it is a separate setting with no default, and why the reminder comes
- * first: somebody who sees the reminder can act, and the automatic clock-out
- * only happens when they did not. Both fire at most once per shift, keyed by
+ * why it is a separate setting with no default. If both limits are reached,
+ * automatic clock-out takes priority. Both fire at most once per shift, keyed by
  * the shift id, so a reminder does not repeat every minute and a clock-out
  * that failed is not retried into a second record.
  */
@@ -37,9 +36,8 @@ export interface LongShiftInput {
 }
 
 /**
- * Automatic clock-out uses the same daily work total as the widget. Factorial
+ * Both limits use the same daily work total as the widget. Factorial
  * opens a new record after every break, so `since` alone loses earlier work.
- * The forgotten-shift reminder still measures the current record's duration.
  */
 export function longShiftDecision(input: LongShiftInput): LongShiftAction | null {
   const { state, settings } = input
@@ -56,7 +54,7 @@ export function longShiftDecision(input: LongShiftInput): LongShiftAction | null
   }
   if (
     settings.longShiftReminderHours !== null &&
-    hours >= settings.longShiftReminderHours &&
+    workedHours >= settings.longShiftReminderHours &&
     input.remindedShiftId !== state.shiftId
   ) {
     return 'remind'

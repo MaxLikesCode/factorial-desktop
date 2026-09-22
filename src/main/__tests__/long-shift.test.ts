@@ -46,9 +46,10 @@ describe('longShiftDecision', () => {
     expect(longShiftDecision({ todayMinutes: 0, state: clockedIn, now: at(11), settings, remindedShiftId: '7', clockedOutShiftId: '7' })).toBeNull()
   })
 
-  it('counts a break as being on the clock', () => {
+  it('reminds during a break only when the worked total has reached the limit', () => {
     const onBreak: AttendanceState = { kind: 'break', shiftId: '8', since, breakId: '1', breakName: 'Mittag', locationType: null }
-    expect(longShiftDecision({ todayMinutes: 0, state: onBreak, now: at(8), settings, remindedShiftId: null, clockedOutShiftId: null })).toBe('remind')
+    expect(longShiftDecision({ todayMinutes: 0, state: onBreak, now: at(8), settings, remindedShiftId: null, clockedOutShiftId: null })).toBeNull()
+    expect(longShiftDecision({ todayMinutes: 480, state: onBreak, now: at(1), settings, remindedShiftId: null, clockedOutShiftId: null })).toBe('remind')
   })
 
   it('respects each setting being off', () => {
@@ -69,6 +70,30 @@ describe('asHoursSetting', () => {
 })
 
 describe('watchLongShifts', () => {
+  it('reminds at eight worked hours across a break without repeating every minute', async () => {
+    vi.useFakeTimers()
+    let now = at(8.74)
+    const remind = vi.fn()
+    const stop = watchLongShifts({
+      getSnapshot: () => ({ state: { ...clockedIn, since: at(4.75) }, todayMinutes: 240 }),
+      getSettings: () => ({ longShiftReminderHours: 8, autoClockOutHours: null }),
+      now: () => now,
+      remind,
+      clockOut: vi.fn(async () => {}),
+    })
+    try {
+      expect(remind).not.toHaveBeenCalled()
+      now = at(8.75)
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(remind).toHaveBeenCalledExactlyOnceWith(8)
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(remind).toHaveBeenCalledTimes(1)
+    } finally {
+      stop()
+      vi.useRealTimers()
+    }
+  })
+
   it('uses closed work from the snapshot when checking the automatic limit', async () => {
     vi.useFakeTimers()
     let now = at(8.74)
