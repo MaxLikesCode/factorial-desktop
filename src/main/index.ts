@@ -358,7 +358,7 @@ async function bootstrap(): Promise<void> {
   // The forgotten shift: a notification after N hours, and — only when the
   // user switched it on — a clock-out after M. See long-shift.ts.
   watchLongShifts({
-    getState: () => store.getSnapshot().state,
+    getSnapshot: () => store.getSnapshot(),
     getSettings: () => {
       const { longShiftReminderHours, autoClockOutHours } = settings.get()
       return { longShiftReminderHours, autoClockOutHours }

@@ -3,7 +3,7 @@
  *
  * Two settings, both off by nothing but their value: `longShiftReminderHours`
  * says after how many hours on the clock a notification is shown, and
- * `autoClockOutHours` after how many the app clocks out by itself. The
+ * `autoClockOutHours` after how many worked hours today the app clocks out. The
  * decision is `longShiftDecision`, pure and tested; `watchLongShifts` is the
  * timer around it.
  *
@@ -26,6 +26,8 @@ export type LongShiftAction = 'remind' | 'clockOut'
 
 export interface LongShiftInput {
   state: AttendanceState
+  /** Closed work records today, excluding breaks and the running record. */
+  todayMinutes: number
   now: Date
   settings: LongShiftSettings
   /** The shift already reminded about, if any. */
@@ -35,17 +37,19 @@ export interface LongShiftInput {
 }
 
 /**
- * What to do right now, or null. A break counts as being on the clock: the
- * point is a day that never ended, and a break left running is one of those.
+ * Automatic clock-out uses the same daily work total as the widget. Factorial
+ * opens a new record after every break, so `since` alone loses earlier work.
+ * The forgotten-shift reminder still measures the current record's duration.
  */
 export function longShiftDecision(input: LongShiftInput): LongShiftAction | null {
   const { state, settings } = input
   if (state.kind !== 'in' && state.kind !== 'break') return null
   const hours = (input.now.getTime() - state.since.getTime()) / 3_600_000
+  const workedHours = input.todayMinutes / 60 + (state.kind === 'in' ? Math.max(0, hours) : 0)
 
   if (
     settings.autoClockOutHours !== null &&
-    hours >= settings.autoClockOutHours &&
+    workedHours >= settings.autoClockOutHours &&
     input.clockedOutShiftId !== state.shiftId
   ) {
     return 'clockOut'
@@ -68,7 +72,7 @@ export function asHoursSetting(value: unknown): number | null {
 }
 
 export interface LongShiftWatcherDeps {
-  getState: () => AttendanceState
+  getSnapshot: () => Pick<LongShiftInput, 'state' | 'todayMinutes'>
   getSettings: () => LongShiftSettings
   now?: () => Date
   remind: (hours: number) => void
@@ -87,10 +91,11 @@ export function watchLongShifts(deps: LongShiftWatcherDeps): () => void {
 
   async function tick(): Promise<void> {
     if (busy) return
-    const state = deps.getState()
+    const { state, todayMinutes } = deps.getSnapshot()
     const settings = deps.getSettings()
     const action = longShiftDecision({
       state,
+      todayMinutes,
       now: now(),
       settings,
       remindedShiftId,
