@@ -2,6 +2,18 @@ import type { Catalogue } from '../i18n'
 
 /** Italian. See the caveat in `es.ts` about the work-location labels. */
 export const it: Catalogue = {
+  'settingsPage.breakReminders': "Promemoria pause",
+  'settingsPage.breakDuration': "Ricorda una pausa in corso dopo",
+  'settingsPage.breakDurationHint': "Una notifica per pausa. Decidi tu quando riprendere.",
+  'settingsPage.lunchTime': "Ricorda la pausa pranzo alle",
+  'settingsPage.lunchTimeHint': "Solo se oggi non è stata registrata alcuna pausa.",
+  'settingsPage.lunchHours': "Ricorda la pausa pranzo dopo",
+  'settingsPage.lunchHoursHint': "Ore lavorate oggi. Se entrambi sono attivi, il primo ricorda una volta al giorno.",
+  'settingsPage.minutes': "{minutes} min",
+  'breakReminder.lunchTitle': "È ora di una pausa",
+  'breakReminder.lunchBody': "Oggi non hai ancora registrato una pausa. Che ne dici di una pausa pranzo?",
+  'breakReminder.durationTitle': "Sei ancora in pausa?",
+  'breakReminder.durationBody': "Sei in pausa da {minutes} minuti. Vuoi riprendere a lavorare?",
   'state.unknown': 'Caricamento …',
   'state.unauthenticated': 'Non hai effettuato l’accesso',
   'state.out': 'Uscita registrata',

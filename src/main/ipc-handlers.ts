@@ -21,6 +21,7 @@
  *    into German words.
  */
 
+import { isBreakReminderMinutes, isReminderTime } from './break-reminders'
 import {
   IPC,
   encodeActionError,
@@ -220,6 +221,15 @@ function asSettingsPatch(payload: unknown): Partial<AppSettings> {
   }
   if (raw.autoClockOutHours === null || typeof raw.autoClockOutHours === 'number') {
     patch.autoClockOutHours = asHoursSetting(raw.autoClockOutHours)
+  }
+  if (raw.breakDurationReminderMinutes === null || isBreakReminderMinutes(raw.breakDurationReminderMinutes)) {
+    patch.breakDurationReminderMinutes = raw.breakDurationReminderMinutes
+  }
+  if (raw.lunchReminderTime === null || isReminderTime(raw.lunchReminderTime)) {
+    patch.lunchReminderTime = raw.lunchReminderTime
+  }
+  if (raw.lunchReminderHours === null || asHoursSetting(raw.lunchReminderHours) !== null) {
+    patch.lunchReminderHours = asHoursSetting(raw.lunchReminderHours)
   }
   if (typeof raw.widgetDesign === 'string' && isWidgetDesign(raw.widgetDesign)) {
     patch.widgetDesign = raw.widgetDesign

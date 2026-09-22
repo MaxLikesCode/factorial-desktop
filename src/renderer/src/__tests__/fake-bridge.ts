@@ -44,6 +44,9 @@ export const TEST_SETTINGS: AppSettings = {
   askLocationOnClockIn: false,
   longShiftReminderHours: 8,
   autoClockOutHours: null,
+  breakDurationReminderMinutes: null,
+  lunchReminderTime: null,
+  lunchReminderHours: null,
   widgetDesign: 'simple',
   showSeconds: true,
 }

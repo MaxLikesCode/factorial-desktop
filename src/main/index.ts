@@ -30,6 +30,7 @@ import { createTray, hasTray, refreshTray } from './tray'
 import { createTimesheet } from './timesheet'
 import { createOverview } from './overview'
 import { watchLongShifts } from './long-shift'
+import { watchBreakReminders } from './break-reminders'
 import { closeMainWindow, controlMainWindow, getMainWindow, showMainWindow } from './main-window'
 import { createUpdateLog } from './update-log'
 import { maybePreviewUpdateWindow } from './update-preview'
@@ -376,6 +377,19 @@ async function bootstrap(): Promise<void> {
   })
 
   // One read so the widget and the tray have real numbers immediately.
+  watchBreakReminders({
+    getSnapshot: () => store.getSnapshot(),
+    getSettings: () => settings.get(),
+    notify: (kind, minutes) => {
+      const t = translatorFor(resolveLocale(settings.get().language, app.getLocale()))
+      notify(
+        t(kind === 'takeBreak' ? 'breakReminder.lunchTitle' : 'breakReminder.durationTitle'),
+        kind === 'takeBreak' ? t('breakReminder.lunchBody') : t('breakReminder.durationBody', { minutes }),
+        () => showMainWindow('overview'),
+      )
+    },
+  })
+
   await store.refresh()
 
   // DESIGN.md, "Synchronisation": every 60 s in the background.

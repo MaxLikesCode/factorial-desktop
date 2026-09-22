@@ -29,9 +29,26 @@ const SETTINGS: AppSettings = {
   askLocationOnClockIn: false,
   longShiftReminderHours: 8,
   autoClockOutHours: null,
+  breakDurationReminderMinutes: null,
+  lunchReminderTime: null,
+  lunchReminderHours: null,
   widgetDesign: 'simple',
   showSeconds: true,
 }
+
+describe('break reminder settings over IPC', () => {
+  it('accepts both lunch triggers and the break duration and drops malformed values', async () => {
+    const settings = fakeSettings()
+    const { handlers } = handlersFor(fakeStore(), settings)
+    const selected = { breakDurationReminderMinutes: 30, lunchReminderTime: '12:30', lunchReminderHours: 4 }
+    await handlers[IPC.setSettings](selected)
+    expect(settings.set).toHaveBeenLastCalledWith(selected)
+    await handlers[IPC.setSettings]({ breakDurationReminderMinutes: 0, lunchReminderTime: '24:00', lunchReminderHours: '4' })
+    expect(settings.set).toHaveBeenLastCalledWith({})
+    await handlers[IPC.setSettings]({ breakDurationReminderMinutes: null, lunchReminderTime: null, lunchReminderHours: null })
+    expect(settings.set).toHaveBeenLastCalledWith({ breakDurationReminderMinutes: null, lunchReminderTime: null, lunchReminderHours: null })
+  })
+})
 
 function fakeStore(overrides: Partial<IpcStore> = {}): IpcStore & { listeners: (() => void)[] } {
   const listeners: (() => void)[] = []

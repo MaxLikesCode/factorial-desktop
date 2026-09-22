@@ -8,6 +8,18 @@ import type { Catalogue } from '../i18n'
  * the market Factorial sells into.
  */
 export const pt: Catalogue = {
+  'settingsPage.breakReminders': "Lembretes de pausa",
+  'settingsPage.breakDuration': "Lembrar uma pausa em curso após",
+  'settingsPage.breakDurationHint': "Uma notificação por pausa. Tu decides quando retomar.",
+  'settingsPage.lunchTime': "Lembrar a pausa de almoço às",
+  'settingsPage.lunchTimeHint': "Apenas se ainda não houver uma pausa registada hoje.",
+  'settingsPage.lunchHours': "Lembrar a pausa de almoço após",
+  'settingsPage.lunchHoursHint': "Horas trabalhadas hoje. Se ambos estiverem ativos, o primeiro lembra uma vez por dia.",
+  'settingsPage.minutes': "{minutes} min",
+  'breakReminder.lunchTitle': "Hora de uma pausa",
+  'breakReminder.lunchBody': "Ainda não registaste uma pausa hoje. Que tal uma pausa para almoçar?",
+  'breakReminder.durationTitle': "Ainda em pausa?",
+  'breakReminder.durationBody': "Estás em pausa há {minutes} minutos. Queres voltar ao trabalho?",
   'state.unknown': 'A carregar …',
   'state.unauthenticated': 'Sessão não iniciada',
   'state.out': 'Saída registada',

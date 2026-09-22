@@ -31,6 +31,7 @@ import { isLanguageSetting } from '@shared/i18n'
 import { isExpandDirection, type ExpandDirection } from '@shared/widget-size'
 import { isLocationType } from './factorial/types'
 import { asHoursSetting } from './long-shift'
+import { isBreakReminderMinutes, isReminderTime } from './break-reminders'
 
 export const DEFAULT_SETTINGS: AppSettings = {
   // Autostart is opt-in — DESIGN.md, "Settings". The OS is only told about
@@ -56,6 +57,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   // it stays opt-in.
   longShiftReminderHours: 8,
   autoClockOutHours: null,
+  breakDurationReminderMinutes: null,
+  lunchReminderTime: null,
+  lunchReminderHours: null,
   widgetDesign: 'glass',
   // A running clock is how the card shows a shift is running; whoever finds
   // that restless turns it off.
@@ -146,6 +150,14 @@ function sanitise(raw: unknown, base: AppSettings): AppSettings {
       r.autoClockOutHours === null ? null : (asHoursSetting(r.autoClockOutHours) ?? base.autoClockOutHours),
     widgetDesign:
       typeof r.widgetDesign === 'string' && isWidgetDesign(r.widgetDesign) ? r.widgetDesign : base.widgetDesign,
+    breakDurationReminderMinutes:
+      r.breakDurationReminderMinutes === null || isBreakReminderMinutes(r.breakDurationReminderMinutes)
+        ? r.breakDurationReminderMinutes : base.breakDurationReminderMinutes,
+    lunchReminderTime:
+      r.lunchReminderTime === null || isReminderTime(r.lunchReminderTime)
+        ? r.lunchReminderTime : base.lunchReminderTime,
+    lunchReminderHours:
+      r.lunchReminderHours === null ? null : (asHoursSetting(r.lunchReminderHours) ?? base.lunchReminderHours),
   }
 }
 

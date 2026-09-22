@@ -2,6 +2,18 @@ import type { Catalogue } from '../i18n'
 
 /** Dutch. See the caveat in `es.ts` about the work-location labels. */
 export const nl: Catalogue = {
+  'settingsPage.breakReminders': "Pauzeherinneringen",
+  'settingsPage.breakDuration': "Herinner aan een lopende pauze na",
+  'settingsPage.breakDurationHint': "Eén melding per pauze. Jij beslist wanneer je verdergaat.",
+  'settingsPage.lunchTime': "Herinner aan de lunchpauze om",
+  'settingsPage.lunchTimeHint': "Alleen als er vandaag nog geen pauze is geregistreerd.",
+  'settingsPage.lunchHours': "Herinner aan de lunchpauze na",
+  'settingsPage.lunchHoursHint': "Gewerkte uren vandaag. Als beide actief zijn, herinnert de eerste je eenmaal per dag.",
+  'settingsPage.minutes': "{minutes} min",
+  'breakReminder.lunchTitle': "Tijd voor een pauze",
+  'breakReminder.lunchBody': "Je hebt vandaag nog geen pauze geregistreerd. Tijd voor een lunchpauze?",
+  'breakReminder.durationTitle': "Nog aan het pauzeren?",
+  'breakReminder.durationBody': "Je pauze duurt nu {minutes} minuten. Wil je weer aan het werk?",
   'state.unknown': 'Laden …',
   'state.unauthenticated': 'Niet aangemeld',
   'state.out': 'Uitgeklokt',

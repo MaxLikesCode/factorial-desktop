@@ -102,6 +102,36 @@ export function SettingsPage(): React.JSX.Element {
         </Row>
       </Section>
 
+      <Section title={t('settingsPage.breakReminders')} wide>
+        <Row label={t('settingsPage.breakDuration')} hint={t('settingsPage.breakDurationHint')}>
+          <MenuButton
+            value={settings.breakDurationReminderMinutes === null ? 'off' : String(settings.breakDurationReminderMinutes)}
+            onChange={(v) => set({ breakDurationReminderMinutes: v === 'off' ? null : Number(v) })}
+            options={[null, ...new Set([15, 30, 45, 60, 90, 120, ...(settings.breakDurationReminderMinutes === null ? [] : [settings.breakDurationReminderMinutes])])].map((minutes) => ({
+              value: minutes === null ? 'off' : String(minutes),
+              label: minutes === null ? t('settingsPage.off') : t('settingsPage.minutes', { minutes }),
+            }))}
+          />
+        </Row>
+        <Row label={t('settingsPage.lunchTime')} hint={t('settingsPage.lunchTimeHint')}>
+          <span className="flex items-center gap-3">
+            {settings.lunchReminderTime !== null && (
+              <input
+                type="time"
+                aria-label={t('settingsPage.lunchTime')}
+                className="app-btn app-btn-secondary w-[110px]"
+                value={settings.lunchReminderTime}
+                onChange={(event) => { if (event.target.value) set({ lunchReminderTime: event.target.value }) }}
+              />
+            )}
+            <Switch checked={settings.lunchReminderTime !== null} onChange={(v) => set({ lunchReminderTime: v ? '12:30' : null })} />
+          </span>
+        </Row>
+        <Row label={t('settingsPage.lunchHours')} hint={t('settingsPage.lunchHoursHint')}>
+          <HoursSelect value={settings.lunchReminderHours} onChange={(v) => set({ lunchReminderHours: v })} />
+        </Row>
+      </Section>
+
       <Section title={t('settingsPage.updates')}>
         <Row label={t('settings.autoInstallUpdates')}>
           <Switch checked={settings.autoInstallUpdates} onChange={(v) => set({ autoInstallUpdates: v })} />

@@ -20,6 +20,18 @@ function read(): unknown {
 }
 
 describe('createSettings', () => {
+  it('persists break reminders, rejects invalid values and can disable each one', () => {
+    const deps = { filePath: file, applyLoginItem: vi.fn(), applyTheme: vi.fn(), applyExpandDirection: vi.fn() }
+    const s = createSettings(deps)
+    const selected = { breakDurationReminderMinutes: 60, lunchReminderTime: '12:30', lunchReminderHours: 4 }
+    s.set(selected)
+    expect(createSettings(deps).get()).toMatchObject(selected)
+    s.set({ breakDurationReminderMinutes: -1, lunchReminderTime: '25:00', lunchReminderHours: 99 })
+    expect(s.get()).toMatchObject(selected)
+    s.set({ breakDurationReminderMinutes: null, lunchReminderTime: null, lunchReminderHours: null })
+    expect(createSettings(deps).get()).toMatchObject({ breakDurationReminderMinutes: null, lunchReminderTime: null, lunchReminderHours: null })
+  })
+
   it('returns defaults when no file exists yet', () => {
     const s = createSettings({ filePath: file, applyLoginItem: vi.fn(), applyTheme: vi.fn(), applyExpandDirection: vi.fn() })
     expect(s.get()).toEqual(DEFAULT_SETTINGS)
@@ -100,6 +112,9 @@ describe('createSettings', () => {
       askLocationOnClockIn: DEFAULT_SETTINGS.askLocationOnClockIn,
       longShiftReminderHours: DEFAULT_SETTINGS.longShiftReminderHours,
       autoClockOutHours: DEFAULT_SETTINGS.autoClockOutHours,
+      breakDurationReminderMinutes: null,
+      lunchReminderTime: null,
+      lunchReminderHours: null,
       widgetDesign: DEFAULT_SETTINGS.widgetDesign,
       showSeconds: DEFAULT_SETTINGS.showSeconds,
     })

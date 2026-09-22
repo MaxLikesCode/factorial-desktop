@@ -311,6 +311,12 @@ export interface AppSettings {
   longShiftReminderHours: number | null
   /** Hours on the clock before the app clocks out by itself; null is off. */
   autoClockOutHours: number | null
+  /** Minutes in the current break before a reminder; null is off. */
+  breakDurationReminderMinutes: number | null
+  /** Local HH:MM for a lunch reminder if no break is recorded today. */
+  lunchReminderTime: string | null
+  /** Worked hours today before a lunch reminder; null is off. */
+  lunchReminderHours: number | null
   /** The widget card's look. See `WidgetDesign`. */
   widgetDesign: WidgetDesign
   /**
