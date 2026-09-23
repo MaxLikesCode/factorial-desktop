@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { CheckIcon } from 'lucide-react'
+import { FRAME_MARGIN } from './platform'
 
 export interface DropdownItem {
   value: string
@@ -23,8 +24,6 @@ interface Props {
 
 /** The gap between the trigger and the list, and to the window's edges. */
 const GAP = 6
-/** FRAME_MARGIN in main-window.ts: the transparent room around the window. */
-const FRAME_MARGIN = 32
 
 /**
  * A list that opens under a button — the window's own, not the platform's.

@@ -13,7 +13,7 @@
  * widget stay, so this is never the app's last window.
  */
 
-import { BrowserWindow, app, webContents } from 'electron'
+import { BrowserWindow, app, nativeTheme, webContents } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { IPC, MAIN_WINDOW_PAGES, type MainWindowPage, type WindowControl } from '@shared/ipc-contract'
@@ -43,24 +43,39 @@ export function showMainWindow(page: MainWindowPage | null = null): void {
   }
 
   pendingPage = page
+  const margin = frameMargin()
   const created = new BrowserWindow({
     // The page draws the window: its rounded corners, border and shadow. The
-    // extra 2 x FRAME_MARGIN is the transparent room the shadow needs.
-    width: 980 + 2 * FRAME_MARGIN,
-    height: 680 + 2 * FRAME_MARGIN,
+    // extra 2 x margin is the transparent room the shadow needs.
+    width: 980 + 2 * margin,
+    height: 680 + 2 * margin,
     // One size. The frame is drawn by the page, so there is no edge to grab
     // anyway, and a fixed window has no maximised state to draw differently.
     resizable: false,
     maximizable: false,
     show: false,
     title: 'Factorial Desktop',
-    // Frameless and transparent, like the widget: the platform's own corner
-    // radius cannot be changed, so the window is drawn by the page — a
-    // larger radius, at the price of Aero Snap and edge resizing. The
-    // controls are the page's own too (`controlWindow`).
-    frame: false,
-    transparent: true,
-    backgroundColor: '#00000000',
+    ...(process.platform === 'darwin'
+      ? {
+          // PLATFORM: macOS keeps its own frame — native corners, shadow and
+          // traffic lights — with the title bar hidden so the page runs up to
+          // the top. A transparent window here gets a native shadow traced
+          // around the page's drawn one, and no traffic lights at all.
+          titleBarStyle: 'hiddenInset' as const,
+          // A fixed size has nothing to fill a screen with; greys the green light.
+          fullscreenable: false,
+          // The sidebar's colour, so the first frame is not a white flash.
+          backgroundColor: nativeTheme.shouldUseDarkColors ? '#0b0d12' : '#f2f1ee',
+        }
+      : {
+          // Frameless and transparent, like the widget: the platform's own
+          // corner radius cannot be changed, so the window is drawn by the
+          // page — a larger radius, at the price of Aero Snap and edge
+          // resizing. The controls are the page's own too (`controlWindow`).
+          frame: false,
+          transparent: true,
+          backgroundColor: '#00000000',
+        }),
     webPreferences: {
       preload: join(import.meta.dirname, '../preload/index.mjs'),
       contextIsolation: true,
@@ -126,8 +141,14 @@ export function showMainWindow(page: MainWindowPage | null = null): void {
   }
 }
 
-/** The transparent margin around the drawn window, in DIP: room for its shadow. */
-export const FRAME_MARGIN = 32
+/**
+ * The transparent margin around the drawn window, in DIP: room for its shadow.
+ * PLATFORM: none on macOS, where the window has a native frame. Mirrored in
+ * the renderer's `app/platform.ts`.
+ */
+export function frameMargin(): number {
+  return process.platform === 'darwin' ? 0 : 32
+}
 
 /** The page's own window buttons. Acts on the window that asked. */
 export function controlMainWindow(action: WindowControl, senderId?: number): void {

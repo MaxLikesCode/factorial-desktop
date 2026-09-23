@@ -562,6 +562,15 @@ img {
      * at the window's edge with a hard line. */
     box-shadow: 0 1px 0 var(--app-edge-top) inset, 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(0, 0, 0, 0.3);
 }
+/* PLATFORM: macOS draws the window itself — corners, edge and shadow. A
+ * transparent window there gets a native shadow traced around the page's
+ * half-transparent one, a second frame around the first. */
+.app-frame-native {
+    inset: 0;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+}
 .app-window-btn {
     display: flex;
     align-items: center;

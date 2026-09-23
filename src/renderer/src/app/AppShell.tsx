@@ -8,9 +8,7 @@ import logo from '../update/app-icon.png'
 import { OverviewPage } from './OverviewPage'
 import { SettingsPage } from './SettingsPage'
 import { TimesheetPage } from './TimesheetPage'
-
-/** Where the traffic lights are — the one platform fact this page needs. */
-const MAC = navigator.platform.toLowerCase().includes('mac')
+import { MAC } from './platform'
 
 const NAV: { page: MainWindowPage; icon: LucideIcon; tint: string; key: MessageKey }[] = [
   { page: 'overview', icon: HouseIcon, tint: 'linear-gradient(180deg, #ff9a3c, #ef6a1f)', key: 'app.overview' },
@@ -42,7 +40,7 @@ export function AppShell(): React.JSX.Element {
   }, [])
 
   return (
-    <div className="app-frame flex">
+    <div className={`app-frame flex ${MAC ? 'app-frame-native' : ''}`}>
       <aside
         // The same 12 px above the first entry as beside it. PLATFORM: macOS
         // paints its traffic lights over this corner, so there the column
