@@ -552,6 +552,46 @@ describe('StatusWidget — actions', () => {
     })
     await act(async () => void screen.getByRole('button', { name: 'Fortsetzen' }).click())
     expect(bridge.endBreak).toHaveBeenCalledTimes(1)
+    expect(bridge.popupMenu).not.toHaveBeenCalled()
+  })
+
+  it('asks for the location on resuming when the setting says so', async () => {
+    const onBreak = {
+      state: {
+        kind: 'break',
+        shiftId: '1',
+        since: NOW,
+        breakId: '19613',
+        breakName: 'Mittagspause',
+        locationType: 'office',
+      },
+    } as const
+    const bridge = await mount(onBreak, { askLocationOnResume: true })
+    vi.mocked(bridge.popupMenu).mockResolvedValueOnce('work_from_home')
+    await act(async () => void screen.getByRole('button', { name: 'Fortsetzen' }).click())
+    const [items] = vi.mocked(bridge.popupMenu).mock.calls[0]!
+    expect(items.find((item) => item.checked)?.id).toBe('office')
+    expect(bridge.endBreak).toHaveBeenCalledWith({ locationType: 'work_from_home' })
+    expect(bridge.setSettings).toHaveBeenCalledWith({ lastLocationType: 'work_from_home' })
+  })
+
+  it('keeps the break running when the resume question is dismissed', async () => {
+    const bridge = await mount(
+      {
+        state: {
+          kind: 'break',
+          shiftId: '1',
+          since: NOW,
+          breakId: '19613',
+          breakName: 'Mittagspause',
+          locationType: 'office',
+        },
+      },
+      { askLocationOnResume: true },
+    )
+    await act(async () => void screen.getByRole('button', { name: 'Fortsetzen' }).click())
+    expect(bridge.popupMenu).toHaveBeenCalledTimes(1)
+    expect(bridge.endBreak).not.toHaveBeenCalled()
   })
 
   it('phrases a rejected action in German, never in the store’s own words', async () => {

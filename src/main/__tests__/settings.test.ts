@@ -110,6 +110,7 @@ describe('createSettings', () => {
       autoInstallUpdates: DEFAULT_SETTINGS.autoInstallUpdates,
       skippedUpdateVersion: DEFAULT_SETTINGS.skippedUpdateVersion,
       askLocationOnClockIn: DEFAULT_SETTINGS.askLocationOnClockIn,
+      askLocationOnResume: DEFAULT_SETTINGS.askLocationOnResume,
       longShiftReminderHours: DEFAULT_SETTINGS.longShiftReminderHours,
       autoClockOutHours: DEFAULT_SETTINGS.autoClockOutHours,
       breakDurationReminderMinutes: null,

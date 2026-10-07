@@ -8,7 +8,7 @@ import { useSettings } from '@renderer/hooks/useSettings'
 import { useTranslate } from '@renderer/hooks/useTranslate'
 import { ActionBar } from './ActionBar'
 import { LocationSelect } from './LocationSelect'
-import { clockInFromButton } from '@renderer/lib/clock-in'
+import { clockInFromButton, resumeFromButton } from '@renderer/lib/clock-in'
 import { WidgetCard } from './WidgetCard'
 import type { WidgetView } from './WidgetView'
 
@@ -289,7 +289,16 @@ export function StatusWidget(): React.JSX.Element {
         }
         onClockOut={() => void run(() => window.factorial.clockOut())}
         onStartBreak={(id) => void run(() => window.factorial.startBreak(id))}
-        onEndBreak={() => void run(() => window.factorial.endBreak())}
+        onEndBreak={(anchor) =>
+          void run(() =>
+            resumeFromButton({
+              ask: settings?.askLocationOnResume ?? false,
+              currentLocationType: displayedLocation,
+              anchor,
+              t,
+            }).then(() => undefined),
+          )
+        }
         onSignIn={() => void run(() => window.factorial.signOut())}
       />
     </div>

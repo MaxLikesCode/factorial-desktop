@@ -211,6 +211,8 @@ export const it: Catalogue = {
   'settingsPage.account': 'Account',
   'settingsPage.askLocation': 'Chiedi dove lavoro prima di timbrare',
   'settingsPage.askLocationHint': 'Timbrare apre un menu con ufficio, casa e trasferta. Disattivato, vale l’ultimo luogo scelto.',
+  'settingsPage.askLocationOnResume': 'Chiedi dove lavoro alla ripresa',
+  'settingsPage.askLocationOnResumeHint': 'Riprendere dopo una pausa apre lo stesso menu, utile se cambi luogo a pranzo. Disattivato, si continua nello stesso luogo.',
   'settingsPage.reminder': 'Ricordamelo dopo',
   'settingsPage.reminderHint': 'Una notifica quando un turno dura da così tanto.',
   'settingsPage.autoClockOut': 'Timbra l’uscita automaticamente dopo',

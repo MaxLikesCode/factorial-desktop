@@ -220,6 +220,8 @@ export const de: Catalogue = {
   'settingsPage.account': 'Konto',
   'settingsPage.askLocation': 'Vor dem Einstempeln nach dem Arbeitsort fragen',
   'settingsPage.askLocationHint': 'Einstempeln öffnet ein Menü mit Büro, Mobil und Dienstreise. Ausgeschaltet gilt der zuletzt gewählte Ort.',
+  'settingsPage.askLocationOnResume': 'Beim Fortsetzen nach dem Arbeitsort fragen',
+  'settingsPage.askLocationOnResumeHint': 'Fortsetzen nach einer Pause öffnet dasselbe Menü. Praktisch, wenn du in der Mittagspause den Ort wechselst. Ausgeschaltet geht es am bisherigen Ort weiter.',
   'settingsPage.reminder': 'Erinnern nach',
   'settingsPage.reminderHint': 'Eine Benachrichtigung, wenn eine Schicht so lange läuft.',
   'settingsPage.autoClockOut': 'Automatisch ausstempeln nach',

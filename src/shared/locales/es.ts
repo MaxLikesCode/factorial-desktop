@@ -221,6 +221,8 @@ export const es: Catalogue = {
   'settingsPage.account': 'Cuenta',
   'settingsPage.askLocation': 'Preguntar dónde trabajo antes de fichar',
   'settingsPage.askLocationHint': 'Fichar abre un menú con oficina, casa y viaje. Desactivado, se usa la última ubicación.',
+  'settingsPage.askLocationOnResume': 'Preguntar dónde trabajo al reanudar',
+  'settingsPage.askLocationOnResumeHint': 'Reanudar tras una pausa abre el mismo menú, útil si cambias de lugar en la comida. Desactivado, se sigue en el mismo lugar.',
   'settingsPage.reminder': 'Recordarme tras',
   'settingsPage.reminderHint': 'Una notificación cuando un turno lleve tanto tiempo en curso.',
   'settingsPage.autoClockOut': 'Fichar la salida automáticamente tras',

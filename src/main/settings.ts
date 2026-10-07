@@ -52,6 +52,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   // Asked every time: the location is a real field in the HR record, and a
   // remembered "office" on a day at home is a wrong record nobody notices.
   askLocationOnClockIn: true,
+  // Off: most days resume where they stopped, and a question after every
+  // break is noise. It is for whoever changes place over lunch.
+  askLocationOnResume: false,
   // On by default: a day that never ended is the mistake this exists for, and
   // a notification costs nothing. The automatic clock-out writes a record, so
   // it stays opt-in.
@@ -140,6 +143,8 @@ function sanitise(raw: unknown, base: AppSettings): AppSettings {
           : base.skippedUpdateVersion,
     askLocationOnClockIn:
       typeof r.askLocationOnClockIn === 'boolean' ? r.askLocationOnClockIn : base.askLocationOnClockIn,
+    askLocationOnResume:
+      typeof r.askLocationOnResume === 'boolean' ? r.askLocationOnResume : base.askLocationOnResume,
     // `null` is "off" and is kept; a number is rounded and bounded by
     // `asHoursSetting`, and anything else falls back.
     longShiftReminderHours:

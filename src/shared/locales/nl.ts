@@ -211,6 +211,8 @@ export const nl: Catalogue = {
   'settingsPage.account': 'Account',
   'settingsPage.askLocation': 'Vragen waar ik werk voor het inklokken',
   'settingsPage.askLocationHint': 'Inklokken opent een menu met kantoor, thuis en dienstreis. Uit: de laatste locatie wordt gebruikt.',
+  'settingsPage.askLocationOnResume': 'Vragen waar ik werk bij hervatten',
+  'settingsPage.askLocationOnResumeHint': 'Hervatten na een pauze opent hetzelfde menu, handig als je tijdens de lunch van plek wisselt. Uit: je gaat verder op dezelfde locatie.',
   'settingsPage.reminder': 'Herinner me na',
   'settingsPage.reminderHint': 'Een melding wanneer een dienst zo lang loopt.',
   'settingsPage.autoClockOut': 'Automatisch uitklokken na',

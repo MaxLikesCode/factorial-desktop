@@ -468,11 +468,12 @@ export function createAttendanceStore({
       )
     },
 
-    async endBreak(): Promise<void> {
-      // Location is left null rather than guessed: resuming opens a new record
-      // and the refresh right after carries the real one.
-      await mutate(optimisticClockedIn({ locationType: null, workplaceId: null }), () =>
-        ops.breakEnd({ now: now() }),
+    async endBreak(input: { locationType: LocationType | null } = { locationType: null }): Promise<void> {
+      // Without a picked place the location is left null rather than guessed:
+      // resuming opens a new record and the refresh right after carries the
+      // real one.
+      await mutate(optimisticClockedIn({ locationType: input.locationType, workplaceId: null }), () =>
+        ops.breakEnd({ now: now(), locationType: input.locationType }),
       )
     },
 

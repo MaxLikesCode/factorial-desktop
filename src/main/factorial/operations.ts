@@ -978,14 +978,22 @@ ${MUTATION_RESULT}            }
       assertMutationSucceeded(data, 'BreakStart', 'breakStartAttendanceShift')
     },
 
-    async breakEnd(input: { now: Date }): Promise<void> {
+    async breakEnd(input: { now: Date; locationType?: LocationType | null }): Promise<void> {
+      const variables: Record<string, unknown> = nowVar(input.now)
+      // Only sent when the user picked a place on resuming. Without one the
+      // request stays the verified call, which carries the shift's location on.
+      if (input.locationType != null) variables.locationType = input.locationType
+
       const data = await client.execute<unknown>({
         operationName: 'BreakEnd',
-        variables: nowVar(input.now),
-        // systemCreated is mandatory here too (K3).
-        query: `mutation BreakEnd($now: ISO8601DateTime!, $source: AttendanceEnumsShiftSourceEnum) {
+        variables,
+        // systemCreated is mandatory here too (K3). `locationType` is in the
+        // schema for this mutation (DESIGN.md), unlike for BreakStart (K2).
+        query: `mutation BreakEnd($now: ISO8601DateTime!, $source: AttendanceEnumsShiftSourceEnum,
+                                  $locationType: AttendanceShiftLocationTypeEnum) {
           attendanceMutations {
-            breakEndAttendanceShift(now: $now, source: $source, systemCreated: false) {${MUTATION_RESULT}            }
+            breakEndAttendanceShift(now: $now, source: $source, systemCreated: false,
+                                    locationType: $locationType) {${MUTATION_RESULT}            }
           }
         }`,
       })

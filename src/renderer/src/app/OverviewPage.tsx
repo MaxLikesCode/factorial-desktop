@@ -105,6 +105,8 @@ export function OverviewPage({ onEditToday }: { onEditToday: () => void }): Reac
             breakOptions={snapshot.breakOptions}
             askLocation={settings?.askLocationOnClockIn ?? false}
             lastLocationType={settings?.lastLocationType ?? 'office'}
+            askLocationOnResume={settings?.askLocationOnResume ?? false}
+            currentLocationType={location?.value ?? settings?.lastLocationType ?? 'office'}
             onClockIn={(locationType) =>
               run(() =>
                 window.factorial.clockIn({ locationType, workplaceId: settings?.lastWorkplaceId ?? null }),
@@ -112,7 +114,7 @@ export function OverviewPage({ onEditToday }: { onEditToday: () => void }): Reac
             }
             onClockOut={() => run(() => window.factorial.clockOut())}
             onStartBreak={(id) => run(() => window.factorial.startBreak(id))}
-            onEndBreak={() => run(() => window.factorial.endBreak())}
+            onEndBreak={(locationType) => run(() => window.factorial.endBreak(locationType ? { locationType } : undefined))}
             onSignIn={() => run(() => window.factorial.signOut())}
           />
         </div>
@@ -383,6 +385,8 @@ function Actions({
   breakOptions,
   askLocation,
   lastLocationType,
+  askLocationOnResume,
+  currentLocationType,
   onClockIn,
   onClockOut,
   onStartBreak,
@@ -394,11 +398,15 @@ function Actions({
   breakOptions: { id: string; name: string }[]
   askLocation: boolean
   lastLocationType: string
+  askLocationOnResume: boolean
+  /** Where the shift ran before the break — marked when resuming asks. */
+  currentLocationType: string
   /** With the location to clock in at — asked for first when the setting says so. */
   onClockIn: (locationType: string) => void
   onClockOut: () => void
   onStartBreak: (id: string) => void
-  onEndBreak: () => void
+  /** With a new location when resuming asked for one, otherwise without. */
+  onEndBreak: (locationType?: string) => void
   onSignIn: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -446,8 +454,23 @@ function Actions({
         >
           <PauseIcon /> {t('tray.break')}
         </Dropdown>
+      ) : askLocationOnResume ? (
+        // Same list as clocking in: the pick is where the work goes on after
+        // the break, and it is remembered as the new default too.
+        <Dropdown
+          items={LOCATIONS.map((l) => ({ value: l.value, label: t(l.key) }))}
+          value={currentLocationType}
+          disabled={busy}
+          className="app-btn app-btn-secondary"
+          onSelect={(locationType) => {
+            void window.factorial.setSettings({ lastLocationType: locationType }).catch(() => {})
+            onEndBreak(locationType)
+          }}
+        >
+          <PauseIcon /> {t('tray.resume')}
+        </Dropdown>
       ) : (
-        <button type="button" className="app-btn app-btn-secondary" disabled={busy} onClick={onEndBreak}>
+        <button type="button" className="app-btn app-btn-secondary" disabled={busy} onClick={() => onEndBreak()}>
           <PauseIcon /> {t('tray.resume')}
         </button>
       )}

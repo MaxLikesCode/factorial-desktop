@@ -42,6 +42,7 @@ export const TEST_SETTINGS: AppSettings = {
   autoInstallUpdates: false,
   skippedUpdateVersion: null,
   askLocationOnClockIn: false,
+  askLocationOnResume: false,
   longShiftReminderHours: 8,
   autoClockOutHours: null,
   breakDurationReminderMinutes: null,

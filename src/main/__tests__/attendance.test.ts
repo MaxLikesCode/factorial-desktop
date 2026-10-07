@@ -664,7 +664,27 @@ describe('optimistic updates', () => {
     ops.fetchOpenShift.mockResolvedValue(OPEN)
     pending.release()
     await running
-    expect(ops.breakEnd).toHaveBeenCalledWith({ now: NOW })
+    expect(ops.breakEnd).toHaveBeenCalledWith({ now: NOW, locationType: null })
+  })
+
+  it('resumes at a newly picked location, shown optimistically', async () => {
+    const ops = makeOps()
+    ops.fetchOpenShift.mockResolvedValue(ON_BREAK)
+    const pending = gate()
+    ops.breakEnd.mockImplementation(async () => {
+      await pending.wait
+    })
+    const store = makeStore(ops)
+    await store.refresh()
+
+    const running = store.endBreak({ locationType: 'work_from_home' })
+    const state = store.getSnapshot().state
+    expect(state.kind === 'in' ? state.locationType : null).toBe('work_from_home')
+
+    ops.fetchOpenShift.mockResolvedValue(OPEN)
+    pending.release()
+    await running
+    expect(ops.breakEnd).toHaveBeenCalledWith({ now: NOW, locationType: 'work_from_home' })
   })
 
   it('shows the clocked-out state while clocking out', async () => {

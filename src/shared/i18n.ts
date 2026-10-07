@@ -305,6 +305,8 @@ export const en = {
   'settingsPage.account': 'Account',
   'settingsPage.askLocation': 'Ask where I work before clocking in',
   'settingsPage.askLocationHint': 'Clock in opens a menu with office, home and business trip. Off, the last location is used.',
+  'settingsPage.askLocationOnResume': 'Ask where I work when resuming',
+  'settingsPage.askLocationOnResumeHint': 'Resuming after a break opens the same menu, handy if you change place over lunch. Off, work goes on where it was.',
   'settingsPage.reminder': 'Remind me after',
   'settingsPage.reminderHint': 'A notification when a shift has been running this long.',
   'settingsPage.autoClockOut': 'Clock out automatically after',

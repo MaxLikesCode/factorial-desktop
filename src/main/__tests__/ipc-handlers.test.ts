@@ -27,6 +27,7 @@ const SETTINGS: AppSettings = {
   autoInstallUpdates: false,
   skippedUpdateVersion: null,
   askLocationOnClockIn: false,
+  askLocationOnResume: false,
   longShiftReminderHours: 8,
   autoClockOutHours: null,
   breakDurationReminderMinutes: null,
@@ -163,6 +164,29 @@ describe('createIpcHandlers', () => {
     expect(payload.state.sinceMs).toBe(since.getTime())
     // Structured clone would drop a Date's identity; nothing here may be one.
     expect(JSON.parse(JSON.stringify(payload))).toEqual(payload)
+  })
+})
+
+describe('end-break payload validation', () => {
+  it('resumes at the shift’s own location when nothing was picked', async () => {
+    const endBreak = vi.fn(async () => {})
+    const { handlers } = handlersFor(fakeStore({ endBreak }))
+    await handlers[IPC.endBreak](undefined)
+    expect(endBreak).toHaveBeenCalledWith({ locationType: null })
+  })
+
+  it('passes a picked location through', async () => {
+    const endBreak = vi.fn(async () => {})
+    const { handlers } = handlersFor(fakeStore({ endBreak }))
+    await handlers[IPC.endBreak]({ locationType: 'work_from_home' })
+    expect(endBreak).toHaveBeenCalledWith({ locationType: 'work_from_home' })
+  })
+
+  it('refuses a location the schema does not know', async () => {
+    const endBreak = vi.fn(async () => {})
+    const { handlers } = handlersFor(fakeStore({ endBreak }))
+    await expect(handlers[IPC.endBreak]({ locationType: 'beach' })).rejects.toThrow()
+    expect(endBreak).not.toHaveBeenCalled()
   })
 })
 

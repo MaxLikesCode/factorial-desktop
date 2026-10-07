@@ -211,6 +211,8 @@ export const fr: Catalogue = {
   'settingsPage.account': 'Compte',
   'settingsPage.askLocation': 'Demander le lieu de travail avant de pointer',
   'settingsPage.askLocationHint': 'Pointer ouvre un menu : bureau, domicile, déplacement. Désactivé, le dernier lieu est repris.',
+  'settingsPage.askLocationOnResume': 'Demander le lieu de travail à la reprise',
+  'settingsPage.askLocationOnResumeHint': 'Reprendre après une pause ouvre le même menu, utile si vous changez de lieu à midi. Désactivé, le lieu reste le même.',
   'settingsPage.reminder': 'Me rappeler après',
   'settingsPage.reminderHint': 'Une notification quand un poste dure depuis aussi longtemps.',
   'settingsPage.autoClockOut': 'Dépointer automatiquement après',

@@ -539,6 +539,13 @@ describe('mutations', () => {
     expect(only(calls).query).toContain('systemCreated: false')
   })
 
+  it('sends break-end with a location only when one was picked', async () => {
+    const { client, calls } = recordingClient(ok('breakEndAttendanceShift'))
+    await createOperations(client).breakEnd({ now, locationType: 'work_from_home' })
+    expect(only(calls).variables).toEqual({ now: NOW_ISO, source: 'desktop', locationType: 'work_from_home' })
+    expect(only(calls).query).toContain('$locationType: AttendanceShiftLocationTypeEnum')
+  })
+
   it('sends clock-out', async () => {
     const { client, calls } = recordingClient(ok('clockOutAttendanceShift'))
     await createOperations(client).clockOut({ now })

@@ -39,7 +39,7 @@ const bridge: FactorialBridge = {
   // deliberately not swallowed here.
   clockIn: (input) => ipcRenderer.invoke(IPC.clockIn, input),
   startBreak: (breakId) => ipcRenderer.invoke(IPC.startBreak, breakId),
-  endBreak: () => ipcRenderer.invoke(IPC.endBreak),
+  endBreak: (input) => ipcRenderer.invoke(IPC.endBreak, input),
   clockOut: () => ipcRenderer.invoke(IPC.clockOut),
 
   refresh: () => ipcRenderer.invoke(IPC.refresh),

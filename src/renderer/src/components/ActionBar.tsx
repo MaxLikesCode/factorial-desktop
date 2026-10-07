@@ -11,7 +11,8 @@ interface Props {
   onClockIn: (anchor: DOMRect) => void
   onClockOut: () => void
   onStartBreak: (id: string) => void
-  onEndBreak: () => void
+  /** Handed the button's box too, for the location menu on resuming. */
+  onEndBreak: (anchor: DOMRect) => void
   onSignIn: () => void
 }
 
@@ -69,7 +70,11 @@ export function ActionBar({
   if (state.kind === 'break') {
     return (
       <div className="flex items-center gap-2">
-        <Button size="sm" disabled={busy} onClick={onEndBreak}>
+        <Button
+          size="sm"
+          disabled={busy}
+          onClick={(event) => onEndBreak(event.currentTarget.getBoundingClientRect())}
+        >
           {t('tray.resume')}
         </Button>
         <Button size="sm" variant="outline" disabled={busy} onClick={onClockOut}>

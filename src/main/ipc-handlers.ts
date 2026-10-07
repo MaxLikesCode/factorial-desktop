@@ -53,7 +53,7 @@ import {
 } from './attendance'
 import { FactorialError } from './factorial/client'
 import { isExpandDirection } from '@shared/widget-size'
-import { isLocationType } from './factorial/types'
+import { isLocationType, type LocationType } from './factorial/types'
 
 type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
 type AssertTrue<T extends true> = T
@@ -169,6 +169,21 @@ function asClockInInput(payload: unknown): ClockInInput {
   return { locationType, workplaceId: asWorkplaceId(raw.workplaceId) }
 }
 
+/**
+ * Resuming takes an optional place: nothing (or no `locationType`) keeps the
+ * shift's own, anything else must be in the enum like a clock-in's.
+ */
+function asEndBreakInput(payload: unknown): { locationType: LocationType | null } {
+  if (payload === undefined || payload === null) return { locationType: null }
+  const raw = asRecord(payload, IPC.endBreak)
+  const locationType = raw.locationType
+  if (locationType === undefined || locationType === null) return { locationType: null }
+  if (typeof locationType !== 'string' || !isLocationType(locationType)) {
+    throw new Error(`unsupported location type: ${JSON.stringify(locationType)}`)
+  }
+  return { locationType }
+}
+
 function asBreakId(payload: unknown): string {
   if (typeof payload !== 'string' || payload.trim() === '') {
     throw new Error(`${IPC.startBreak} expects a non-empty break id`)
@@ -215,6 +230,9 @@ function asSettingsPatch(payload: unknown): Partial<AppSettings> {
   }
   if (typeof raw.askLocationOnClockIn === 'boolean') {
     patch.askLocationOnClockIn = raw.askLocationOnClockIn
+  }
+  if (typeof raw.askLocationOnResume === 'boolean') {
+    patch.askLocationOnResume = raw.askLocationOnResume
   }
   if (raw.longShiftReminderHours === null || typeof raw.longShiftReminderHours === 'number') {
     patch.longShiftReminderHours = asHoursSetting(raw.longShiftReminderHours)
@@ -309,8 +327,8 @@ export function createIpcHandlers({
     [IPC.startBreak]: async (payload) => {
       await store.startBreak(asBreakId(payload))
     },
-    [IPC.endBreak]: async () => {
-      await store.endBreak()
+    [IPC.endBreak]: async (payload) => {
+      await store.endBreak(asEndBreakInput(payload))
     },
     [IPC.clockOut]: async () => {
       await store.clockOut()

@@ -96,6 +96,9 @@ export function SettingsPage(): React.JSX.Element {
         <Row label={t('settingsPage.askLocation')} hint={t('settingsPage.askLocationHint')}>
           <Switch checked={settings.askLocationOnClockIn} onChange={(v) => set({ askLocationOnClockIn: v })} />
         </Row>
+        <Row label={t('settingsPage.askLocationOnResume')} hint={t('settingsPage.askLocationOnResumeHint')}>
+          <Switch checked={settings.askLocationOnResume} onChange={(v) => set({ askLocationOnResume: v })} />
+        </Row>
         <Row label={t('settingsPage.reminder')} hint={t('settingsPage.reminderHint')}>
           <HoursSelect value={settings.longShiftReminderHours} onChange={(v) => set({ longShiftReminderHours: v })} />
         </Row>

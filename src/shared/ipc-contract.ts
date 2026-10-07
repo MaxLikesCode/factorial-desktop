@@ -307,6 +307,11 @@ export interface AppSettings {
    * button. Off, the remembered location is used without a question.
    */
   askLocationOnClockIn: boolean
+  /**
+   * Ask again where the work happens when resuming after a break — for
+   * whoever changes place over lunch. Off, the shift keeps its location.
+   */
+  askLocationOnResume: boolean
   /** Hours on the clock before a reminder notification; null is off. */
   longShiftReminderHours: number | null
   /** Hours on the clock before the app clocks out by itself; null is off. */
@@ -397,7 +402,8 @@ export interface FactorialBridge {
    */
   clockIn(input: { locationType: string; workplaceId: number | null }): Promise<void>
   startBreak(breakId: string): Promise<void>
-  endBreak(): Promise<void>
+  /** Without a `locationType` the shift resumes where it was; validated like `clockIn`'s. */
+  endBreak(input?: { locationType: string }): Promise<void>
   clockOut(): Promise<void>
   refresh(): Promise<void>
   signOut(): Promise<void>

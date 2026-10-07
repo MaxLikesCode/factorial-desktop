@@ -217,6 +217,8 @@ export const pt: Catalogue = {
   'settingsPage.account': 'Conta',
   'settingsPage.askLocation': 'Perguntar onde trabalho antes de registar o ponto',
   'settingsPage.askLocationHint': 'Registar abre um menu com escritório, casa e viagem. Desligado, usa-se o último local.',
+  'settingsPage.askLocationOnResume': 'Perguntar onde trabalho ao retomar',
+  'settingsPage.askLocationOnResumeHint': 'Retomar após uma pausa abre o mesmo menu, útil se mudas de local ao almoço. Desligado, continua-se no mesmo local.',
   'settingsPage.reminder': 'Lembrar-me após',
   'settingsPage.reminderHint': 'Uma notificação quando um turno estiver a decorrer há tanto tempo.',
   'settingsPage.autoClockOut': 'Registar a saída automaticamente após',
