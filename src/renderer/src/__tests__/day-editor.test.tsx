@@ -4,8 +4,8 @@ import type { TimesheetDay } from '@shared/timesheet'
 import { DayEditor, ghostsOf } from '@renderer/app/DayEditor'
 import { installBridge } from './fake-bridge'
 
-const { toastSuccess, toastError } = vi.hoisted(() => ({ toastSuccess: vi.fn(), toastError: vi.fn() }))
-vi.mock('sonner', () => ({ toast: { error: toastError, success: toastSuccess, info: vi.fn() } }))
+const { toastSuccess, toastError, toastInfo } = vi.hoisted(() => ({ toastSuccess: vi.fn(), toastError: vi.fn(), toastInfo: vi.fn() }))
+vi.mock('sonner', () => ({ toast: { error: toastError, success: toastSuccess, info: toastInfo } }))
 
 /** The real 1 September: one work block, one request to end it later. */
 function day(over: Partial<TimesheetDay> = {}): TimesheetDay {
@@ -16,6 +16,7 @@ function day(over: Partial<TimesheetDay> = {}): TimesheetDay {
     requests: [
       { id: '13542375', requestType: 'update_shift', shiftId: '554387733', start: 792, end: 1135, workable: null, breakConfigurationId: null, locationType: null },
     ],
+    held: [],
     ...over,
   }
 }
@@ -281,3 +282,74 @@ describe('ghostsOf', () => {
     ])
   })
 })
+
+describe('DayEditor with a held change', () => {
+  const work = { id: '11', kind: 'work' as const, start: 1081, end: 1145, breakConfigurationId: null, breakName: null, locationType: 'office', workplaceId: null }
+  const held = { id: 'held-1', block: { ...work, start: 825 }, waiting: true }
+
+  it('marks it as not sent yet, says why, and draws it on the strip', async () => {
+    installBridge()
+    render(<DayEditor day={day({ blocks: [work], requests: [], held: [held] })} breakOptions={[]} now={null} defaultLocation={'office'} onSaved={vi.fn()} />)
+    await act(async () => {})
+
+    const row = document.querySelector('[data-slot="pending-row"]')
+    expect(row?.textContent).toContain('Wartet')
+    expect(row?.textContent).toContain('13:45 – 19:05')
+    expect(row?.textContent).toContain('Verwerfen')
+    expect(document.querySelector('[data-slot="held-hint"]')).toBeTruthy()
+    expect(document.querySelector('[data-slot="stuck-hint"]')).toBeNull()
+    expect(document.querySelector('[data-slot="ghost"]')?.getAttribute('title')).toBe('13:45 – 19:05')
+  })
+
+  it('says so when nothing is under way that could clear it', async () => {
+    installBridge()
+    render(<DayEditor day={day({ blocks: [work], requests: [], held: [{ ...held, waiting: false }] })} breakOptions={[]} now={null} defaultLocation={'office'} onSaved={vi.fn()} />)
+    await act(async () => {})
+
+    expect(document.querySelector('[data-slot="pending-row"]')?.textContent).toContain('Blockiert')
+    expect(document.querySelector('[data-slot="stuck-hint"]')).toBeTruthy()
+  })
+
+  it('discards rather than withdraws, because Factorial never got it', async () => {
+    const bridge = installBridge()
+    const onSaved = vi.fn()
+    render(<DayEditor day={day({ blocks: [work], requests: [], held: [held] })} breakOptions={[]} now={null} defaultLocation={'office'} onSaved={onSaved} />)
+    await act(async () => {})
+
+    const row = document.querySelector('[data-slot="pending-row"]')
+    fireEvent.click(row!.querySelector('button')!)
+    await act(async () => {})
+
+    expect(bridge.discardHeldTimesheetChange).toHaveBeenCalledWith('held-1', '2026-09-01')
+    expect(bridge.withdrawTimesheetRequest).not.toHaveBeenCalled()
+    expect(onSaved).toHaveBeenCalled()
+  })
+
+  it.each([
+    [1, 1, '1 Änderung beantragt. 1 weitere wird automatisch beantragt, sobald diese genehmigt ist.'],
+    [2, 3, 'Beantragt: 2. Automatisch nach der Genehmigung: 3.'],
+    // A retry: the first request is already pending, so this save sent nothing.
+    [0, 1, '1 Änderung wartet und wird automatisch beantragt, sobald die vorherige genehmigt ist.'],
+    [0, 2, '2 Änderungen warten und werden automatisch beantragt, sobald die vorherigen genehmigt sind.'],
+  ])('after a save with %i sent and %i held, says what actually happened', async (requested, heldCount, message) => {
+    const bridge = installBridge()
+    vi.mocked(bridge.saveTimesheetDay).mockResolvedValue({ day: day({ requests: [] }), requested, held: heldCount })
+    render(<DayEditor day={day({ requests: [] })} breakOptions={[]} now={null} defaultLocation={'office'} onSaved={vi.fn()} />)
+    await act(async () => {})
+
+    await act(async () => void screen.getByRole('button', { name: '+ Arbeit' }).click())
+    await act(async () => void screen.getByRole('button', { name: 'Änderungen beantragen' }).click())
+
+    expect(toastInfo).toHaveBeenCalledWith(message)
+    expect(toastSuccess).not.toHaveBeenCalled()
+  })
+
+  it('counts it in the sum as it would be after approval', async () => {
+    installBridge()
+    render(<DayEditor day={day({ blocks: [work], requests: [], held: [held] })} breakOptions={[]} now={null} defaultLocation={'office'} onSaved={vi.fn()} />)
+    await act(async () => {})
+
+    expect(document.querySelector('[data-slot="projected"]')?.textContent).toContain('5:20 h')
+  })
+})
+

@@ -27,6 +27,7 @@ import { registerIpc } from './ipc'
 import { applyBrowserUserAgent, clearSession, createNetFetch, getFactorialSession } from './session'
 import { buildLoginItemSettings, createSettings, type Settings } from './settings'
 import { createTray, hasTray, refreshTray } from './tray'
+import { createHeldStore } from './held-changes'
 import { createTimesheet } from './timesheet'
 import { createOverview } from './overview'
 import { watchLongShifts } from './long-shift'
@@ -176,6 +177,9 @@ async function signInOrOfferAnother(ops: Operations): Promise<Identity | null> {
 }
 
 /** A system notification, if the platform offers them; a click opens the app window. */
+/** How often held timesheet changes look for the approval they wait on. */
+const HELD_CHANGE_CHECK_MS = 15 * 60 * 1000
+
 function notify(title: string, body: string, onClick: () => void): void {
   if (!Notification.isSupported()) return
   const notification = new Notification({ title, body })
@@ -305,7 +309,17 @@ async function bootstrap(): Promise<void> {
     onSaved: (date) => {
       if (date === toLocalDate(new Date())) void store.refresh()
     },
+    held: createHeldStore({ filePath: join(app.getPath('userData'), 'held-timesheet-changes.json') }),
+    onReleased: (date, count) => {
+      const t = translatorFor(resolveLocale(settings.get().language, app.getLocale()))
+      notify(t('timesheet.releasedTitle'), t('timesheet.releasedBody', { count, date }), () => showMainWindow('timesheet'))
+    },
   })
+  // An approval reaches nobody by itself, and nobody should have to open the
+  // timesheet for the change that waited on it to go out. Costs no request
+  // while nothing is held.
+  void timesheet.releaseHeld()
+  setInterval(() => void timesheet.releaseHeld(), HELD_CHANGE_CHECK_MS).unref()
 
   const overview = createOverview({ ops, employeeId })
 

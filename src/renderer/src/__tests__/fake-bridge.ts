@@ -114,10 +114,12 @@ export function createFakeBridge(
     getTimesheetMonth: vi.fn(async () => ({ year: 2026, month: 9, days: [] })),
     // A request changes nothing, so the day comes back without the edit in it.
     saveTimesheetDay: vi.fn(async (edit) => ({
-      day: { date: edit.date, blocks: [], expectedMinutes: null, requests: [] },
+      day: { date: edit.date, blocks: [], expectedMinutes: null, requests: [], held: [] },
       requested: edit.blocks.length,
+      held: 0,
     })),
-    withdrawTimesheetRequest: vi.fn(async (_id, date) => ({ date, blocks: [], expectedMinutes: null, requests: [] })),
+    withdrawTimesheetRequest: vi.fn(async (_id, date) => ({ date, blocks: [], expectedMinutes: null, requests: [], held: [] })),
+    discardHeldTimesheetChange: vi.fn(async (_id, date) => ({ date, blocks: [], expectedMinutes: null, requests: [], held: [] })),
     getOverviewInsights: vi.fn(async () => ({
       leaves: [],
       month: { startOn: '2026-09-01', endOn: '2026-09-30', workedMinutes: 0, expectedToDate: 0, expectedTotal: 0, pendingInconsistencies: 0 },

@@ -96,7 +96,7 @@ export interface IpcHandlerDeps {
   /** Clears the session cookie and offers a new sign-in. Owned by `index.ts`. */
   onSignOut: () => Promise<void>
   /** Recorded time, by month and by day. Owned by `timesheet.ts`. */
-  timesheet: Pick<Timesheet, 'getMonth' | 'saveDay' | 'withdraw'>
+  timesheet: Pick<Timesheet, 'getMonth' | 'saveDay' | 'withdraw' | 'discardHeld'>
   /** The overview's absences and month cards. Owned by `overview.ts`. */
   overview: Pick<Overview, 'getInsights'>
   /** Opens the app window at a section. Owned by `main-window.ts`. */
@@ -394,6 +394,13 @@ export function createIpcHandlers({
         throw new Error(`${IPC.withdrawTimesheetRequest}: expected a request id and a date`)
       }
       return timesheet.withdraw(raw.requestId, raw.date)
+    },
+    [IPC.discardHeldTimesheetChange]: async (payload) => {
+      const raw = asRecord(payload, IPC.discardHeldTimesheetChange)
+      if (typeof raw.heldId !== 'string' || raw.heldId === '' || typeof raw.date !== 'string' || parseIsoDate(raw.date) === null) {
+        throw new Error(`${IPC.discardHeldTimesheetChange}: expected a held change id and a date`)
+      }
+      return timesheet.discardHeld(raw.heldId, raw.date)
     },
     [IPC.getOverviewInsights]: async () => overview.getInsights(),
     [IPC.openMainWindow]: async (payload) => {

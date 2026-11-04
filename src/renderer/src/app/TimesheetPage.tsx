@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react'
 import { toLocalDate } from '@shared/time'
-import { MINUTES_PER_DAY, formatHours, minuteOfDay, workedMinutes, type TimesheetDay, type TimesheetMonth } from '@shared/timesheet'
+import { MINUTES_PER_DAY, formatHours, heldAsRequest, minuteOfDay, workedMinutes, type TimesheetDay, type TimesheetMonth } from '@shared/timesheet'
 import { useAttendance, useTicker } from '@renderer/hooks/useAttendance'
 import { useSettings } from '@renderer/hooks/useSettings'
 import { useTranslate } from '@renderer/hooks/useTranslate'
@@ -188,6 +188,11 @@ export function TimesheetPage({ headerSlot }: { headerSlot: HTMLElement | null }
                     {t('timesheet.pendingCount', { count: day.requests.length })}
                   </span>
                 )}
+                {day.held.length > 0 && (
+                  <span className="app-pending-badge shrink-0" data-slot="held-badge">
+                    {day.held.length} {t(day.held.some((held) => !held.waiting) ? 'timesheet.stuck' : 'timesheet.held')}
+                  </span>
+                )}
                 <span className="w-[120px] shrink-0 text-right text-sm" style={{ fontVariantNumeric: 'tabular-nums' }}>
                   {day.blocks.length === 0 ? (
                     <span className="app-faint">{target === 0 || target === null ? t('timesheet.dayOff') : t('timesheet.noRecords')}</span>
@@ -276,7 +281,7 @@ function MiniStrip({ day, now }: { day: TimesheetDay; now: number | null }): Rea
       })}
       {/* What was asked for, as an outline over what is there — so a day
           with a pending change looks unsettled before the row is opened. */}
-      {day.requests.map((request) => {
+      {[...day.requests, ...day.held.map(heldAsRequest)].map((request) => {
         const target = day.blocks.find((b) => b.id === request.shiftId)
         const start = request.requestType === 'delete_shift' ? target?.start : request.start
         const end = request.requestType === 'delete_shift' ? target?.end : request.end

@@ -49,6 +49,7 @@ export const IPC = {
   getTimesheetMonth: 'timesheet:getMonth',
   saveTimesheetDay: 'timesheet:saveDay',
   withdrawTimesheetRequest: 'timesheet:withdrawRequest',
+  discardHeldTimesheetChange: 'timesheet:discardHeld',
   getOverviewInsights: 'overview:getInsights',
   openMainWindow: 'window:openMain',
   navigate: 'window:navigate',
@@ -481,6 +482,8 @@ export interface FactorialBridge {
   saveTimesheetDay(edit: DayEdit): Promise<DaySaveResult>
   /** Takes one pending change request back; resolves with its day, re-read. */
   withdrawTimesheetRequest(requestId: string, date: string): Promise<TimesheetDay>
+  /** Forgets a change that was held back and never sent; resolves with its day, re-read. */
+  discardHeldTimesheetChange(heldId: string, date: string): Promise<TimesheetDay>
   /** The overview's absences and month cards, read fresh. */
   getOverviewInsights(): Promise<OverviewInsights>
   /** Opens the app window, optionally at a section. */

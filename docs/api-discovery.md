@@ -222,6 +222,33 @@ a pending request; payload `DeleteAttendanceEditTimesheetRequestPayload` with
 the usual `errors` union and `editTimesheetRequest`. There is also an
 `updateAttendanceEditTimesheetRequest`, not probed.
 
+### A request is checked against the record, not against other requests — 2026-11-04
+
+Seen live: a break recorded as 12:44–18:01 and work as 18:01–19:05, both to move
+so the break ends at 13:45. The break's `update_shift` to 12:44–13:45 was
+accepted. The work's `update_shift` to 13:45–19:05 came back in-band with
+*"Überschneidet sich mit der Schicht von 12:44 bis 18:01 am 2026-11-04"*, naming
+the recorded times of a shift whose shortening was already pending.
+
+So **pending requests do not count**, and no order of requests gets round it: the
+second can only go out once the first is approved. Factorial's own client has no
+answer either. Its smart-autofill screen sends the same deletes, updates, creates
+sequence one at a time and, on a refusal, withdraws what it already sent
+(`CreateSmartAutofillEditRequest` and its caller in the web app's bundle).
+
+`attendanceMutations.writeAttendanceTimesheetDay` does take a whole day at once,
+but it writes shifts rather than asking for them, so it is not a way round
+approval and this app does not use it.
+
+Not verified, because it would take real requests: whether a pending
+`delete_shift` frees its record's time for a `create_shift`. The app assumes not,
+in line with the above, so a replacement waits for the delete to be approved.
+That can only cost time, and it also rules out the replacement being approved
+while the record it replaces is still there.
+
+What the app does about it: `src/main/held-changes.ts` and `releaseHeld` in
+`src/main/timesheet.ts`.
+
 ## The profile widgets — 2026-09-05
 
 `app.factorialhr.com/profile` shows five cards: status, absences, timesheet,

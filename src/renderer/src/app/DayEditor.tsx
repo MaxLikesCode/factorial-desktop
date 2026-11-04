@@ -9,6 +9,7 @@ import {
   formatHours,
   formatMinuteOfDay,
   hasChanges,
+  heldAsRequest,
   normaliseBlocks,
   parseTimeOfDay,
   setBlockTime,
@@ -57,14 +58,25 @@ export function DayEditor({ day, breakOptions, now, defaultLocation, onSaved }: 
   const breaks = breakMinutes(blocks, now)
   // The day if everything pending were approved, on top of what is being
   // edited — the answer to "did I cut it back far enough" before the answer.
-  const projected = useMemo(() => applyRequests(blocks, day.requests), [blocks, day.requests])
+  // A held change counts here too: it is part of what the user asked for, and
+  // the sum is the answer to whether all of it adds up.
+  const proposals = useMemo(() => [...day.requests, ...day.held.map(heldAsRequest)], [day.requests, day.held])
+  const heldById = useMemo(() => new Map(day.held.map((held) => [held.id, held])), [day.held])
+  const projected = useMemo(() => applyRequests(blocks, proposals), [blocks, proposals])
   const projectedWorked = workedMinutes(projected, now)
   const projectedBreaks = breakMinutes(projected, now)
-  const shifts = day.requests.length > 0 && (projectedWorked !== worked || projectedBreaks !== breaks)
+  const shifts = proposals.length > 0 && (projectedWorked !== worked || projectedBreaks !== breaks)
 
   // What has been asked for, drawn over the strip. Memoised because the strip
   // widens its scale to fit these and must not see a fresh list every render.
   const ghosts = useMemo(() => ghostsOf(day, t('timesheet.pendingNew')), [day, t])
+
+  /** What a proposal is labelled: a held change says it has not gone out yet. */
+  function badgeOf(id: string, requested: 'timesheet.pending' | 'timesheet.pendingNew'): string {
+    const held = heldById.get(id)
+    if (held === undefined) return t(requested)
+    return t(held.waiting ? 'timesheet.held' : 'timesheet.stuck')
+  }
 
   /** A location as the widget calls it, or the raw value for one the list does not know. */
   function placeName(location: string | null): string {
@@ -98,16 +110,28 @@ export function DayEditor({ day, breakOptions, now, defaultLocation, onSaved }: 
   // off and is shown as its own row too.
   const rows = useMemo(() => {
     const present = new Set(blocks.map((b) => b.id))
-    const loose = day.requests.filter((r) => r.shiftId === null || !present.has(r.shiftId))
+    const loose = proposals.filter((r) => r.shiftId === null || !present.has(r.shiftId))
     const out: Array<{ kind: 'block'; block: TimesheetBlock; index: number; start: number } | { kind: 'new'; request: PendingRequest; start: number }> = [
       ...blocks.map((block, index) => ({ kind: 'block' as const, block, index, start: block.start })),
       ...loose.map((request) => ({ kind: 'new' as const, request, start: request.start ?? Number.POSITIVE_INFINITY })),
     ]
     return out.sort((a, b) => a.start - b.start)
-  }, [blocks, day.requests])
+  }, [blocks, proposals])
 
   async function withdraw(request: PendingRequest): Promise<void> {
     setSaving(true)
+    if (heldById.has(request.id)) {
+      // Never sent, so there is nothing to take back: it is simply forgotten.
+      try {
+        onSaved(await window.factorial.discardHeldTimesheetChange(request.id, day.date))
+        toast.success(t('timesheet.discarded'))
+      } catch (error) {
+        toast.error(t('timesheet.discardFailed', { reason: describeActionError(t, error) }))
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
     try {
       onSaved(await window.factorial.withdrawTimesheetRequest(request.id, day.date))
       toast.success(t('timesheet.withdrawn'))
@@ -158,6 +182,12 @@ export function DayEditor({ day, breakOptions, now, defaultLocation, onSaved }: 
     ])
   }
 
+  /** Says what actually went out, which can be nothing: a retry only re-files what is missing. */
+  function heldMessage(requested: number, held: number): string {
+    if (requested === 0) return held === 1 ? t('timesheet.onlyHeldOne') : t('timesheet.onlyHeldMany', { count: held })
+    return requested === 1 && held === 1 ? t('timesheet.savedHeldOne') : t('timesheet.savedHeldMany', { requested, count: held })
+  }
+
   async function save(): Promise<void> {
     setSaving(true)
     try {
@@ -165,7 +195,8 @@ export function DayEditor({ day, breakOptions, now, defaultLocation, onSaved }: 
       // The day, not the edit: nothing was changed, only asked for. Drawing the
       // requested times would show something the timesheet does not hold.
       onSaved(result.day)
-      if (result.requested === 0) toast.info(t('timesheet.noChanges'))
+      if (result.held > 0) toast.info(heldMessage(result.requested, result.held))
+      else if (result.requested === 0) toast.info(t('timesheet.noChanges'))
       else toast.success(t('timesheet.saved'))
     } catch (error) {
       toast.error(t('timesheet.saveFailed', { reason: describeActionError(t, error) }))
@@ -193,14 +224,14 @@ export function DayEditor({ day, breakOptions, now, defaultLocation, onSaved }: 
                 <span className="app-chip w-[160px] shrink-0">
                   <span className={`app-dot ${isBreak ? 'app-dot-break' : 'app-dot-work'}`} />
                   <span className="truncate">{isBreak ? (breakName ?? t('timesheet.break')) : t('timesheet.work')}</span>
-                  <span className="app-pending-badge">{t('timesheet.pendingNew')}</span>
+                  <span className="app-pending-badge">{badgeOf(request.id, 'timesheet.pendingNew')}</span>
                 </span>
                 <span className="font-semibold" style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--app-pending)' }}>
                   {parts.join(' · ')}
                 </span>
                 <span className="flex-1" />
                 <button type="button" className="app-btn app-btn-ghost app-btn-sm" disabled={saving} onClick={() => void withdraw(request)}>
-                  {t('timesheet.withdraw')}
+                  {t(heldById.has(request.id) ? 'timesheet.discard' : 'timesheet.withdraw')}
                 </button>
               </div>
             )
@@ -209,7 +240,7 @@ export function DayEditor({ day, breakOptions, now, defaultLocation, onSaved }: 
           const { block, index } = row
           // The requests about this record hang off its row, so what was asked
           // for is read next to what is there — not matched up from a list.
-          const attached = block.id === null ? [] : day.requests.filter((r) => r.shiftId === block.id)
+          const attached = block.id === null ? [] : proposals.filter((r) => r.shiftId === block.id)
           // The record that is still running is shown, not edited: Factorial
           // takes no change to a shift without a clock-out, and `diffDay` drops
           // it, so every control on it would be a no-op dressed as an edit. It
@@ -295,7 +326,7 @@ export function DayEditor({ day, breakOptions, now, defaultLocation, onSaved }: 
                 return (
                   <div key={request.id} className="flex items-center gap-3 px-2.5 py-1.5 text-sm" style={PENDING_LINE} data-slot="pending-row">
                     <span className="w-[160px] shrink-0">
-                      <span className="app-pending-badge">{t('timesheet.pending')}</span>
+                      <span className="app-pending-badge">{badgeOf(request.id, 'timesheet.pending')}</span>
                     </span>
                     {before !== null && (
                       <>
@@ -310,7 +341,7 @@ export function DayEditor({ day, breakOptions, now, defaultLocation, onSaved }: 
                     </span>
                     <span className="flex-1" />
                     <button type="button" className="app-btn app-btn-ghost app-btn-sm" disabled={saving} onClick={() => void withdraw(request)}>
-                      {t('timesheet.withdraw')}
+                      {t(heldById.has(request.id) ? 'timesheet.discard' : 'timesheet.withdraw')}
                     </button>
                   </div>
                 )
@@ -319,6 +350,8 @@ export function DayEditor({ day, breakOptions, now, defaultLocation, onSaved }: 
           )
         })}
         {blocks.some((b) => b.end === null) && <div className="app-faint text-xs">{t('timesheet.runningHint')}</div>}
+        {day.held.some((held) => held.waiting) && <div className="app-faint text-xs" data-slot="held-hint">{t('timesheet.heldHint')}</div>}
+        {day.held.some((held) => !held.waiting) && <div className="app-faint text-xs" data-slot="stuck-hint">{t('timesheet.stuckHint')}</div>}
       </div>
 
       {/* The sums on a line of their own, so the buttons cannot push them
@@ -423,7 +456,7 @@ function span(start: number | null, end: number | null): string {
  */
 export function ghostsOf(day: TimesheetDay, newLabel: string): TimelineGhost[] {
   const out: TimelineGhost[] = []
-  for (const request of day.requests) {
+  for (const request of [...day.requests, ...day.held.map(heldAsRequest)]) {
     if (request.requestType === 'delete_shift') {
       const target = day.blocks.find((b) => b.id === request.shiftId)
       if (target === undefined || target.end === null) continue

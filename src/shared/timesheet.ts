@@ -89,6 +89,32 @@ export interface PendingRequest {
   locationType: string | null
 }
 
+/**
+ * A change the user asked for that Factorial would refuse today, kept on this
+ * machine until it would not.
+ *
+ * Factorial checks a new request against the shifts as *recorded*, ignoring
+ * every pending request (seen live on 2026-11-04, docs/api-discovery.md). So
+ * "break 12:44–18:01 becomes 12:44–13:45, work 18:01–19:05 becomes 13:45–19:05"
+ * cannot go out at once: the break's request is accepted, the work's is refused
+ * because the recorded break still covers 13:45. It can only be sent once the
+ * break's has been approved. This is not in Factorial at all, which is why it
+ * is a separate list from `requests` and why the editor offers to discard it
+ * rather than to withdraw it.
+ */
+export interface HeldChange {
+  /** Local to this app; Factorial has never heard of it. */
+  id: string
+  /** What the block should become. `id: null` asks for a new one. */
+  block: TimesheetBlock
+  /**
+   * True while something that could clear the way is still under way. False
+   * when nothing is — the request it waited on was rejected or withdrawn — so
+   * it will not go out by itself unless the recorded day changes.
+   */
+  waiting: boolean
+}
+
 export interface TimesheetDay {
   /** `YYYY-MM-DD`, local. */
   date: string
@@ -97,6 +123,8 @@ export interface TimesheetDay {
   expectedMinutes: number | null
   /** Change requests still waiting for an answer, oldest first. */
   requests: PendingRequest[]
+  /** Changes not sent yet, because Factorial would refuse them today. */
+  held: HeldChange[]
 }
 
 export interface TimesheetMonth {
@@ -119,11 +147,13 @@ export interface DayEdit {
  * this app may only ask for changes, never make them (see `timesheet.ts`), so
  * an editor that showed the requested times would be showing something that is
  * not in the timesheet and may never be. `requested` is how many change
- * requests went out, which is the only thing that did happen.
+ * requests went out, which is the only thing that did happen. `held` is how
+ * many changes stayed behind for later (`HeldChange`).
  */
 export interface DaySaveResult {
   day: TimesheetDay
   requested: number
+  held: number
 }
 
 /** How a saved day differs from the stored one, as the three mutations. */
@@ -314,6 +344,80 @@ export function applyRequests(blocks: readonly TimesheetBlock[], requests: reado
     })
   }
   return normaliseBlocks(out)
+}
+
+/**
+ * The recorded blocks that stand in the way of `target`: Factorial refuses a
+ * request whose times overlap any shift it holds other than the one being
+ * changed. Touching is not overlapping, and a running record reaches onwards
+ * for as long as it has no end.
+ */
+export function blockersOf(target: TimesheetBlock, recorded: readonly TimesheetBlock[]): TimesheetBlock[] {
+  if (target.end === null) return []
+  const end = target.end
+  return recorded.filter((b) => b.id !== target.id && b.start < end && (b.end === null || target.start < b.end))
+}
+
+/** Whether a pending request already asks for exactly this, so asking again would file a duplicate. */
+export function isAlreadyRequested(
+  target: TimesheetBlock,
+  original: TimesheetBlock | undefined,
+  requests: readonly PendingRequest[],
+): boolean {
+  return requests.some((r) => {
+    if (r.start !== target.start || r.end !== target.end) return false
+    if (target.id === null) {
+      const isBreak = r.workable === false || r.breakConfigurationId !== null
+      return r.requestType === 'create_shift' && isBreak === (target.kind === 'break')
+    }
+    // A request that names no place leaves the record's where it is.
+    return r.requestType === 'update_shift' && r.shiftId === target.id && (r.locationType ?? original?.locationType) === target.locationType
+  })
+}
+
+/**
+ * What to do about a held change, given the day as Factorial holds it now:
+ *
+ * - `settled`: nothing left to do. The record is already like that or is gone,
+ *   or an identical request is already pending.
+ * - `ready`: nothing recorded overlaps it any more, so it can be sent.
+ * - `waiting`: still blocked, but a pending request or another held change is
+ *   about what blocks it, so that may yet clear.
+ * - `stuck`: still blocked, and nothing under way would change that.
+ */
+export function heldState(
+  target: TimesheetBlock,
+  day: { blocks: readonly TimesheetBlock[]; requests: readonly PendingRequest[] },
+  held: readonly TimesheetBlock[],
+): 'settled' | 'ready' | 'waiting' | 'stuck' {
+  const original = target.id === null ? undefined : day.blocks.find((b) => b.id === target.id)
+  if (target.id !== null) {
+    if (original === undefined) return 'settled'
+    if (original.start === target.start && original.end === target.end && original.locationType === target.locationType) return 'settled'
+  } else if (day.blocks.some((b) => b.kind === target.kind && b.start === target.start && b.end === target.end)) {
+    return 'settled'
+  }
+  if (isAlreadyRequested(target, original, day.requests)) return 'settled'
+
+  const blockers = blockersOf(target, day.blocks)
+  if (blockers.length === 0) return 'ready'
+  const underWay = blockers.every((b) => day.requests.some((r) => r.shiftId === b.id) || held.some((h) => h !== target && h.id === b.id))
+  return underWay ? 'waiting' : 'stuck'
+}
+
+/** A held change in the shape of a request, for what draws and sums both alike. */
+export function heldAsRequest(held: HeldChange): PendingRequest {
+  const { block } = held
+  return {
+    id: held.id,
+    requestType: block.id === null ? 'create_shift' : 'update_shift',
+    shiftId: block.id,
+    start: block.start,
+    end: block.end,
+    workable: block.id === null ? block.kind === 'work' : null,
+    breakConfigurationId: block.id === null ? block.breakConfigurationId : null,
+    locationType: block.locationType,
+  }
 }
 
 export function hasChanges(changes: DayChanges): boolean {
