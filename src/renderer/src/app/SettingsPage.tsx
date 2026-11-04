@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useId, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { LANGUAGE_NAMES, LOCALES } from '@shared/i18n'
 import type { AppInfo, AppSettings } from '@shared/ipc-contract'
@@ -185,20 +185,32 @@ function Section({ title, children, wide = false }: { title: string; children: R
   )
 }
 
+/** The id of the enclosing row's label, for a control with no text of its own. */
+const RowLabelId = createContext<string | undefined>(undefined)
+
+/**
+ * Deliberately not a `<label>`: a browser forwards a click anywhere on a label
+ * to the first control inside it, so the whole row would flip a switch or open
+ * a list. Only the control itself answers to a click.
+ */
 function Row({ label, hint, children }: { label: string; hint?: string | undefined; children: ReactNode }): React.JSX.Element {
+  const labelId = useId()
   return (
-    <label className="flex cursor-default items-center justify-between gap-6 px-[18px] py-3.5">
+    <div role="group" aria-labelledby={labelId} className="flex cursor-default items-center justify-between gap-6 px-[18px] py-3.5">
       <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-[15px] font-medium">{label}</span>
+        <span id={labelId} className="text-[15px] font-medium">{label}</span>
         {hint !== undefined && <span className="app-muted text-[13px]">{hint}</span>}
       </span>
-      <span className="shrink-0">{children}</span>
-    </label>
+      <RowLabelId.Provider value={labelId}>
+        <span className="shrink-0">{children}</span>
+      </RowLabelId.Provider>
+    </div>
   )
 }
 
 function Switch({ checked, onChange }: { checked: boolean; onChange: (value: boolean) => void }): React.JSX.Element {
-  return <button type="button" role="switch" aria-checked={checked} className="app-switch" onClick={() => onChange(!checked)} />
+  const labelId = useContext(RowLabelId)
+  return <button type="button" role="switch" aria-checked={checked} aria-labelledby={labelId} className="app-switch" onClick={() => onChange(!checked)} />
 }
 
 function Segmented({

@@ -10,7 +10,7 @@ it('configures duration, lunch time and worked-hours reminders independently', a
   render(<SettingsPage />)
   await act(async () => {})
 
-  const row = (label: string) => within(screen.getByText(label).closest('label')!)
+  const row = (label: string) => within(screen.getByText(label).closest<HTMLElement>('[role="group"]')!)
   fireEvent.click(row('An laufende Pause erinnern nach').getByRole('button'))
   fireEvent.click(screen.getByRole('option', { name: '60 Min.' }))
   await act(async () => {})
@@ -40,8 +40,31 @@ it('configures duration, lunch time and worked-hours reminders independently', a
   expect(row('An Mittagspause erinnern um').getByRole('button').textContent).toContain('13:00')
 
   fireEvent.click(row('An Mittagspause erinnern um').getByRole('button'))
-  fireEvent.click(screen.getByRole('button', { name: 'Aus' }))
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Aus' }))
   await act(async () => {})
   expect(bridge.setSettings).toHaveBeenLastCalledWith({ lunchReminderTime: null })
   expect(row('An Mittagspause erinnern nach').getByRole('button').textContent).toContain('1 h')
+})
+
+it('does not toggle a switch when the row around it is clicked', async () => {
+  const bridge = installBridge()
+  render(<SettingsPage />)
+  await act(async () => {})
+
+  fireEvent.click(screen.getByText('Autostart'))
+  expect(bridge.setSettings).not.toHaveBeenCalled()
+
+  // The switch still answers to its own click, and still goes by the row's name.
+  fireEvent.click(screen.getByRole('switch', { name: 'Autostart' }))
+  expect(bridge.setSettings).toHaveBeenCalledTimes(1)
+})
+
+it('does not open a dropdown when the row around it is clicked', async () => {
+  installBridge()
+  render(<SettingsPage />)
+  await act(async () => {})
+
+  fireEvent.click(screen.getByText('Sprache'))
+  await act(async () => {})
+  expect(screen.queryByRole('listbox')).toBeNull()
 })
