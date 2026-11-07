@@ -246,6 +246,12 @@ img {
     font-variant-numeric: tabular-nums;
 }
 
+/* A word where a time would go ("running", "en curso") is wider than the
+   five characters the field is sized for, so it gets the padding back and
+   a smaller size instead of being clipped. */
+.app-input:placeholder-shown { padding: 0 4px; }
+.app-input::placeholder { font-size: 12px; }
+
 .app-menu.app-time-picker { width: 248px; padding: 12px; color: var(--app-text); }
 .app-time-column { position: relative; height: 180px; overflow-y: auto; overscroll-behavior: contain; border-radius: 10px; background: var(--app-input); scrollbar-width: thin; }
 .app-time-column .app-menu-item { width: 100%; justify-content: center; }
