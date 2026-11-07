@@ -61,6 +61,7 @@ export const de: Catalogue = {
 
   'widget.worked': 'Gearbeitet {time}',
   'widget.breakTotal': 'Pause {time}',
+  'widget.breakLabel': 'Pause · {name}',
   'widget.remaining': 'Verbleibende Zeit {time}',
   'widget.targetMet': 'Soll erfüllt · {overtime}',
   'widget.incomplete': 'Tagessumme unvollständig',

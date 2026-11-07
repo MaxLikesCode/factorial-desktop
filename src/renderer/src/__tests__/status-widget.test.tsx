@@ -238,6 +238,23 @@ describe('StatusWidget — the three states', () => {
     // is now that break's. "Pause" stays in front: the amber dot says paused,
     // but a break called "Arztbesuch" would leave colour as the only carrier.
     expect(screen.getByText('Pause · Mittagspause')).toBeTruthy()
+    // The word in front is the app's language, not the German it was written in.
+    cleanup()
+    await mount(
+      {
+        state: { kind: 'break', shiftId: '2', since: new Date(NOW.getTime() - 754_000), breakId: '19613', breakName: 'Lunch', locationType: 'office' },
+        todayMinutes: 120,
+        expectedMinutes: 480,
+      },
+      { language: 'en' },
+    )
+    expect(screen.getByText('Break · Lunch')).toBeTruthy()
+    cleanup()
+    await mount({
+      state: { kind: 'break', shiftId: '2', since: new Date(NOW.getTime() - 754_000), breakId: '19613', breakName: 'Mittagspause', locationType: 'office' },
+      todayMinutes: 120,
+      expectedMinutes: 480,
+    })
     // And the day's worked time is not lost — it moves up beside the status.
     expect(screen.getByText('Gearbeitet 02:00')).toBeTruthy()
 

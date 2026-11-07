@@ -52,6 +52,7 @@ export const fr: Catalogue = {
 
   'widget.worked': 'Travaillé {time}',
   'widget.breakTotal': 'Pause {time}',
+  'widget.breakLabel': 'Pause · {name}',
   'widget.remaining': 'Temps restant {time}',
   'widget.targetMet': 'Objectif atteint · {overtime}',
   'widget.incomplete': 'Total du jour incomplet',

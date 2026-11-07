@@ -64,6 +64,7 @@ export const nl: Catalogue = {
 
   'widget.worked': 'Gewerkt {time}',
   'widget.breakTotal': 'Pauze {time}',
+  'widget.breakLabel': 'Pauze · {name}',
   'widget.remaining': 'Resterende tijd {time}',
   'widget.targetMet': 'Doel behaald · {overtime}',
   'widget.incomplete': 'Dagtotaal onvolledig',

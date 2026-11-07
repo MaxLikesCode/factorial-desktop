@@ -127,6 +127,7 @@ export const en = {
   // Widget.
   'widget.worked': 'Worked {time}',
   'widget.breakTotal': 'Break {time}',
+  'widget.breakLabel': 'Break · {name}',
   'widget.remaining': 'Remaining {time}',
   'widget.targetMet': 'Target met · {overtime}',
   'widget.incomplete': 'Day total incomplete',

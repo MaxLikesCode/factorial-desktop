@@ -232,11 +232,11 @@ export function StatusWidget(): React.JSX.Element {
     /**
      * During a break the label names the break rather than the state, because
      * the number below it is now that break's clock and the label has to say
-     * what the number is. The word "Pause" stays in front of the name: the amber
+     * what the number is. The word for a break stays in front of the name: the amber
      * dot already says "paused", but a break called "Arztbesuch" would leave
      * colour as the only carrier of that, and colour cannot be the only carrier.
      */
-    label: state.kind === 'break' ? `Pause · ${state.breakName}` : t(LABEL_KEY[state.kind]),
+    label: state.kind === 'break' ? t('widget.breakLabel', { name: state.breakName }) : t(LABEL_KEY[state.kind]),
     dotClass: DOT[state.kind],
     tone: TONE[state.kind],
     /**
