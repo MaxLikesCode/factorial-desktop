@@ -14,6 +14,9 @@ export interface TimelineGhost {
   label: string
 }
 
+/** The shortest request that gets its times written on it. */
+const GHOST_LABEL_MINUTES = 60
+
 interface Props {
   blocks: TimesheetBlock[]
   /** Pending requests, drawn over the blocks and never dragged. */
@@ -225,6 +228,11 @@ export function Timeline({ blocks, ghosts = [], now, onChange, disabled = false,
           // Wide enough to be taken by its own ends, or the ends move out into
           // the empty strip beside it.
           const roomy = !running && length * perMinute >= MIN_GRAB_WIDTH
+          // A request drawn over the block carries its own label in the same
+          // centred spot; with both, the two texts print on top of each other.
+          const covered = ghosts.some(
+            (ghost) => ghost.end - ghost.start >= GHOST_LABEL_MINUTES && ghost.start < end && ghost.end > block.start,
+          )
           const previous = blocks[index - 1]
           const reach =
             roomy || running || perMinute === 0
@@ -257,7 +265,7 @@ export function Timeline({ blocks, ghosts = [], now, onChange, disabled = false,
                 {/* Marks, not targets: what the press does is decided by where it
                     landed, so two boxes cannot fight over a short block. */}
                 {roomy && <span className="tl-handle tl-handle-start" />}
-                {length >= 45 && (
+                {length >= 45 && !covered && (
                   <span className="pointer-events-none px-3 truncate">
                     {block.kind === 'break' && block.breakName && length >= 120 ? `${block.breakName} · ` : ''}
                     {formatMinuteOfDay(length).replace(/^0/, '')}
@@ -288,7 +296,7 @@ export function Timeline({ blocks, ghosts = [], now, onChange, disabled = false,
               style={{ left: pct(ghost.start), width: `${Math.max(0, (length / span) * 100)}%` }}
               title={`${formatMinuteOfDay(ghost.start)} – ${formatMinuteOfDay(ghost.end)}`}
             >
-              {length >= 60 && <span className="truncate px-2">{ghost.label}</span>}
+              {length >= GHOST_LABEL_MINUTES && <span className="truncate px-2">{ghost.label}</span>}
             </span>
           )
         })}

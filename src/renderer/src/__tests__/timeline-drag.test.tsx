@@ -243,3 +243,23 @@ describe('dragging an ordinary block', () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 })
+
+describe('a request drawn over a block', () => {
+  it('shows its own times instead of the block’s length, so the two do not print over each other', () => {
+    restore = layOut()
+    const morning: TimesheetBlock = { id: '1', kind: 'work', start: 514, end: 736, breakConfigurationId: null, breakName: null, locationType: 'office', workplaceId: null }
+    render(
+      <Timeline
+        blocks={[morning]}
+        ghosts={[{ id: 'r1', kind: 'change', start: 495, end: 736, label: '08:15 – 12:16' }]}
+        now={null}
+        onChange={vi.fn()}
+        nowLabel="jetzt"
+      />,
+    )
+    const block = document.querySelector('[data-slot="timeline"] [data-slot="block"]') as HTMLElement
+    const ghost = document.querySelector('[data-slot="ghost"]') as HTMLElement
+    expect(block.textContent).toBe('')
+    expect(ghost.textContent).toBe('08:15 – 12:16')
+  })
+})
